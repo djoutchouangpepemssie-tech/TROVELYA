@@ -4,7 +4,10 @@
 the business transaction commits. Publishing is done by the worker relay (P0-T06).
 """
 
-from typing import Any
+from collections.abc import Awaitable, Callable
+from dataclasses import dataclass
+from datetime import datetime
+from typing import Any, Protocol
 from uuid import UUID
 
 from sqlalchemy import bindparam, text
@@ -42,3 +45,52 @@ async def emit_event(
         },
     )
     return event_id
+
+
+@dataclass(frozen=True, slots=True)
+class OutboxEvent:
+    id: UUID
+    type: str
+    aggregate_type: str
+    aggregate_id: UUID
+    payload: dict[str, Any]
+    occurred_at: datetime
+
+
+class EventPublisher(Protocol):
+    async def publish(self, event: OutboxEvent) -> None: ...
+
+
+class InMemoryPublisher:
+    """Test publisher: keeps every published event in order."""
+
+    def __init__(self) -> None:
+        self.events: list[OutboxEvent] = []
+
+    async def publish(self, event: OutboxEvent) -> None:
+        self.events.append(event)
+
+
+_MARK_PROCESSED = text(
+    "INSERT INTO processed_events (consumer, event_id) VALUES (:consumer, :event_id)"
+    " ON CONFLICT DO NOTHING RETURNING event_id"
+)
+
+
+async def consume_once(
+    session: AsyncSession,
+    consumer: str,
+    event_id: UUID,
+    handler: Callable[[], Awaitable[None]],
+) -> bool:
+    """Run `handler` once per (consumer, event), in the caller's transaction.
+
+    Delivery is at least once (section 5.6): the mark and the handler's writes commit together,
+    so a rolled-back attempt can be retried and a committed one is never repeated.
+    Returns False when the event was already processed by this consumer.
+    """
+    marked = await session.execute(_MARK_PROCESSED, {"consumer": consumer, "event_id": event_id})
+    if marked.scalar_one_or_none() is None:
+        return False
+    await handler()
+    return True
