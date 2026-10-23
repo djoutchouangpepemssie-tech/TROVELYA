@@ -1,0 +1,52 @@
+# Architecture contracts (docs/CAHIER_DES_CHARGES.md section 5.4).
+# Run with: uv run lint-imports
+#
+# Rule 1: a module never imports another module's repository, models or migrations; it goes
+# through that module's public service.py. Every module under trovelya.modules needs its own
+# contract below (tests/architecture/test_architecture.py fails otherwise).
+# Rule 2: layers. The shared kernel and core never import business modules.
+
+[importlinter]
+root_package = trovelya
+
+[importlinter:contract:layers]
+name = Layers: entry points > modules > core > shared
+type = layers
+layers =
+    trovelya.main | trovelya.workers | trovelya.scripts
+    trovelya.modules
+    trovelya.core
+    trovelya.shared
+
+[importlinter:contract:module-ledger]
+name = Other modules use ledger only through ledger.service
+type = forbidden
+source_modules =
+    trovelya.modules.catalog
+    trovelya.modules.orders
+forbidden_modules =
+    trovelya.modules.ledger.repository
+    trovelya.modules.ledger.models
+    trovelya.modules.ledger.migrations
+
+[importlinter:contract:module-catalog]
+name = Other modules use catalog only through catalog.service
+type = forbidden
+source_modules =
+    trovelya.modules.ledger
+    trovelya.modules.orders
+forbidden_modules =
+    trovelya.modules.catalog.repository
+    trovelya.modules.catalog.models
+    trovelya.modules.catalog.migrations
+
+[importlinter:contract:module-orders]
+name = Other modules use orders only through orders.service
+type = forbidden
+source_modules =
+    trovelya.modules.ledger
+    trovelya.modules.catalog
+forbidden_modules =
+    trovelya.modules.orders.repository
+    trovelya.modules.orders.models
+    trovelya.modules.orders.migrations

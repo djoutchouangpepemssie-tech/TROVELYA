@@ -27,6 +27,7 @@ dev = [
     "httpx==0.28.1",
     "testcontainers==4.15.0",
     "hypothesis==6.170.8",
+    "import-linter==2.15",
 ]
 
 [build-system]

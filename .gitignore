@@ -11,3 +11,4 @@ build/
 .expo/
 .DS_Store
 coverage/
+.import_linter_cache/
