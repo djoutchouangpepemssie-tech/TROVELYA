@@ -1,0 +1,45 @@
+# Local development stack (docs/CAHIER_DES_CHARGES.md section 5.7, environment "local").
+# Object storage (S3) is added in P2 with the chosen EU provider's local equivalent.
+# Usage: docker compose -f infra/docker-compose.yml up -d --build
+name: trovelya
+
+services:
+  postgres:
+    build: ./postgres
+    image: trovelya/postgres:17
+    environment:
+      POSTGRES_USER: trovelya
+      POSTGRES_PASSWORD: trovelya
+      POSTGRES_DB: trovelya
+    ports:
+      - "5432:5432"
+    volumes:
+      - postgres-data:/var/lib/postgresql/data
+      - ./postgres/check_extensions.sql:/check_extensions.sql:ro
+    healthcheck:
+      test: ["CMD-SHELL", "pg_isready -U trovelya -d trovelya"]
+      interval: 5s
+      timeout: 3s
+      retries: 20
+
+  redis:
+    image: redis:8.2-alpine # same major as Railway (redis:8.2)
+    ports:
+      - "6379:6379"
+    volumes:
+      - redis-data:/data
+    healthcheck:
+      test: ["CMD", "redis-cli", "ping"]
+      interval: 5s
+      timeout: 3s
+      retries: 20
+
+  mailpit:
+    image: axllent/mailpit:v1.32.0
+    ports:
+      - "1025:1025" # SMTP
+      - "8025:8025" # web UI
+
+volumes:
+  postgres-data:
+  redis-data:

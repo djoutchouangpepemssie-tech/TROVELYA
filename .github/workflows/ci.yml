@@ -27,3 +27,20 @@ jobs:
       - run: pnpm install --frozen-lockfile
       - run: pnpm format:check
       - run: pnpm turbo run lint typecheck test build
+
+  postgres-image:
+    name: postgres-image
+    runs-on: ubuntu-latest
+    timeout-minutes: 15
+    steps:
+      - uses: actions/checkout@v4
+      - name: Build TROVÉLYA PostgreSQL image
+        run: docker build -t trovelya/postgres:17 infra/postgres
+      - name: Start a fresh database
+        run: |
+          docker run -d --name pg -e POSTGRES_PASSWORD=ci trovelya/postgres:17
+          for i in $(seq 1 30); do docker exec pg pg_isready -U postgres && break; sleep 2; done
+      - name: Create every required extension
+        run: |
+          docker cp infra/postgres/check_extensions.sql pg:/check_extensions.sql
+          docker exec pg psql -U postgres -v ON_ERROR_STOP=1 -f /check_extensions.sql
