@@ -12,3 +12,6 @@ build/
 .DS_Store
 coverage/
 .import_linter_cache/
+test-results/
+playwright-report/
+next-env.d.ts
