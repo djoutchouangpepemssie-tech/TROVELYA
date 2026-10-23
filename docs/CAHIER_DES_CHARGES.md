@@ -4,7 +4,7 @@
 
 | Champ | Valeur |
 |---|---|
-| Version | 1.0 |
+| Version | 1.1 — catalogue généraliste, verticales immobilier, véhicules, services (phase P9) |
 | Date | 23 octobre 2026 |
 | Propriétaire produit | Arcel (fondateur) |
 | Statut | Référence de développement — fait foi pour Claude Code |
@@ -15,7 +15,7 @@
 
 ## Sommaire
 
-0. Mode d'emploi de ce document · 1. Vision, positionnement et périmètre · 2. Glossaire métier · 3. Acteurs, rôles et permissions · 4. Stratégie de construction (21 phases, web d'abord) · 5. Architecture technique · 6. Expérience utilisateur et design system · 7. Modèle de données PostgreSQL · 8. Règles métier · 9. Machines à états · 10. Paiements, séquestre et grand livre · 11. Contrat d'API · 12. Temps réel · 13. Sécurité · 14. Conformité réglementaire · 15. Spécifications des phases P9 à P20 · 16. Qualité, tests, exploitation · 17. Plan de construction chronologique · 18. Décisions ouvertes · 19. Phases ↔ skills · Annexes
+0. Mode d'emploi de ce document · 1. Vision, positionnement et périmètre · 2. Glossaire métier · 3. Acteurs, rôles et permissions · 4. Stratégie de construction (22 phases, web d'abord) · 5. Architecture technique · 6. Expérience utilisateur et design system · 7. Modèle de données PostgreSQL · 8. Règles métier · 9. Machines à états · 10. Paiements, séquestre et grand livre · 11. Contrat d'API · 12. Temps réel · 13. Sécurité · 14. Conformité réglementaire · 15. Spécifications des phases P9 à P21 · 16. Qualité, tests, exploitation · 17. Plan de construction chronologique · 18. Décisions ouvertes · 19. Phases ↔ skills · Annexes
 
 ---
 
@@ -71,7 +71,8 @@ Si deux sources se contredisent, **ne pas trancher seul** : signaler le conflit,
 
 TROVÉLYA est une **place de marché européenne** qui réunit en une seule application :
 
-- la **revente entre particuliers** (style Vinted, Leboncoin) ;
+- la **revente entre particuliers** (style Vinted, Leboncoin), **dans toutes les catégories** : mode, maison, high-tech, culture, enfants, sport, collection, matériel professionnel… ;
+- les **petites annonces à mise en relation** : **immobilier** (vente, location, colocation, locaux, terrains), **véhicules**, **services** ;
 - les **boutiques de marque** possédées par les marchands (style Shopify) ;
 - les **enchères** et le **live shopping** (style Whatnot) ;
 - un **feed social** qui apporte des acheteurs aux vendeurs ;
@@ -85,13 +86,21 @@ Promesse acheteur : *Trouver la belle pièce, près de chez soi, en toute sécur
 
 Chaque fonctionnalité DOIT servir à la fois le vendeur (vendre plus, garder la main) et l'acheteur (découvrir, être protégé). Une idée qui ne sert qu'un camp est mise en attente.
 
-### 1.3 Niche de lancement
+### 1.3 Catalogue : une place de marché généraliste
 
-**Seconde main de qualité et objets de collection** : mode vintage, livres rares et éditions limitées, montres, vinyles et hi-fi, photo, déco et céramique, cartes à collectionner, sneakers. Zone de lancement : **Paris et petite couronne**, puis France, Belgique, Luxembourg.
+**Décision d'Arcel : TROVÉLYA n'est pas limitée à une niche.** Tout ce qui peut légalement se vendre, se louer ou se proposer entre particuliers et professionnels y a sa place, réparti en **16 univers** (section 8.19), dont trois **verticales** aux règles propres :
+
+- **Immobilier** : vente, location, colocation, location saisonnière, bureaux et commerces, terrains, parkings (section 8.20) ;
+- **Véhicules** : voitures, motos, utilitaires, caravanes et camping-cars, bateaux, pièces (section 8.21) ;
+- **Services** : cours, bricolage, déménagement, ménage, événementiel… (section 8.22).
+
+Chaque catégorie suit un **modèle transactionnel** : *achat protégé* (paiement, séquestre, remise ou livraison), *mise en relation* (contact, visite, rendez-vous, sans argent qui transite par TROVÉLYA) ou *mixte*. La seconde main de qualité et les objets de collection restent un point fort (enchères, live, authentification, passeport produit), mais **aucune catégorie n'est fermée**. Les univers mis en avant dans la communication de lancement sont un choix marketing **[À VALIDER]** par Arcel.
+
+Zone de lancement : **Paris et petite couronne**, puis France, Belgique, Luxembourg.
 
 ### 1.4 Zone de marché
 
-Union européenne (27 pays), une seule société en France, hébergement des données dans l'UE. Déploiement par vagues (section 15.9).
+Union européenne (27 pays), une seule société en France, hébergement des données dans l'UE. Déploiement par vagues (section 15.10).
 
 ### 1.5 Ce que TROVÉLYA ne fait pas (hors périmètre permanent)
 
@@ -111,9 +120,16 @@ Les identifiants de code sont en anglais (`snake_case` en Python et SQL, `camelC
 | Utilisateur | `user` | Personne disposant d'un compte. Peut être acheteur et vendeur. |
 | Vendeur particulier | `seller` (`seller_type = 'individual'`) | Vend des biens personnels, sans activité commerciale. |
 | Vendeur professionnel | `seller` (`seller_type = 'business'`) | Entreprise identifiée (SIREN/numéro de TVA). Soumis aux obligations DSA de traçabilité et au droit de rétractation de 14 jours. |
-| Boutique | `shop` | Vitrine de marque d'un vendeur pro, avec son domaine (phase P9). |
+| Boutique | `shop` | Vitrine de marque d'un vendeur pro, avec son domaine (phase P10). |
 | Annonce | `listing` | Objet mis en vente, avec un ou plusieurs modes de vente. |
-| Mode de vente | `sale_mode` | `fixed_price`, `auction` (P11), `live` (P12), `drop` (P13), `group_buy` (P13). |
+| Univers | `category` (racine) | Grande famille du catalogue (Mode, Maison et jardin, Immobilier, Véhicules…). 16 univers (section 8.19). |
+| Verticale | `vertical` | Univers aux règles et champs propres : `real_estate`, `vehicles`, `services`. Les autres univers sont `goods`. |
+| Modèle transactionnel | `transaction_model` | `protected_purchase` (paiement + séquestre), `contact` (mise en relation, aucun paiement) ou `mixed` (contact, paiement protégé optionnel). Porté par la catégorie. |
+| Mise en relation | `lead` | Demande de contact, de visite ou de rendez-vous sur une annonce en modèle `contact`. |
+| Annonce immobilière | `real_estate_details` | Détails d'un bien : type de transaction, surface, pièces, DPE, charges, honoraires… |
+| DPE | `energy_class` / `ghg_class` | Diagnostic de performance énergétique : classes A à G (énergie et gaz à effet de serre), mention obligatoire dans les annonces immobilières en France. |
+| Annonce véhicule | `vehicle_details` | Détails d'un véhicule : marque, modèle, année, kilométrage, carburant, contrôle technique… |
+| Mode de vente | `sale_mode` | `fixed_price`, `auction` (P12), `live` (P13), `drop` (P14), `group_buy` (P14). |
 | Offre | `offer` | Proposition de prix d'un acheteur sur une annonce à prix fixe (négociation). |
 | Commande | `order` | Engagement d'achat entre un acheteur et un vendeur, regroupant un ou plusieurs articles d'un même vendeur. |
 | Séquestre | `escrow` | Fonds bloqués chez le prestataire de paiement entre le paiement et la validation de la réception. |
@@ -133,7 +149,7 @@ Les identifiants de code sont en anglais (`snake_case` en Python et SQL, `camelC
 | Zone | `search_zone` | Point ou ville de référence de l'acheteur, avec un rayon. |
 | Cercle | `geo_ring` | Tranche de distance : rayon choisi, ville, région, pays, UE. |
 | Vérification vidéo | `verification_video` | Vidéo horodatée de l'objet, filmée par le vendeur avant l'envoi ou la remise. |
-| Passeport produit | `product_passport` | Identifiant et historique d'un objet à travers ses reventes (P16). |
+| Passeport produit | `product_passport` | Identifiant et historique d'un objet à travers ses reventes (P17). |
 | Contournement | `circumvention` | Tentative de conclure une vente hors plateforme (coordonnées, paiement externe). |
 | Sanction | `sanction` | Mesure graduée contre un compte (rappel, avertissement, réduction de visibilité, suspension). |
 | Signalement | `report` | Notification d'un contenu ou comportement par un utilisateur (DSA « notice »). |
@@ -142,7 +158,7 @@ Les identifiants de code sont en anglais (`snake_case` en Python et SQL, `camelC
 | Journal d'audit | `audit_log` | Historique inaltérable des actions sensibles. |
 | Atelier marchand | `merchant_studio` | Espace de gestion des vendeurs pros sur ordinateur. |
 | TROVÉLYA Pass | `buyer_wallet` | Compte acheteur universel avec moyens de paiement enregistrés chez le prestataire. |
-| Cercle (communauté) | `circle` | Communauté thématique (P14). Ne pas confondre avec `geo_ring`. |
+| Cercle (communauté) | `circle` | Communauté thématique (P15). Ne pas confondre avec `geo_ring`. |
 
 ---
 
@@ -197,20 +213,21 @@ Les permissions DOIVENT être implémentées par **permissions nommées** (ex. `
 1. **Le web d'abord.** Le site Next.js (`apps/web`) est le premier client de l'API et DOIT couvrir 100 % des fonctionnalités avant que l'application mobile ne commence. Il est conçu *mobile first* (responsive dès 360 px) et installable en PWA, pour servir les utilisateurs sur téléphone en attendant l'app native.
 2. **Tout le produit est construit**, sans couper de fonctionnalités de la vision. Il n'y a pas de « MVP réduit » : il y a un **ordre**.
 3. **L'ordre est chronologique et strict** : chaque phase s'appuie sur la précédente. Une phase n'est commencée que lorsque la porte de la précédente est franchie (critères en section 17).
-4. **L'application mobile Expo** (`apps/mobile`) est la **dernière phase de construction** (P20). Elle consomme la même API et le même `packages/api-client`, sans logique métier propre.
+4. **L'application mobile Expo** (`apps/mobile`) est la **dernière phase de construction** (P21). Elle consomme la même API et le même `packages/api-client`, sans logique métier propre.
 
 ### 4.2 Pourquoi cet ordre
 
+- **Toutes les catégories d'objets** (16 univers moins les verticales) sont ouvertes dès P2 ; les verticales immobilier, véhicules et services arrivent en P9, une fois la recherche, la messagerie et la confiance en place, car elles en dépendent entièrement. Leurs catégories existent dès P2 en base, masquées par le drapeau `verticals`.
 - Les phases P0 à P8 forment la **colonne vertébrale transactionnelle** (identité → annonce → recherche → paiement → remise → messagerie → confiance → administration). Tout le reste (boutiques, publicité, enchères, live, IA, international) se branche dessus.
 - Les briques qui coûteraient cher à ajouter plus tard sont **posées dès P0**, même si leur fonctionnalité arrive bien après :
   - **i18n** : `next-intl` installé en P0, toutes les chaînes d'interface dans des fichiers de messages (`fr` par défaut). Aucune chaîne en dur dans les composants.
-  - **Multi-devise** : chaque montant est stocké avec sa devise (`amount_minor` + `currency` ISO 4217) dès P0, même si seul l'euro est actif avant P17.
+  - **Multi-devise** : chaque montant est stocké avec sa devise (`amount_minor` + `currency` ISO 4217) dès P0, même si seul l'euro est actif avant P18.
   - **Pays et TVA** : chaque utilisateur, vendeur, commande porte un `country_code` (ISO 3166-1 alpha-2) dès P0.
-  - **Fonctionnalités activables** (feature flags) : chaque module de P9 à P19 est derrière un drapeau, désactivé par défaut en production.
+  - **Fonctionnalités activables** (feature flags) : chaque module de P10 à P20 est derrière un drapeau, désactivé par défaut en production.
   - **Événements de domaine** : la table `outbox_events` existe dès P0 ; chaque module publie ses événements (section 5.6), ce qui permet d'ajouter feed, notifications, score, publicité sans toucher aux modules existants.
   - **Journal d'audit, grand livre, permissions nommées** : dès P0.
 
-### 4.3 Les 21 phases
+### 4.3 Les 22 phases
 
 | Phase | Nom | Contenu principal | Dépend de |
 |---|---|---|---|
@@ -223,31 +240,33 @@ Les permissions DOIVENT être implémentées par **permissions nommées** (ex. `
 | **P6** | Messagerie et anti-contournement | Messagerie temps réel (WebSocket), pièces jointes, rendez-vous, détection anti-contournement (texte, photo, voix plus tard), sanctions graduées, leviers d'incitation | P1, P4 |
 | **P7** | Confiance | Score de confiance /1 000, badges, rangs, Garantie TROVÉLYA, score de risque transactionnel, détection de faux comptes et comptes liés | P5, P6 |
 | **P8** | Tour de contrôle et conformité DSA | Console admin complète (7 espaces de la maquette + configuration), signalements, exposés des motifs, recours, rapports de transparence, DAC7, GPSR (rappels produits), double validation | P1 à P7 |
-| **P9** | Boutiques et Atelier marchand | Abonnements (Particulier/Starter/Pro/Scale/Entreprise), Vitrine (boutique de marque, éditeur par sections, thèmes), domaines et SSL, catalogue pro (variantes, stocks multi-entrepôts, collections), import Shopify et CSV, codes promo, fidélité, analytique marchand, multi-utilisateurs, B2B, e-mails pro | P4 à P8 |
-| **P10** | TROVÉLYA Ads | Régie : 7 formats, enchère au second prix avec qualité, paiement au clic ou à la vente, pilote automatique, groupe témoin, garde-fous, tableau de bord annonceur, facturation | P3, P9 |
-| **P11** | Enchères | 5 formats (chronométrée, éclair, hollandaise, scellée, multi-lots), moteur à écrivain unique, anti-sniping, enchère auto, réserve, achat immédiat, empreinte bancaire, collusion | P4, P7 |
-| **P12** | Live shopping | Diffusion (LiveKit/Mux), produits épinglés, achat dans la vidéo, enchères éclair, chat modéré, co-live, replay chapitré achetable, lives programmés, multidiffusion, soirées de ventes | P11 |
-| **P13** | Drops, précommandes, achats groupés, demande inversée | File d'attente équitable, tirage au sort, précommande participative à seuil, prix dégressif collectif, demandes publiées par les acheteurs | P4, P9 |
-| **P14** | Communauté | Abonnements sociaux, listes d'envies, collections curatées commissionnées, cercles, shopping entre amis, affiliation, défis et saisons, score d'impact | P3, P7 |
-| **P15** | IA avancée | Feed appris v2 (deux tours + classement multi-objectifs), recherche par photo, conversationnelle et vocale, mode Chasse, studio photo, analyste marchand, service client IA, boutique générée, prévisions | P3, P9 |
-| **P16** | Vie de l'objet | Passeport produit, royalties de revente aux marques, histoire de l'objet, patrimoine en temps réel, valeur de revente estimée | P4, P9 |
-| **P17** | International UE | 24 langues, traduction des annonces, multi-devise, moyens de paiement locaux, étiquette UE, TVA par pays et OSS, vagues 2 et 3 | P4, P9 |
-| **P18** | Écosystème | API publique et webhooks, apps tierces en bac à sable, templates vendus par la communauté, annuaire fournisseurs, dropshipping, TROVÉLYA+, campagnes Google/Meta, rapports de tendances | P9, P10 |
-| **P19** | Innovations signature | Agents négociateurs, bourse des objets, scan de la maison, échanges en chaîne, préparation des membres copropriétaires | P15, P16 |
-| **P20** | Application mobile Expo | iOS et Android, parité fonctionnelle avec le web, live natif, notifications push, scan caméra, publication App Store et Google Play | P0 à P19 |
+| **P9** | Verticales : immobilier, véhicules, services | Modèle transactionnel par catégorie, fiches et filtres spécialisés, mises en relation (contact, visite, rendez-vous), agenda de visites, comptes pros vérifiés (carte professionnelle immobilière, garages), import d'annonces par flux, estimation de prix (données publiques DVF, cotes véhicules), anti-arnaque spécifique, paiement protégé optionnel pour les véhicules, offres pros (packs d'annonces) | P3, P6, P7, P8 |
+| **P10** | Boutiques et Atelier marchand | Abonnements (Particulier/Starter/Pro/Scale/Entreprise), Vitrine (boutique de marque, éditeur par sections, thèmes), domaines et SSL, catalogue pro (variantes, stocks multi-entrepôts, collections), import Shopify et CSV, codes promo, fidélité, analytique marchand, multi-utilisateurs, B2B, e-mails pro | P4 à P8 |
+| **P11** | TROVÉLYA Ads | Régie : 7 formats, enchère au second prix avec qualité, paiement au clic ou à la vente, pilote automatique, groupe témoin, garde-fous, tableau de bord annonceur, facturation | P3, P10 |
+| **P12** | Enchères | 5 formats (chronométrée, éclair, hollandaise, scellée, multi-lots), moteur à écrivain unique, anti-sniping, enchère auto, réserve, achat immédiat, empreinte bancaire, collusion | P4, P7 |
+| **P13** | Live shopping | Diffusion (LiveKit/Mux), produits épinglés, achat dans la vidéo, enchères éclair, chat modéré, co-live, replay chapitré achetable, lives programmés, multidiffusion, soirées de ventes | P12 |
+| **P14** | Drops, précommandes, achats groupés, demande inversée | File d'attente équitable, tirage au sort, précommande participative à seuil, prix dégressif collectif, demandes publiées par les acheteurs | P4, P10 |
+| **P15** | Communauté | Abonnements sociaux, listes d'envies, collections curatées commissionnées, cercles, shopping entre amis, affiliation, défis et saisons, score d'impact | P3, P7 |
+| **P16** | IA avancée | Feed appris v2 (deux tours + classement multi-objectifs), recherche par photo, conversationnelle et vocale, mode Chasse, studio photo, analyste marchand, service client IA, boutique générée, prévisions | P3, P10 |
+| **P17** | Vie de l'objet | Passeport produit, royalties de revente aux marques, histoire de l'objet, patrimoine en temps réel, valeur de revente estimée | P4, P10 |
+| **P18** | International UE | 24 langues, traduction des annonces, multi-devise, moyens de paiement locaux, étiquette UE, TVA par pays et OSS, vagues 2 et 3 | P4, P10 |
+| **P19** | Écosystème | API publique et webhooks, apps tierces en bac à sable, templates vendus par la communauté, annuaire fournisseurs, dropshipping, TROVÉLYA+, campagnes Google/Meta, rapports de tendances | P10, P11 |
+| **P20** | Innovations signature | Agents négociateurs, bourse des objets, scan de la maison, échanges en chaîne, préparation des membres copropriétaires | P16, P17 |
+| **P21** | Application mobile Expo | iOS et Android, parité fonctionnelle avec le web, live natif, notifications push, scan caméra, publication App Store et Google Play | P0 à P20 |
 
 ### 4.4 Mises en ligne
 
-Construire tout le produit ne signifie pas attendre P20 pour avoir des utilisateurs. Le déploiement en production est **continu** ; ce qui est visible au public est contrôlé par les drapeaux de fonctionnalités. Jalons de mise en ligne recommandés, **[À VALIDER]** par Arcel :
+Construire tout le produit ne signifie pas attendre P21 pour avoir des utilisateurs. Le déploiement en production est **continu** ; ce qui est visible au public est contrôlé par les drapeaux de fonctionnalités. Jalons de mise en ligne recommandés, **[À VALIDER]** par Arcel :
 
 | Jalon | Après la phase | Public |
 |---|---|---|
 | Bêta fermée | P5 | 50 vendeurs et 200 acheteurs invités, Paris |
 | Lancement public Paris | P8 | Particuliers et vendeurs pros, Île-de-France |
-| Lancement boutiques | P9 | France, Belgique, Luxembourg |
-| Lancement Arène | P12 | Enchères et live |
-| Vague 2 UE | P17 | 7 pays |
-| Apps stores | P20 | iOS et Android |
+| Lancement immobilier, véhicules, services | P9 | Île-de-France, puis France |
+| Lancement boutiques | P10 | France, Belgique, Luxembourg |
+| Lancement Arène | P13 | Enchères et live |
+| Vague 2 UE | P18 | 7 pays |
+| Apps stores | P21 | iOS et Android |
 
 Aucune fonctionnalité ne passe en production sans : migrations réversibles, tests verts, revue de code, flag désactivable, tableau de bord de surveillance (section 16).
 
@@ -266,7 +285,7 @@ Aucune fonctionnalité ne passe en production sans : migrations réversibles, te
 
 ```
                  ┌──────────────────────────┐        ┌──────────────────────┐
-  Navigateur ───▶│ apps/web  (Next.js 15)   │        │ apps/mobile (Expo)   │  ← P20
+  Navigateur ───▶│ apps/web  (Next.js 15)   │        │ apps/mobile (Expo)   │  ← P21
   (PWA)          │ Vercel, région UE (fra1) │        │ EAS                  │
                  └────────────┬─────────────┘        └──────────┬───────────┘
                               │  HTTPS JSON (REST /v1) + WebSocket (/ws)    │
@@ -287,15 +306,15 @@ Aucune fonctionnalité ne passe en production sans : migrations réversibles, te
                          │
      Services externes : prestataire de paiement (Connect), Boxtal/Sendcloud,
      stockage objet S3 compatible UE (Cloudflare R2 région UE ou Scaleway),
-     e-mail transactionnel (Brevo ou Postmark UE), LiveKit/Mux (P12),
-     LLM / vision (API compatibles UE, P2 et P15), Sentry, Grafana/OTel.
+     e-mail transactionnel (Brevo ou Postmark UE), LiveKit/Mux (P13),
+     LLM / vision (API compatibles UE, P2 et P16), Sentry, Grafana/OTel.
 ```
 
 ### 5.2 Choix structurants (ADR à créer en P0)
 
 | # | Décision | Raison |
 |---|---|---|
-| ADR-0001 | Monolithe modulaire FastAPI, pas de microservices avant P12 | Vitesse d'une petite équipe ; extraction plus tard des modules chauds (enchères, live, feed) |
+| ADR-0001 | Monolithe modulaire FastAPI, pas de microservices avant P13 | Vitesse d'une petite équipe ; extraction plus tard des modules chauds (enchères, live, feed) |
 | ADR-0002 | PostgreSQL unique comme source de vérité, y compris pour le feed, la messagerie et la recherche jusqu'à preuve du contraire. Pas de MongoDB | Transactions ACID, PostGIS, pgvector, un seul système à opérer sur Railway |
 | ADR-0003 | Recherche : PostgreSQL (`tsvector` + `pg_trgm` + `pgvector` + PostGIS) en P3 ; passage à Typesense ou OpenSearch quand le p95 dépasse 150 ms ou le catalogue dépasse 2 millions d'annonces actives | Commencer simple, mesurer, extraire |
 | ADR-0004 | Contrat API : OpenAPI 3.1 généré par FastAPI, client TypeScript généré (`openapi-typescript` + `openapi-fetch`) dans `packages/api-client` | Un seul contrat, zéro dérive entre front et back |
@@ -318,7 +337,7 @@ trovelya/
 │   │   │   │   ├── (auth)/       # connexion, inscription, vérification
 │   │   │   │   ├── (account)/    # compte, commandes, messages, favoris, paramètres
 │   │   │   │   ├── (sell)/       # vendre, mes annonces, ventes, solde
-│   │   │   │   ├── (studio)/     # Atelier marchand (P9)
+│   │   │   │   ├── (studio)/     # Atelier marchand (P10)
 │   │   │   │   └── (admin)/      # Tour de contrôle (sous-domaine admin.)
 │   │   │   └── api/              # uniquement routes techniques (revalidate, og-image)
 │   │   ├── components/
@@ -350,22 +369,22 @@ trovelya/
 │   │   │   │   ├── notifications/
 │   │   │   │   ├── admin/
 │   │   │   │   ├── compliance/   # DSA, DAC7, GPSR, RGPD
-│   │   │   │   ├── shops/        # P9
-│   │   │   │   ├── billing/      # abonnements, factures plateforme (P9)
-│   │   │   │   ├── ads/          # P10
-│   │   │   │   ├── auctions/     # P11
-│   │   │   │   ├── live/         # P12
-│   │   │   │   ├── drops/        # P13
-│   │   │   │   ├── community/    # P14
-│   │   │   │   ├── ai/           # P2 (assistance), P15
-│   │   │   │   ├── passport/     # P16
-│   │   │   │   ├── i18n_market/  # P17 (pays, devises, TVA)
-│   │   │   │   ├── platform/     # P18 (API publique, apps, webhooks sortants)
-│   │   │   │   └── agents/       # P19
+│   │   │   │   ├── shops/        # P10
+│   │   │   │   ├── billing/      # abonnements, factures plateforme (P10)
+│   │   │   │   ├── ads/          # P11
+│   │   │   │   ├── auctions/     # P12
+│   │   │   │   ├── live/         # P13
+│   │   │   │   ├── drops/        # P14
+│   │   │   │   ├── community/    # P15
+│   │   │   │   ├── ai/           # P2 (assistance), P16
+│   │   │   │   ├── passport/     # P17
+│   │   │   │   ├── i18n_market/  # P18 (pays, devises, TVA)
+│   │   │   │   ├── platform/     # P19 (API publique, apps, webhooks sortants)
+│   │   │   │   └── agents/       # P20
 │   │   │   └── workers/          # point d'entrée arq, planification cron
 │   │   ├── migrations/           # Alembic
 │   │   └── tests/                # tests transverses, fixtures, factories
-│   └── mobile/                   # Expo (P20)
+│   └── mobile/                   # Expo (P21)
 ├── packages/
 │   ├── api-client/               # types + client générés depuis openapi.json
 │   ├── ui/                       # composants React partagés web (tokens, icônes)
@@ -423,7 +442,7 @@ trovelya/
 | Base | PostgreSQL + PostGIS + pgvector + pg_trgm + unaccent + h3-pg | 16 |
 | Cache, files | Redis | 7 |
 | Observabilité | OpenTelemetry, Sentry, logs JSON (structlog), Grafana Cloud UE ou Better Stack | — |
-| Mobile (P20) | Expo SDK courant, Expo Router, EAS | — |
+| Mobile (P21) | Expo SDK courant, Expo Router, EAS | — |
 
 ### 5.6 Événements de domaine (outbox)
 
@@ -483,7 +502,7 @@ Toutes lues par `core/config.py` (Pydantic Settings), validées au démarrage. A
 | `EMBEDDING_MODEL`, `EMBEDDING_DIM` | `…`, `768` | Recherche sémantique |
 | `SENTRY_DSN`, `OTEL_EXPORTER_OTLP_ENDPOINT` | — | Observabilité |
 | `FEATURE_FLAGS_DEFAULT` | JSON | Valeurs de flags par défaut |
-| `LIVEKIT_URL`, `LIVEKIT_API_KEY`, `LIVEKIT_API_SECRET` | — | P12 |
+| `LIVEKIT_URL`, `LIVEKIT_API_KEY`, `LIVEKIT_API_SECRET` | — | P13 |
 
 Côté web (`apps/web`) : seules les variables `NEXT_PUBLIC_*` sont exposées au navigateur (`NEXT_PUBLIC_API_URL`, `NEXT_PUBLIC_WS_URL`, `NEXT_PUBLIC_MAP_STYLE_URL`, `NEXT_PUBLIC_SENTRY_DSN`). Les clés secrètes ne DOIVENT jamais avoir le préfixe `NEXT_PUBLIC_`.
 
@@ -554,10 +573,10 @@ Les écrans marqués ★ existent dans la maquette.
 
 | # | Route (`/[locale]/…`) | Écran | Phase |
 |---|---|---|---|
-| W01 ★ | `/` | Accueil web : en-tête avec méga-menu 9 catégories, bandeau live, fil (Pour toi / Près de moi / Abonnements), univers, bloc confiance, pied de page | P2-P3 |
+| W01 ★ | `/` | Accueil web : en-tête avec méga-menu des 16 univers, bandeau live, fil (Pour toi / Près de moi / Abonnements), univers, bloc confiance, pied de page | P2-P3 |
 | W02 ★ | `/recherche`, `/c/[categorie]` | Catalogue : filtres (distance, catégories avec compteurs, modes, prix, états, vendeurs vérifiés, main propre), pastilles actives, 4 tris, grille/liste, recherche enregistrée, cercles géographiques, sponsorisés | P3 |
 | W03 ★ | `/annonce/[slug]-[id]` | Fiche produit : galerie 5 vues dont vidéo, vendeur et rang, prix et revente estimée, choix main propre/envoi, total recalculé, offre, favori, suivi de prix, onglets Description / Passeport / Historique des prix, similaires | P2-P4 |
-| W04 ★ | `/live/[id]` | Live : scène, barre d'enchère (+2/+5/+10), chat masquant les coordonnées, prochains passages, « Me rappeler » | P12 |
+| W04 ★ | `/live/[id]` | Live : scène, barre d'enchère (+2/+5/+10), chat masquant les coordonnées, prochains passages, « Me rappeler » | P13 |
 | W05 | `/carte` | Carte des annonces et boutiques | P3 |
 | W06 | `/connexion`, `/inscription`, `/verifier` | Authentification | P1 |
 | W07 | `/bienvenue` | Onboarding : intérêts, tailles, zone, notifications | P1 |
@@ -576,27 +595,33 @@ Les écrans marqués ★ existent dans la maquette.
 | W20 | `/compte/parametres` | Profil, sécurité (passkeys, sessions), confidentialité, export/suppression, préférences de feed | P1 |
 | W21 | `/aide`, `/legal/*` | Centre d'aide, CGU, CGV, confidentialité, cookies, règles, transparence du classement | P1-P8 |
 | W22 | `/signaler/[type]/[id]` | Formulaire de signalement DSA | P8 |
-| W23 | `/boutique/[slug]` + domaine propre | Vitrine de marque | P9 |
-| W24 | `/atelier/*` | Atelier marchand : tableau de bord, produits, stocks, commandes, clients, marketing, analytique, thème, domaines, équipe, abonnement, paramètres | P9 |
-| W25 | `/atelier/pub/*` | Gestionnaire de campagnes Ads | P10 |
-| W26 | `/encheres`, `/enchere/[id]` | Enchères qui finissent, fiche d'enchère | P11 |
-| W27 | `/direct`, `/live/programmer` | Lives en cours et à venir, studio de diffusion web | P12 |
-| W28 | `/drops/[id]`, `/groupe/[id]`, `/demandes` | Drops, achats groupés, demandes inversées | P13 |
-| W29 | `/cercles/*`, `/collections/*` | Communauté | P14 |
-| W30 | `/patrimoine`, `/objet/[passeport]` | Patrimoine, page de l'objet | P16 |
-| W31 | `/bourse/[modele]` | Cote et ordres | P19 |
-| W32 | `/agents` | Missions des agents négociateurs | P19 |
-| W33 | `/developpeurs/*` | Portail API publique | P18 |
-| A01-A07 ★ | `admin.…/` | Tour de contrôle : Vue d'ensemble, Utilisateurs, Anti-contournement, Modération, Lives, Finances, Journal d'audit | P8 (+P12 pour Lives) |
+| W23 | `/boutique/[slug]` + domaine propre | Vitrine de marque | P10 |
+| W24 | `/atelier/*` | Atelier marchand : tableau de bord, produits, stocks, commandes, clients, marketing, analytique, thème, domaines, équipe, abonnement, paramètres | P10 |
+| W25 | `/atelier/pub/*` | Gestionnaire de campagnes Ads | P11 |
+| W26 | `/encheres`, `/enchere/[id]` | Enchères qui finissent, fiche d'enchère | P12 |
+| W27 | `/direct`, `/live/programmer` | Lives en cours et à venir, studio de diffusion web | P13 |
+| W28 | `/drops/[id]`, `/groupe/[id]`, `/demandes` | Drops, achats groupés, demandes inversées | P14 |
+| W29 | `/cercles/*`, `/collections/*` | Communauté | P15 |
+| W30 | `/patrimoine`, `/objet/[passeport]` | Patrimoine, page de l'objet | P17 |
+| W31 | `/bourse/[modele]` | Cote et ordres | P20 |
+| W32 | `/agents` | Missions des agents négociateurs | P20 |
+| W33 | `/developpeurs/*` | Portail API publique | P19 |
+| W34 | `/immobilier`, `/immobilier/[vente\|location\|colocation\|saisonnier\|bureaux-commerces\|terrains\|parkings]` | Recherche immobilière : carte par défaut, dessin de zone, filtres (prix, surface, pièces, DPE, extérieur, étage, ascenseur, meublé, charges), alertes | P9 |
+| W35 | `/annonce/[slug]-[id]` (gabarit immobilier) | Fiche bien : galerie, plan, visite virtuelle, DPE/GES en étiquettes, coût annuel d'énergie, surface, charges, honoraires, copropriété, quartier, estimation du prix au m² du secteur, « Demander une visite » | P9 |
+| W36 | `/vehicules`, `/annonce/…` (gabarit véhicule) | Recherche et fiche véhicule : filtres (marque, modèle, année, km, carburant, boîte, Crit'Air), contrôle technique, historique, cote estimée, « Contacter », « Réserver un essai », paiement protégé optionnel | P9 |
+| W37 | `/services`, `/annonce/…` (gabarit service) | Prestataires près de chez soi, tarifs, zone d'intervention, avis, demande de devis ou de rendez-vous | P9 |
+| W38 | `/compte/visites`, `/compte/demandes` | Agenda des visites et rendez-vous (côté annonceur et côté demandeur), demandes reçues | P9 |
+| W39 | `/pro/immobilier`, `/pro/auto` | Espace pro des verticales : flux d'import, packs d'annonces, statistiques de contacts | P9 |
+| A01-A07 ★ | `admin.…/` | Tour de contrôle : Vue d'ensemble, Utilisateurs, Anti-contournement, Modération, Lives, Finances, Journal d'audit | P8 (+P13 pour Lives) |
 | A08 | `admin.…/litiges` | File des litiges | P5/P8 |
 | A09 | `admin.…/configuration` | Paramètres plateforme (`platform_settings`), flags, catégories | P8 |
 | A10 | `admin.…/conformite` | DSA (transparence, recours), DAC7, GPSR | P8 |
 
-Écrans de l'application mobile de la maquette (Welcome, Main, Menu, Search, Sell, Profile, etc.) : à reproduire en responsive dans le web (mêmes parcours) puis nativement en P20.
+Écrans de l'application mobile de la maquette (Welcome, Main, Menu, Search, Sell, Profile, etc.) : à reproduire en responsive dans le web (mêmes parcours) puis nativement en P21.
 
 ### 6.5 Navigation web
 
-- **En-tête** (Liquid Glass, collant) : logo, barre de recherche avec choix de zone (« Paris 11e · 5 km »), bouton « Vendre », favoris, messages (pastille), notifications (pastille), avatar ; méga-menu des 9 catégories racines : Mode, Livres et papeterie, Montres et bijoux, Musique et vinyles, Photo et hi-fi, Maison et déco, Collection (cartes, figurines), Sneakers, Art et artisanat **[PARAM]**.
+- **En-tête** (Liquid Glass, collant) : logo, barre de recherche avec choix de zone (« Paris 11e · 5 km »), bouton « Vendre », favoris, messages (pastille), notifications (pastille), avatar ; méga-menu des **16 univers** (section 8.19) en grille d'icônes squircles, avec les sous-catégories les plus demandées ; **Immobilier**, **Véhicules** et **Services** ont chacun un accès direct dans l'en-tête et une page d'accueil dédiée (recherche par carte pour l'immobilier).
 - **Mobile web** : barre d'onglets inférieure (Accueil, Rechercher, Vendre, Messages, Profil) + menu grille (maquette `Menu`).
 - **Pied de page** : À propos, Aide, Sécurité, Vendre sur TROVÉLYA, Boutiques, Légal, sélecteur de langue/pays, « © 2026 TROVÉLYA · La belle trouvaille ».
 
@@ -816,7 +841,7 @@ CREATE TABLE consents (                          -- RGPD
 CREATE TABLE follows (
   follower_id UUID NOT NULL REFERENCES users(id),
   followee_user_id UUID REFERENCES users(id),
-  followee_shop_id UUID,                         -- P9
+  followee_shop_id UUID,                         -- P10
   created_at TIMESTAMPTZ NOT NULL DEFAULT now(),
   CHECK (num_nonnulls(followee_user_id, followee_shop_id) = 1)
 );
@@ -878,6 +903,13 @@ CREATE TABLE categories (
   is_active BOOLEAN NOT NULL DEFAULT true,
   requires_verification_video_above_minor BIGINT, -- surcharge du seuil global
   is_restricted BOOLEAN NOT NULL DEFAULT false,  -- catégories soumises à contrôle (ex. couteaux)
+  vertical TEXT NOT NULL DEFAULT 'goods' CHECK (vertical IN ('goods','real_estate','vehicles','services')),
+  transaction_model TEXT NOT NULL DEFAULT 'protected_purchase'
+    CHECK (transaction_model IN ('protected_purchase','contact','mixed')),
+  shipping_allowed BOOLEAN NOT NULL DEFAULT true, -- false : véhicules, immobilier, services, meubles volumineux
+  protected_payment_cap_minor BIGINT,            -- plafond du paiement protégé en modèle 'mixed'
+  listing_fee_minor BIGINT,                      -- annonce payante éventuelle (pros des verticales) [PARAM]
+  max_photos SMALLINT NOT NULL DEFAULT 12,       -- 30 pour l'immobilier et les véhicules
   vat_category TEXT NOT NULL DEFAULT 'standard'
 );
 CREATE INDEX categories_path_gist ON categories USING gist (path);
@@ -903,8 +935,8 @@ CREATE TYPE item_condition AS ENUM ('new_with_tags','new_without_tags','very_goo
 CREATE TABLE listings (
   id UUID PRIMARY KEY,
   seller_id UUID NOT NULL REFERENCES users(id),
-  shop_id UUID,                                  -- P9 : annonce rattachée à une boutique
-  product_variant_id UUID,                       -- P9 : lien au catalogue pro (stock unique)
+  shop_id UUID,                                  -- P10 : annonce rattachée à une boutique
+  product_variant_id UUID,                       -- P10 : lien au catalogue pro (stock unique)
   status listing_status NOT NULL DEFAULT 'draft',
   title TEXT NOT NULL CHECK (char_length(title) BETWEEN 5 AND 120),
   description TEXT NOT NULL CHECK (char_length(description) BETWEEN 20 AND 5000),
@@ -914,7 +946,7 @@ CREATE TABLE listings (
   attributes JSONB NOT NULL DEFAULT '{}',        -- validé contre category_attributes
   price_minor BIGINT NOT NULL CHECK (price_minor BETWEEN 100 AND 100000000), -- 1 € à 1 000 000 €
   currency CHAR(3) NOT NULL DEFAULT 'EUR',
-  original_price_minor BIGINT,                   -- prix barré : soumis à Omnibus (P9 pros)
+  original_price_minor BIGINT,                   -- prix barré : soumis à Omnibus (P10 pros)
   quantity INTEGER NOT NULL DEFAULT 1 CHECK (quantity >= 0),
   accepts_offers BOOLEAN NOT NULL DEFAULT true,
   min_offer_minor BIGINT,                        -- offres refusées automatiquement en dessous
@@ -928,9 +960,9 @@ CREATE TABLE listings (
   place_name TEXT NOT NULL,                      -- 'Paris 11e', 'Lyon 5e'
   country_code CHAR(2) NOT NULL,
   sale_modes TEXT[] NOT NULL DEFAULT '{fixed_price}',
-  is_boosted_until TIMESTAMPTZ,                  -- remontée d'annonce (P10)
-  open_to_swap BOOLEAN NOT NULL DEFAULT false,   -- P19
-  passport_id UUID,                              -- P16
+  is_boosted_until TIMESTAMPTZ,                  -- remontée d'annonce (P11)
+  open_to_swap BOOLEAN NOT NULL DEFAULT false,   -- P20
+  passport_id UUID,                              -- P17
   quality_score SMALLINT NOT NULL DEFAULT 0,     -- 0-100 : photos, description, attributs
   search_document TSVECTOR,                      -- titre (A), marque (A), attributs (B), description (C)
   embedding VECTOR(768),                         -- texte + image (P3)
@@ -1218,7 +1250,7 @@ Plan de comptes (voir écritures types en section 10.4) :
 | `revenue:payment_margin` | revenue | Marge sur frais de paiement |
 | `revenue:instant_payout` | revenue | Frais de virement instantané |
 | `revenue:shipping_margin` | revenue | Marge sur étiquettes |
-| `revenue:ads` / `revenue:boosts` / `revenue:subscriptions` | revenue | P9-P10 |
+| `revenue:ads` / `revenue:boosts` / `revenue:subscriptions` | revenue | P10-P11 |
 | `liability:vat:{country}` | liability | TVA collectée à reverser |
 | `expense:provider_fees` | expense | Frais facturés par le prestataire |
 | `expense:chargebacks` / `expense:goodwill` | expense | Rétrofacturations, gestes commerciaux |
@@ -1462,24 +1494,25 @@ CREATE TABLE notification_deliveries (id BIGINT GENERATED ALWAYS AS IDENTITY PRI
   status TEXT NOT NULL, provider_message_id TEXT, error TEXT, sent_at TIMESTAMPTZ);
 ```
 
-### 7.13 Modules ultérieurs (P9 à P19) — tables principales
+### 7.13 Modules ultérieurs (P10 à P20) — tables principales
 
 Le détail des colonnes sera produit au début de chaque phase (skill `postgresql-table-design`), en respectant les conventions ci-dessus. Tables attendues :
 
 | Phase | Module | Tables |
 |---|---|---|
-| P9 | `shops` | `shops` (slug, nom, logo, thème, statut, pays, owner), `shop_members` (rôles : owner, admin, editor, support), `shop_domains` (domaine, statut DNS, certificat), `shop_pages`, `shop_sections` (éditeur), `shop_themes`, `products`, `product_variants` (SKU, prix, poids), `inventory_locations`, `inventory_levels`, `collections` (manuelles et automatiques par règles), `customers` (clients propres du marchand, exportables), `discount_codes`, `loyalty_programs`, `loyalty_ledger`, `imports` (Shopify/CSV : statut, mapping, erreurs), `redirects` (SEO après migration), `b2b_price_lists`, `quotes` |
-| P9 | `billing` | `plans` (Particulier, Starter, Pro, Scale, Entreprise), `subscriptions`, `subscription_items` (sièges supplémentaires 5 €), `usage_records` (crédits IA), `platform_invoices` (via `invoices`) |
-| P10 | `ads` | `ad_accounts`, `ad_campaigns` (objectif, budget journalier, pilote automatique, ROAS cible), `ad_groups`, `ads` (format, créations), `ad_keywords`, `ad_targeting`, `ad_auctions` (journal échantillonné), `ad_impressions`, `ad_clicks`, `ad_conversions`, `ad_holdout_assignments`, `ad_billing_events`, `listing_boosts` |
-| P11 | `auctions` | `auctions` (format, début, fin, fin effective, réserve, achat immédiat, pas d'enchère, statut), `bids` (séquence serveur, montant, horodatage µs, auto/manuel), `proxy_bids` (maximum chiffré), `auction_holds` (empreintes bancaires), `auction_lots` (multi-lots), `sealed_bids` |
-| P12 | `live` | `live_shows` (programmation, statut, salle LiveKit, replay), `live_show_items` (épinglage, chapitres), `live_viewers`, `live_chat_messages`, `live_moderation_events`, `live_cohosts`, `sales_events` (soirées de ventes) |
-| P13 | `drops` | `drops`, `drop_queue_entries`, `drop_draws`, `preorder_campaigns` (seuil, date limite), `preorder_pledges`, `group_buys`, `group_buy_tiers`, `group_buy_members`, `wanted_requests` (demande inversée), `wanted_proposals` |
-| P14 | `community` | `circles`, `circle_members`, `circle_posts`, `circle_events`, `collections_boards`, `board_items`, `wishlists`, `shared_carts`, `polls`, `affiliate_links`, `affiliate_commissions`, `quests`, `quest_progress`, `seasons`, `impact_counters` |
-| P15 | `ai` | `ai_jobs`, `ai_usage`, `ranking_models` (versions), `feature_store_snapshots`, `hunt_missions` (mode Chasse), `merchant_assistant_threads` |
-| P16 | `passport` | `product_passports` (identifiant `TRV-PP-…`, modèle, numéro de série, marque, certificat), `passport_events` (vente, revente, réparation, authentification), `object_story_chapters` (visibilité), `royalty_rules` (marque, pourcentage), `royalty_payments`, `portfolio_items`, `valuations` (quotidiennes) |
-| P17 | `i18n_market` | `countries` (devise, TVA, moyens de paiement, transporteurs, langues), `vat_rates` (pays × catégorie × dates), `fx_rates` (taux quotidiens), `translations_cache` (annonces traduites) |
-| P18 | `platform` | `api_clients` (OAuth 2.1, scopes), `api_tokens`, `webhook_endpoints`, `webhook_deliveries`, `apps`, `app_installations` (permissions), `templates`, `template_purchases`, `suppliers`, `supplier_reviews`, `rfq_requests`, `plus_memberships` (TROVÉLYA+) |
-| P19 | `agents` / `exchange` | `agent_missions` (mandat, plafonds, validation requise), `agent_negotiation_steps`, `market_models` (cote), `market_orders` (ordres d'achat/vente), `market_trades`, `home_scans`, `swap_cycles`, `swap_participants` |
+| P9 | `verticals` | `real_estate_details` (listing_id, transaction : `sale`/`rent`/`flatshare`/`seasonal`, type de bien, surface habitable, surface Carrez, surface terrain, pièces, chambres, étage, ascenseur, extérieurs, stationnement, année de construction, chauffage, `energy_class`, `ghg_class`, coût annuel d'énergie estimé (min-max, année de référence), DPE en cours/vierge, meublé, loyer hors charges, charges, régularisation ou forfait, dépôt de garantie, honoraires (à la charge de qui, montant ou % TTC, prix hors honoraires), copropriété (lots, charges annuelles, procédure en cours), zone d'encadrement et loyer de référence, complément de loyer, date de disponibilité, visite virtuelle), `vehicle_details` (listing_id, type, marque, modèle, version, année, 1re mise en circulation, km, carburant, boîte, puissance fiscale et DIN, Crit'Air, portes, places, couleur, nombre de propriétaires, immatriculation chiffrée + affichage partiel, VIN chiffré, date du contrôle technique et résultat, rapport d'historique fourni, garantie, non gagé déclaré), `service_details` (type, tarif horaire ou forfait, zone d'intervention en km, qualifications, assurance, statut micro-entrepreneur/SIRET), `pro_licenses` (user_id, type : `real_estate_card_t`, `real_estate_card_g`, `car_dealer`, `service_siret`, numéro, autorité, validité, vérifiée le, document), `leads` (listing_id, demandeur, type : `contact`/`visit`/`test_drive`/`quote`, message, statut, créneau), `visit_slots` (listing_id, début, fin, capacité), `visit_bookings`, `listing_feeds` (pro, URL du flux, format, fréquence, dernier import, erreurs), `price_references` (agrégats DVF par secteur et type de bien, cotes véhicules) |
+| P10 | `shops` | `shops` (slug, nom, logo, thème, statut, pays, owner), `shop_members` (rôles : owner, admin, editor, support), `shop_domains` (domaine, statut DNS, certificat), `shop_pages`, `shop_sections` (éditeur), `shop_themes`, `products`, `product_variants` (SKU, prix, poids), `inventory_locations`, `inventory_levels`, `collections` (manuelles et automatiques par règles), `customers` (clients propres du marchand, exportables), `discount_codes`, `loyalty_programs`, `loyalty_ledger`, `imports` (Shopify/CSV : statut, mapping, erreurs), `redirects` (SEO après migration), `b2b_price_lists`, `quotes` |
+| P10 | `billing` | `plans` (Particulier, Starter, Pro, Scale, Entreprise), `subscriptions`, `subscription_items` (sièges supplémentaires 5 €), `usage_records` (crédits IA), `platform_invoices` (via `invoices`) |
+| P11 | `ads` | `ad_accounts`, `ad_campaigns` (objectif, budget journalier, pilote automatique, ROAS cible), `ad_groups`, `ads` (format, créations), `ad_keywords`, `ad_targeting`, `ad_auctions` (journal échantillonné), `ad_impressions`, `ad_clicks`, `ad_conversions`, `ad_holdout_assignments`, `ad_billing_events`, `listing_boosts` |
+| P12 | `auctions` | `auctions` (format, début, fin, fin effective, réserve, achat immédiat, pas d'enchère, statut), `bids` (séquence serveur, montant, horodatage µs, auto/manuel), `proxy_bids` (maximum chiffré), `auction_holds` (empreintes bancaires), `auction_lots` (multi-lots), `sealed_bids` |
+| P13 | `live` | `live_shows` (programmation, statut, salle LiveKit, replay), `live_show_items` (épinglage, chapitres), `live_viewers`, `live_chat_messages`, `live_moderation_events`, `live_cohosts`, `sales_events` (soirées de ventes) |
+| P14 | `drops` | `drops`, `drop_queue_entries`, `drop_draws`, `preorder_campaigns` (seuil, date limite), `preorder_pledges`, `group_buys`, `group_buy_tiers`, `group_buy_members`, `wanted_requests` (demande inversée), `wanted_proposals` |
+| P15 | `community` | `circles`, `circle_members`, `circle_posts`, `circle_events`, `collections_boards`, `board_items`, `wishlists`, `shared_carts`, `polls`, `affiliate_links`, `affiliate_commissions`, `quests`, `quest_progress`, `seasons`, `impact_counters` |
+| P16 | `ai` | `ai_jobs`, `ai_usage`, `ranking_models` (versions), `feature_store_snapshots`, `hunt_missions` (mode Chasse), `merchant_assistant_threads` |
+| P17 | `passport` | `product_passports` (identifiant `TRV-PP-…`, modèle, numéro de série, marque, certificat), `passport_events` (vente, revente, réparation, authentification), `object_story_chapters` (visibilité), `royalty_rules` (marque, pourcentage), `royalty_payments`, `portfolio_items`, `valuations` (quotidiennes) |
+| P18 | `i18n_market` | `countries` (devise, TVA, moyens de paiement, transporteurs, langues), `vat_rates` (pays × catégorie × dates), `fx_rates` (taux quotidiens), `translations_cache` (annonces traduites) |
+| P19 | `platform` | `api_clients` (OAuth 2.1, scopes), `api_tokens`, `webhook_endpoints`, `webhook_deliveries`, `apps`, `app_installations` (permissions), `templates`, `template_purchases`, `suppliers`, `supplier_reviews`, `rfq_requests`, `plus_memberships` (TROVÉLYA+) |
+| P20 | `agents` / `exchange` | `agent_missions` (mandat, plafonds, validation requise), `agent_negotiation_steps`, `market_models` (cote), `market_orders` (ordres d'achat/vente), `market_trades`, `home_scans`, `swap_cycles`, `swap_participants` |
 
 
 ---
@@ -1490,7 +1523,7 @@ Toutes les valeurs marquées **[PARAM]** sont stockées dans `platform_settings`
 
 ### 8.1 Frais de protection acheteur
 
-S'appliquent aux achats auprès de **vendeurs particuliers** (et aux enchères entre particuliers en P11). Payés par l'acheteur, affichés sur la fiche et au paiement.
+S'appliquent aux achats auprès de **vendeurs particuliers** (et aux enchères entre particuliers en P12). Payés par l'acheteur, affichés sur la fiche et au paiement.
 
 ```
 protection = fixe + ceil(prix_articles × pourcentage)
@@ -1531,13 +1564,13 @@ Déterminées par `orders.sale_channel` au moment de la création de la commande
 Règles :
 
 1. **Plafond par commande : 250 €** [`commission.cap_minor = 25000`]. Levier anti-contournement : les objets chers ne gagnent rien à sortir de la plateforme.
-2. **Vendeurs particuliers** : commission **0 %** (ils ne paient que la protection côté acheteur) — sauf `live_*`/`auction_*` en P11-P12 **[À VALIDER]**.
+2. **Vendeurs particuliers** : commission **0 %** (ils ne paient que la protection côté acheteur) — sauf `live_*`/`auction_*` en P12-P13 **[À VALIDER]**.
 3. **Base** de la commission : prix des articles (hors livraison, hors protection), après remise.
 4. **Arrondi** : au centime inférieur (en faveur du vendeur).
 5. **Attribution** (« qui a apporté la vente ») : modèle **dernier contact TROVÉLYA sur 7 jours** [`attribution.window_days = 7`] : si l'acheteur a cliqué sur l'article depuis une surface TROVÉLYA (feed, recherche, page similaire, notification d'alerte) dans les 7 jours, canal `marketplace` ; si la session d'achat arrive par un lien marchand traçable (`?ref=shop_<id>` signé ou domaine propre) sans contact TROVÉLYA antérieur, canal `own_traffic`. Le détail de l'attribution est stocké dans `orders.attribution` et visible par le marchand.
 6. **Marge sur frais de paiement** : `payment_margin = ceil(total × 0,4 %)` [`fees.payment_margin_bp = 40`], facturée aux vendeurs pros uniquement, détaillée sur la facture.
 
-### 8.3 Abonnements marchands (P9)
+### 8.3 Abonnements marchands (P10)
 
 | Offre | Prix mensuel | Prix annuel | Inclus |
 |---|---|---|---|
@@ -1553,26 +1586,26 @@ Utilisateur supplémentaire : **5 €/mois**. Prix HT, TVA en sus. Essai gratuit
 
 | Service | Tarif par défaut | Phase |
 |---|---|---|
-| Remontée d'annonce (particulier) | 0,99 € (24 h), 2,99 € (3 jours), 4,99 € (7 jours) | P10 |
+| Remontée d'annonce (particulier) | 0,99 € (24 h), 2,99 € (3 jours), 4,99 € (7 jours) | P11 |
 | Virement instantané du solde | 1 % (min 0,50 €), gratuit dès le rang Or | P4 |
 | Marge sur étiquette | 0,30 € à 1 € selon transporteur | P5 |
-| Produit sponsorisé | Au clic dès 0,05 € ou 3 à 8 % de la vente | P10 |
-| Boutique sponsorisée | Au clic dès 0,20 € | P10 |
-| Live boosté | Au spectateur gagné dès 0,05 € | P12 |
-| Enchère boostée | Au clic ou forfait 1,99 € | P11 |
-| Authentification expert | 10 à 30 € par article | P11 |
-| Domaine | Prix registrar + 5 €/an | P9 |
-| E-mail pro | 3 €/boîte/mois | P9 |
-| Crédits IA | Packs dès 9 € | P9 |
-| TROVÉLYA+ (acheteur) | 4,99 €/mois | P18 |
-| Conversion de devises | 1 à 2 % | P17 |
-| Templates, apps tierces | 20 % de commission | P18 |
-| Royalties de revente | 15 % de la royalty versée à la marque | P16 |
-| Affiliation et collections | 10 % de la commission du créateur | P14 |
-| Fournisseur vérifié | 49 €/mois | P18 |
-| Rapports de tendances | 199 à 999 €/mois | P18 |
-| Sponsoring d'événement | 500 à 10 000 € | P14 |
-| Campagnes Google/Meta gérées | 10 % du budget | P18 |
+| Produit sponsorisé | Au clic dès 0,05 € ou 3 à 8 % de la vente | P11 |
+| Boutique sponsorisée | Au clic dès 0,20 € | P11 |
+| Live boosté | Au spectateur gagné dès 0,05 € | P13 |
+| Enchère boostée | Au clic ou forfait 1,99 € | P12 |
+| Authentification expert | 10 à 30 € par article | P12 |
+| Domaine | Prix registrar + 5 €/an | P10 |
+| E-mail pro | 3 €/boîte/mois | P10 |
+| Crédits IA | Packs dès 9 € | P10 |
+| TROVÉLYA+ (acheteur) | 4,99 €/mois | P19 |
+| Conversion de devises | 1 à 2 % | P18 |
+| Templates, apps tierces | 20 % de commission | P19 |
+| Royalties de revente | 15 % de la royalty versée à la marque | P17 |
+| Affiliation et collections | 10 % de la commission du créateur | P15 |
+| Fournisseur vérifié | 49 €/mois | P19 |
+| Rapports de tendances | 199 à 999 €/mois | P19 |
+| Sponsoring d'événement | 500 à 10 000 € | P15 |
+| Campagnes Google/Meta gérées | 10 % du budget | P19 |
 
 **Règle de cohérence** : un vendeur ne paie jamais deux fois sur la même vente (test d'invariant obligatoire sur le calcul des frais).
 
@@ -1609,10 +1642,10 @@ Utilisateur supplémentaire : **5 €/mois**. Prix HT, TVA en sus. Essai gratuit
 ### 8.8 Vérification vidéo avant envoi (P5)
 
 - **Obligatoire** si le prix des articles ≥ **150 €** [`verification_video.required_above_minor = 15000`] ou si la catégorie l'exige ; **facultative** en dessous (valorisée par un badge sur la commande).
-- Filmée **dans l'application** (capture caméra via `getUserMedia` en web, caméra native en P20) ; l'import depuis la galerie est refusé.
+- Filmée **dans l'application** (capture caméra via `getUserMedia` en web, caméra native en P21) ; l'import depuis la galerie est refusé.
 - Durée 15 à 60 s, guidée par une liste : face, dos, étiquette/numéro de série, défauts signalés.
 - Horodatage **serveur** à réception ; empreinte SHA-256 stockée ; rattachée à la commande.
-- Analyse IA (P5, version simple ; P15, version avancée) : correspondance modèle, couleur, état, numéro de série → verdict `consistent` / `doubtful` / `inconsistent`. Un verdict `inconsistent` bloque la génération de l'étiquette et demande une confirmation au vendeur.
+- Analyse IA (P5, version simple ; P16, version avancée) : correspondance modèle, couleur, état, numéro de série → verdict `consistent` / `doubtful` / `inconsistent`. Un verdict `inconsistent` bloque la génération de l'étiquette et demande une confirmation au vendeur.
 - Visible uniquement par l'acheteur, le vendeur et le support. Conservée 12 mois [PARAM] puis supprimée.
 - Sans vidéo obligatoire : impossible de générer l'étiquette.
 
@@ -1672,22 +1705,22 @@ Déroulé :
 - `location_public` = position réelle décalée aléatoirement de 200 à 500 m (décalage fixé une fois par annonce, pas recalculé à chaque requête, pour empêcher la triangulation).
 - Le filtrage par distance utilise la position réelle côté serveur, mais la distance renvoyée est calculée sur la position réelle **puis arrondie** ; l'API ne renvoie jamais de coordonnées précises d'un vendeur particulier.
 
-**Livraison suggérée selon la distance** : < 10 km → main propre en premier ; même région → point relais 24-48 h ; France → point relais, domicile ; autre pays UE → étiquette internationale (P17).
+**Livraison suggérée selon la distance** : < 10 km → main propre en premier ; même région → point relais 24-48 h ; France → point relais, domicile ; autre pays UE → étiquette internationale (P18).
 
 ### 8.12 Feed v1 (P3)
 
-Fils : **Pour toi** (classé), **Près de moi** (cercle 1 puis 2, classement par fraîcheur et qualité), **Abonnements** (chronologique pur, sans profilage), puis **En direct** (P12) et **Enchères qui finissent** (P11).
+Fils : **Pour toi** (classé), **Près de moi** (cercle 1 puis 2, classement par fraîcheur et qualité), **Abonnements** (chronologique pur, sans profilage), puis **En direct** (P13) et **Enchères qui finissent** (P12).
 
 Pipeline (skill `recsys-pipeline-architect`) : *Source → Hydratation → Filtre → Score → Sélection → Effets de bord*.
 
 - **Sources** v1 : annonces récentes des catégories d'intérêt, annonces proches, vendeurs suivis, articles similaires aux favoris (pgvector), tendances (favoris/heure), quota découverte (nouveaux vendeurs).
 - **Filtres** : déjà vu 3 fois sans interaction, vendeur bloqué, marque bloquée, catégorie en pause, hors budget déclaré ×1,5, vendeur sanctionné (`visibility_factor`), déjà acheté.
 - **Score** v1 (règles) : `0,30 × affinité_catégorie + 0,20 × similarité_favoris + 0,15 × proximité + 0,15 × qualité_fiche + 0,10 × confiance_vendeur + 0,10 × fraîcheur`, multiplié par `visibility_factor` du vendeur.
-- **Sélection** : diversité (max 2 articles du même vendeur par tranche de 10, max 4 de la même catégorie feuille), **quota découverte** : 1 carte sur 8 réservée aux annonces de vendeurs ayant moins de 5 ventes [`feed.discovery_slot_every = 8`] ; publicité (P10) : max 1 sur 6.
+- **Sélection** : diversité (max 2 articles du même vendeur par tranche de 10, max 4 de la même catégorie feuille), **quota découverte** : 1 carte sur 8 réservée aux annonces de vendeurs ayant moins de 5 ventes [`feed.discovery_slot_every = 8`] ; publicité (P11) : max 1 sur 6.
 - **« Pourquoi je vois ça ? »** sur chaque carte : raison principale lisible (« Parce que tu as aimé des montres vintage », « À 2 km de toi », « Nouveau vendeur près de chez toi »).
 - **Option sans profilage** (DSA art. 38, appliqué volontairement) : bascule « Feed non personnalisé » dans les préférences → tri par fraîcheur et proximité uniquement.
 - **Mode « Pas maintenant »** : suspend les notifications marketing et les incitations (compte à rebours, « plus que 1 ») pour une durée choisie.
-- Journalisation de chaque requête de feed (`request_id`, candidats servis, affectation d'expérience) pour l'apprentissage en P15.
+- Journalisation de chaque requête de feed (`request_id`, candidats servis, affectation d'expérience) pour l'apprentissage en P16.
 
 ### 8.13 Score de confiance (P7)
 
@@ -1733,11 +1766,11 @@ Attribués et retirés automatiquement chaque nuit, sauf mention contraire.
 | Expédition éclair | `fast_shipper` | ≥ 95 % des colis expédiés en < 24 h, min 10 colis sur 90 jours |
 | Zéro litige | `zero_dispute` | ≥ 100 ventes sans litige perdu (sur la vie du compte) |
 | Vendeur du quartier | `neighborhood_seller` | ≥ 10 remises en main propre réussies sur 90 jours, aucune annulation de son fait |
-| Authentifié | `authenticated` | Articles contrôlés par expert partenaire (manuel, P11) |
-| Artisan / Fabriqué en France | `artisan`, `made_in_france` | Justificatifs vérifiés (manuel, P9) |
+| Authentifié | `authenticated` | Articles contrôlés par expert partenaire (manuel, P12) |
+| Artisan / Fabriqué en France | `artisan`, `made_in_france` | Justificatifs vérifiés (manuel, P10) |
 | Acheteur fiable | `reliable_buyer` | ≥ 10 achats, 100 % payés à temps, ≤ 1 retour sur 90 jours |
 | Collectionneur | `collector` | ≥ 5 achats dans une même catégorie de collection sur 180 jours |
-| Mécène | `patron` | ≥ 3 premiers achats chez de nouveaux vendeurs ou précommandes (P13) |
+| Mécène | `patron` | ≥ 3 premiers achats chez de nouveaux vendeurs ou précommandes (P14) |
 | Pionnier | `pioneer` | Inscrit pendant la première année d'ouverture publique (définitif) |
 
 ### 8.15 Rangs (P7)
@@ -1765,7 +1798,7 @@ Objectif : rendre la transaction hors application **inutile** (leviers) et **ris
 3. Protection uniquement dans l'application : remboursement, médiation, vidéo de vérification.
 4. Versement rapide au vendeur (libération immédiate en main propre).
 5. Le score, les badges, les avis et le rang ne progressent que sur les ventes dans l'application.
-6. Points de fidélité acheteurs (P14) sur les achats dans l'application.
+6. Points de fidélité acheteurs (P15) sur les achats dans l'application.
 
 **Détection** (module `circumvention`, appliquée **avant** l'affichage d'un message, d'une annonce, d'une description, d'un pseudo, d'un commentaire live) :
 
@@ -1777,9 +1810,9 @@ Objectif : rendre la transaction hors application **inutile** (leviers) et **ris
 | Applications de paiement | Liste de mots-clés [`circumvention.payment_keywords`] | WhatsApp, Lydia, PayPal, Telegram, Wero, Revolut, virement, espèces « en direct » |
 | Réseaux sociaux | `@pseudo`, `insta`, `snap` | |
 | Liens externes | Domaines hors liste blanche | |
-| Texte dans les images | OCR sur les photos d'annonce et de message (P6 : OCR simple ; P15 : vision) | Numéro écrit sur un papier |
-| Voix des lives | Transcription (P12) | « Envoie-moi un message sur WhatsApp » |
-| Intention | Classifieur (P15) | « On peut s'arranger en direct ? » |
+| Texte dans les images | OCR sur les photos d'annonce et de message (P6 : OCR simple ; P16 : vision) | Numéro écrit sur un papier |
+| Voix des lives | Transcription (P13) | « Envoie-moi un message sur WhatsApp » |
+| Intention | Classifieur (P16) | « On peut s'arranger en direct ? » |
 
 Regex de base obligatoire (miroir de la maquette, à enrichir) : `\d(?:[\s.\-]?\d){7,}|whats?app|lydia|paypal|telegram|@|z[ée]ro\s?(six|sept)|iban` (insensible à la casse).
 
@@ -1798,7 +1831,7 @@ Chaque niveau ≥ 2 génère une `moderation_decision` avec exposé des motifs (
 
 ### 8.17 Vente : interdits et restrictions (P2)
 
-Liste [PARAM] `catalog.prohibited`: armes et munitions, contrefaçons, médicaments, produits du tabac et vapotage, alcool (sauf vendeurs pros autorisés **[À VALIDER]**), animaux vivants, espèces protégées (ivoire…), contenus pour adultes, données et comptes numériques, titres de transport et billets nominatifs, produits rappelés (GPSR), objets volés, documents d'identité. La modération automatique à la publication (texte + image) bloque ou met en revue (`pending_review`).
+Liste [PARAM] `catalog.prohibited` (s'applique à tous les univers) : armes et munitions, contrefaçons, médicaments, produits du tabac et vapotage, alcool (sauf vendeurs pros autorisés **[À VALIDER]**), animaux vivants, espèces protégées (ivoire…), contenus pour adultes, données et comptes numériques, titres de transport et billets nominatifs, produits rappelés (GPSR), objets volés, documents d'identité. La modération automatique à la publication (texte + image) bloque ou met en revue (`pending_review`).
 
 ### 8.18 Âge et capacité
 
@@ -1806,6 +1839,151 @@ Liste [PARAM] `catalog.prohibited`: armes et munitions, contrefaçons, médicame
 - Aucune publicité personnalisée pour les comptes dont l'âge déclaré est < 18 ans.
 
 ---
+
+### 8.19 Univers du catalogue et modèles transactionnels (P2, verticales P9)
+
+| # | Univers | Sous-catégories principales (non exhaustif, arbre complet en graine P2-T01) | Verticale | Modèle | Livraison |
+|---|---|---|---|---|---|
+| 1 | Mode | Femme, Homme, Enfant, Chaussures, Sneakers, Sacs et maroquinerie, Accessoires, Mode vintage, Luxe | goods | Achat protégé | Oui |
+| 2 | Montres et bijoux | Montres, Bijoux, Bijoux anciens, Montres de collection | goods | Achat protégé | Oui |
+| 3 | Maison et jardin | Meubles, Décoration, Céramique et arts de la table, Luminaires, Linge, Électroménager, Bricolage et outillage, Jardin et piscine | goods | Achat protégé | Oui (sauf volumineux : main propre ou transporteur spécialisé) |
+| 4 | High-tech | Téléphones, Ordinateurs, Tablettes, TV et vidéo, Audio et hi-fi, Photo et vidéo, Consoles et jeux vidéo, Objets connectés | goods | Achat protégé | Oui |
+| 5 | Culture et loisirs | Livres, Livres rares et éditions originales, BD et mangas, Vinyles et CD, Films, Instruments de musique, Jeux de société, Loisirs créatifs | goods | Achat protégé | Oui |
+| 6 | Collection | Cartes à collectionner, Timbres, Monnaies et billets, Figurines, Militaria autorisé, Objets publicitaires, Modélisme | goods | Achat protégé | Oui |
+| 7 | Enfants et bébé | Puériculture, Poussettes, Sièges auto, Vêtements, Jouets, Chambre | goods | Achat protégé | Oui |
+| 8 | Sport et plein air | Vélos et VAE, Fitness, Sports d'hiver, Glisse, Camping et randonnée, Sports collectifs, Pêche | goods | Achat protégé | Oui |
+| 9 | Art, antiquités et artisanat | Tableaux, Sculptures, Photographies d'art, Antiquités, Créations artisanales, Fait main | goods | Achat protégé | Oui |
+| 10 | Beauté et bien-être | Parfums, Soins et maquillage neufs scellés, Coiffure, Accessoires | goods | Achat protégé | Oui |
+| 11 | Animaux (accessoires) | Accessoires, Aquariophilie (matériel), Équitation | goods | Achat protégé | Oui |
+| 12 | Matériel professionnel | BTP, Restauration, Agricole, Bureau, Commerce et boutique, Médical (hors dispositifs réglementés), Industrie | goods | Achat protégé (ou contact au-delà du plafond) | Oui / transporteur |
+| 13 | **Véhicules** | Voitures, Motos, Scooters, Utilitaires, Caravanes et camping-cars, Bateaux, Pièces et équipements (auto, moto, bateau) | vehicles | **Mixte** (pièces : achat protégé) | Non (pièces : oui) |
+| 14 | **Immobilier** | Vente (appartement, maison, terrain, parking, immeuble, viager), Location (vide, meublée, étudiant), Colocation, Location saisonnière, Bureaux et commerces, Fonds de commerce | real_estate | **Mise en relation** | Non |
+| 15 | **Services** | Cours particuliers, Bricolage et réparations, Déménagement, Ménage et repassage, Jardinage, Garde d'animaux, Informatique, Événementiel, Bien-être | services | **Mise en relation** (devis, rendez-vous) | Non |
+| 16 | Autres | Billetterie non nominative, Divers | goods | Achat protégé | Oui |
+
+Règles transverses :
+
+1. Le **modèle transactionnel** est porté par la catégorie feuille et hérité par l'annonce ; il pilote l'interface (bouton « Acheter » ou « Contacter / Demander une visite / Demander un devis »), les frais, les règles anti-contournement et la modération.
+2. **Achat protégé** : toutes les règles des sections 8.1 à 8.10 s'appliquent.
+3. **Mise en relation** : aucun paiement ne transite par TROVÉLYA, donc **ni séquestre, ni frais de protection, ni commission** ; la monétisation vient des options payantes et des offres pros (8.20.6, 8.21.5). Les coordonnées restent masquées jusqu'à ce que l'annonceur accepte la demande (visite, rendez-vous) ; ensuite, l'échange de téléphone est **autorisé** et n'est pas sanctionné (il n'y a pas de commission à contourner). En revanche, la **détection d'arnaques** (8.20.5) s'applique pleinement.
+4. **Mixte** (véhicules) : contact et essai d'abord ; l'acheteur PEUT ensuite payer par le paiement protégé (8.21.3).
+5. Recherche : l'arbre des univers et les **filtres intelligents** dépendent de la catégorie (`category_attributes`) ; une recherche texte peut renvoyer plusieurs univers, présentés en blocs (« Objets », « Immobilier », « Véhicules »).
+6. Priorité territoriale : identique pour tous les univers, avec un rayon par défaut adapté [`geo.default_radius_m_by_vertical`] : objets 5 km, services 10 km, véhicules 50 km, immobilier = zone choisie (ville, arrondissement ou zone dessinée sur la carte).
+
+### 8.20 Verticale Immobilier (P9)
+
+#### 8.20.1 Qui peut publier
+
+| Annonceur | Conditions |
+|---|---|
+| Particulier (vente ou location de son bien) | Compte vérifié (e-mail + téléphone) ; déclaration sur l'honneur d'être propriétaire ou mandaté ; 3 annonces actives max en location [PARAM] |
+| Agence immobilière, mandataire, administrateur de biens | **Carte professionnelle** (carte T « transactions », carte G « gestion ») vérifiée : numéro, CCI de délivrance, validité, garantie financière, assurance RCP ; affichage obligatoire sur les annonces ; SIREN vérifié |
+| Promoteur, constructeur | SIREN vérifié, programmes neufs [À VALIDER] |
+| Sous-location | Interdite sans accord écrit du propriétaire (case à cocher + justificatif sur demande) |
+
+Une annonce pro publiée par un compte dont la carte n'est pas vérifiée est bloquée en `pending_review`.
+
+#### 8.20.2 Champs obligatoires de l'annonce (France)
+
+- Type de transaction et de bien, adresse (stockée) et **localisation affichée au quartier** par défaut (l'annonceur peut choisir d'afficher l'adresse exacte).
+- Surface habitable ; **surface loi Carrez** pour un lot de copropriété en vente ; surface « loi Boutin » en location ; nombre de pièces.
+- **DPE** : classe énergie et classe GES (ou mention « DPE vierge / en cours »), **estimation des coûts annuels d'énergie** (fourchette et année de référence) ; mention « logement à consommation énergétique excessive » pour les classes F et G.
+- **Vente** : prix ; honoraires d'agence s'ils sont à la charge de l'acquéreur (montant ou pourcentage TTC et prix hors honoraires) ; copropriété : nombre de lots, charges annuelles moyennes, existence d'une procédure en cours.
+- **Location** : loyer mensuel charges comprises et montant des charges (provision ou forfait), dépôt de garantie, honoraires à la charge du locataire (dont état des lieux), meublé ou non ; en **zone d'encadrement des loyers** (Paris, Lyon, Lille, Bordeaux, Montpellier… liste [PARAM]) : loyer de référence majoré et éventuel complément de loyer.
+- Photos : 3 minimum, 30 maximum ; plan et visite virtuelle (lien vidéo ou 360°) recommandés.
+
+La validation de ces champs est faite par un schéma par sous-catégorie ; les règles exactes et leur mise à jour (évolutions du DPE, des zones d'encadrement) sont **[À VALIDER]** par un juriste immobilier et conservées en [PARAM].
+
+#### 8.20.3 Contrôles automatiques à la publication
+
+1. **Location d'un logement classé G** : refusée (décence énergétique, interdiction de mise en location des nouveaux baux depuis 2025) ; classe F : avertissement (interdiction prévue en 2028) [`real_estate.rent_min_energy_class = 'F'`, À VALIDER].
+2. Loyer au-dessus du loyer de référence majoré en zone d'encadrement sans complément justifié : refus avec explication.
+3. **Discrimination** : refus des critères illégaux dans le texte (origine, nationalité, religion, situation familiale, handicap, âge…) — liste de motifs et classifieur ; « garant », « revenus » restent autorisés dans les limites légales.
+4. Détection de **doublons** (mêmes photos par empreinte perceptuelle, même adresse) et d'annonces **copiées** depuis d'autres sites (arnaques classiques).
+5. Prix anormalement bas pour le secteur (écart > 40 % sous la référence DVF ou loyers observés) → `pending_review`.
+
+#### 8.20.4 Mise en relation et visites
+
+- Bouton **« Demander une visite »** : l'annonceur publie des **créneaux** (`visit_slots`) ou valide des demandes libres ; le demandeur réserve ; rappel la veille ; possibilité de visites groupées.
+- **Dossier locataire** : TROVÉLYA ne collecte **aucun justificatif** (pièce d'identité, fiches de paie, avis d'imposition) ; le candidat partage un lien vers son dossier **DossierFacile** (service public) [À VALIDER]. Rappel affiché : liste légale des pièces exigibles, interdiction de demander certaines pièces (relevés bancaires, photo d'identité…).
+- **Coordonnées** : masquées jusqu'à l'acceptation d'une visite ; ensuite l'annonceur peut choisir de les partager.
+- **Aucun argent** : TROVÉLYA n'encaisse jamais de prix de vente, d'acompte, de loyer, de dépôt de garantie ni d'honoraires (le maniement de fonds immobiliers exige des agréments spécifiques ; une vente passe par un notaire).
+- Statistiques de l'annonceur : vues, favoris, demandes, visites.
+
+#### 8.20.5 Anti-arnaque immobilière
+
+Arnaques visées : faux propriétaire « à l'étranger », demande de virement ou de mandat cash avant visite, envoi de clés par courrier, faux bail, réservation payante de visite, usurpation d'agence.
+
+- Message affiché sur chaque conversation : « Ne versez jamais d'argent avant d'avoir visité le bien et signé le bail. »
+- Détection dans la messagerie et les annonces : demande de paiement avant visite, Western Union, mandat cash, coupons prépayés (PCS, Transcash…), « je suis à l'étranger », « envoi des clés », IBAN étranger, adresses e-mail de domaines jetables → **blocage du message**, alerte au destinataire et file de revue prioritaire.
+- Annonceur nouveau + loyer anormalement bas + demande de contact hors application → `review`.
+- Usurpation : nom d'agence non vérifié → refus.
+- Signalement « Arnaque » en un clic, traité en priorité 1 (< 4 h).
+
+#### 8.20.6 Monétisation immobilier [PARAM, À VALIDER]
+
+| Offre | Tarif indicatif |
+|---|---|
+| Particulier — annonce de vente ou de location | Gratuite (1 annonce vente + 3 location) |
+| Particulier — options | Remontée 9,99 € ; « À la une » 7 jours 19,99 € ; pack visibilité 30 jours 49,99 € |
+| Pro Immo Essentiel | 149 €/mois HT : 50 annonces, import par flux, statistiques |
+| Pro Immo Illimité | 349 €/mois HT : annonces illimitées, mise en avant d'agence, pages agence, alertes acheteurs qualifiés |
+| Location saisonnière | Annonce gratuite ; réservation et paiement intégrés **hors périmètre initial** (réglementation des meublés de tourisme, numéro d'enregistrement obligatoire affiché, plafond de nuitées) — étude en P19 [À VALIDER] |
+
+#### 8.20.7 Outils qui font la différence
+
+- **Recherche par carte** avec dessin de zone, temps de trajet vers une adresse (travail, école) [PARAM, fournisseur d'itinéraires UE].
+- **Estimation de prix** à partir des transactions réelles publiques (**DVF**, demandes de valeurs foncières) : prix au m² du secteur, ventes récentes comparables affichées sur la fiche et dans l'outil « Estimer mon bien » (porte d'entrée pour les vendeurs particuliers).
+- **Alertes immobilières instantanées** (critère décisif face à la concurrence).
+- Quartier : commerces, transports, écoles (données ouvertes).
+- Le bien vendu ou loué alimente « Mon patrimoine » (P17) si le propriétaire le souhaite.
+
+### 8.21 Verticale Véhicules (P9)
+
+#### 8.21.1 Champs
+
+Marque, modèle, version (référentiel), année et date de première mise en circulation, kilométrage, carburant, boîte, puissance fiscale et réelle, vignette **Crit'Air**, portes, places, couleur, nombre de propriétaires, équipements, **date et résultat du contrôle technique**, entretien, rapport d'historique (lien vers le rapport officiel partagé par le vendeur, HistoVec en France), garantie (pros), défauts déclarés. Immatriculation et numéro de série (VIN) : stockés chiffrés, affichés partiellement, utilisés pour vérifier la cohérence (marque, modèle, année) via un service de décodage **[À VALIDER : fournisseur]**.
+
+#### 8.21.2 Règles
+
+- Véhicule de plus de 4 ans vendu en France : contrôle technique de moins de 6 mois à fournir à la vente — rappel au vendeur, champ obligatoire à la publication pour les voitures.
+- Vendeurs pros (garages, concessionnaires) : SIREN vérifié, garantie légale de conformité mentionnée, prix TTC.
+- Kilométrage incohérent avec l'année ou l'historique → `pending_review`.
+- Livraison : désactivée (essai et remise en main propre) ; **pièces et équipements** : achat protégé avec livraison.
+
+#### 8.21.3 Paiement protégé optionnel (modèle mixte)
+
+1. Contact, puis **réservation d'un essai** (créneau).
+2. Si les deux parties le souhaitent, l'acheteur paie via TROVÉLYA ; les fonds sont en séquestre.
+3. Remise du véhicule avec **code de remise** (8.7) au moment de l'échange des clés et des documents ; libération immédiate du séquestre.
+4. Plafond [`vehicles.protected_payment_cap_minor = 5000000`] (50 000 €) **[À VALIDER avec le prestataire de paiement]** ; au-delà, rappel des moyens sûrs (virement instantané vérifié en présence des deux parties).
+5. Frais : protection acheteur (8.1, plafond 150 €) pour un vendeur particulier ; commission plafonnée à 250 € pour un pro (8.2).
+6. **Check-list de cession** générée pour les deux parties : certificat de cession, code de cession, certificat de situation administrative (non-gage), carte grise barrée, déclaration en ligne sur le site officiel — rappels, pas de dépôt de documents chez TROVÉLYA.
+
+#### 8.21.4 Anti-arnaque véhicules
+
+Faux acheteurs « transitaires », chèques de banque falsifiés, vendeurs à l'étranger demandant un acompte, véhicule volé ou gagé : détection des mots-clés (transitaire, chèque de banque à l'avance, acompte, livraison par transporteur pour un véhicule), message de prévention permanent, recommandation du paiement protégé.
+
+#### 8.21.5 Monétisation véhicules [PARAM, À VALIDER]
+
+Particulier : annonce gratuite, options de visibilité (remontée 4,99 €, « À la une » 14,99 €) ; pros : **Pro Auto** 99 €/mois (30 annonces, flux d'import) et 249 €/mois (illimité) ; frais et commission du paiement protégé ; **cote estimée** offerte (prix du marché calculé sur les annonces et ventes TROVÉLYA, puis partenaire) ; partenaires assurance et financement (commission d'apport) en P19.
+
+### 8.22 Verticale Services (P9)
+
+- Prestataires : particuliers (dans les limites légales, ex. cours particuliers, aide ponctuelle) ou professionnels (SIRET vérifié, assurance déclarée). Les activités réglementées (santé, droit, finance, sécurité) sont **interdites** sauf preuve de qualification vérifiée **[À VALIDER]**.
+- Fiche : description, tarif (horaire, forfait ou sur devis), zone d'intervention, disponibilités, qualifications, avis vérifiés (après prestation confirmée).
+- Mise en relation : demande de devis ou de rendez-vous ; coordonnées après acceptation.
+- **Paiement en ligne de la prestation** : hors périmètre P9 (étude en P19 avec le prestataire de paiement : acompte, libération après prestation) [À VALIDER].
+- Monétisation : offre **Pro Services** 29 €/mois (visibilité, devis illimités, page prestataire) [PARAM] ; options de remontée.
+- Emploi (offres d'emploi) : **non inclus** par défaut (obligations du Code du travail sur les annonces) — décision D18.
+
+### 8.23 Anti-contournement selon le modèle
+
+| Modèle | Échange de coordonnées | Sanction de contournement | Détection d'arnaque |
+|---|---|---|---|
+| Achat protégé | Masqué, sanctionné (8.16) | Oui | Oui |
+| Mixte (véhicules) | Autorisé après acceptation d'un essai | Non | Oui, renforcée |
+| Mise en relation (immobilier, services) | Autorisé après acceptation d'une visite ou d'un rendez-vous | Non | Oui, renforcée (8.20.5) |
 
 ## 9. Machines à états
 
@@ -1889,7 +2067,7 @@ pending ──48 h──▶ expired
 pending ──annonce vendue / retirée / acheteur annule──▶ cancelled
 ```
 
-### 9.7 Enchère (P11)
+### 9.7 Enchère (P12)
 
 ```
 scheduled ──heure de début──▶ live ──offre dans les 30 dernières secondes──▶ live (fin prolongée de 30 s)
@@ -1900,7 +2078,7 @@ live ──achat immédiat──▶ settled
 scheduled | live ──annulation (avant toute offre)──▶ cancelled
 ```
 
-### 9.8 Live (P12)
+### 9.8 Live (P13)
 
 ```
 scheduled ──le vendeur ouvre la salle──▶ backstage ──démarrer──▶ live ──terminer──▶ ended ──traitement──▶ replay_ready
@@ -1936,7 +2114,7 @@ class PaymentProvider(Protocol):
                              payment_method_types: list[str], idempotency_key: str,
                              metadata: dict[str, str]) -> PaymentIntentResult: ...
     async def capture_payment(self, provider_payment_id: str, idempotency_key: str) -> None: ...
-    async def authorize_hold(self, *, amount: Money, customer_id: str, idempotency_key: str) -> HoldResult: ...   # empreinte enchères (P11)
+    async def authorize_hold(self, *, amount: Money, customer_id: str, idempotency_key: str) -> HoldResult: ...   # empreinte enchères (P12)
     async def release_hold(self, hold_id: str) -> None: ...
     async def transfer_to_seller(self, *, account_id: str, amount: Money, source_payment_id: str,
                                  idempotency_key: str) -> TransferResult: ...
@@ -2024,11 +2202,11 @@ Vendeur pro, canal `marketplace`, rang Bronze (8 %), article 500 € : T1 crédi
 - Instantanés sur demande : 1 % (min 0,50 €), gratuits dès le rang Or.
 - Revue manuelle : voir 9.5.
 
-### 10.8 Facturation et TVA (cadre minimal P4, complet P9/P17)
+### 10.8 Facturation et TVA (cadre minimal P4, complet P10/P18)
 
 - TROVÉLYA émet des **factures** pour ses propres prestations : frais de protection (à l'acheteur), commissions et marges (au vendeur pro), abonnements, publicité. Numérotation continue sans trou par année.
 - Les ventes elles-mêmes sont facturées par le **vendeur pro** (TROVÉLYA génère la facture pour son compte, au nom du vendeur, s'il l'active — mandat de facturation **[À VALIDER]**).
-- TVA : taux français par défaut (20 %) sur les services de la plateforme ; règles OSS et « plateforme réputée fournisseur » à valider par l'expert-comptable avant P17 **[À VALIDER]**.
+- TVA : taux français par défaut (20 %) sur les services de la plateforme ; règles OSS et « plateforme réputée fournisseur » à valider par l'expert-comptable avant P18 **[À VALIDER]**.
 - Facturation électronique (réforme française 2026-2027) : prévoir l'émission au format Factur-X via une plateforme agréée **[À VALIDER]** (champ `e_invoice_status`).
 
 ---
@@ -2235,9 +2413,9 @@ Notation : 🔓 public · 🔑 connecté · 🛒 vendeur · 🛡️ staff (permi
 | GET/POST/PATCH | `/admin/categories` | `catalog.configure` |
 | GET | `/admin/compliance/transparency-report?period=` · `/admin/compliance/dac7?year=` | `compliance.read` |
 | POST | `/admin/recalls` | `compliance.write` |
-| GET | `/admin/live/shows` · POST `/admin/live/shows/{id}/terminate` (P12) | `live.moderate` |
+| GET | `/admin/live/shows` · POST `/admin/live/shows/{id}/terminate` (P13) | `live.moderate` |
 
-Les points d'accès des phases P9 à P19 sont spécifiés au début de chaque phase (skill `api-design`), dans `docs/api/` et dans l'OpenAPI, en respectant ces conventions.
+Les points d'accès des phases P10 à P20 sont spécifiés au début de chaque phase (skill `api-design`), dans `docs/api/` et dans l'OpenAPI, en respectant ces conventions.
 
 ### 11.6 Génération du client
 
@@ -2254,12 +2432,12 @@ Les points d'accès des phases P9 à P19 sont spécifiés au début de chaque ph
 - Point d'entrée `wss://api.trovelya.com/v1/ws`, authentifié par la session (cookie) ou par un jeton court (`/v1/ws/ticket`, 60 s, usage unique).
 - Messages JSON `{ "type": "...", "channel": "...", "data": {...}, "seq": 123 }`.
 - Abonnements explicites : `{"type":"subscribe","channel":"conversation:<id>"}` ; le serveur vérifie le droit d'accès à chaque abonnement.
-- Canaux : `user:<id>` (notifications, compteurs, statut de commande), `conversation:<id>`, `listing:<id>` (prix, réservé, vendu), `auction:<id>` (P11), `live:<id>` (P12, chat, épinglage, enchère éclair).
+- Canaux : `user:<id>` (notifications, compteurs, statut de commande), `conversation:<id>`, `listing:<id>` (prix, réservé, vendu), `auction:<id>` (P12), `live:<id>` (P13, chat, épinglage, enchère éclair).
 - Distribution entre instances : Redis pub/sub (`ws:<channel>`). Chaque instance FastAPI garde ses connexions locales.
 - Battement de cœur toutes les 25 s ; reconnexion côté client avec délai exponentiel (1, 2, 4… 30 s) et reprise par `seq` (les 200 derniers messages par canal sont gardés 10 min dans un flux Redis `XADD … MAXLEN`).
-- Le WebSocket ne fait **qu'informer** : toute action (envoyer un message, enchérir) passe par un appel REST idempotent. Exception : enchères éclair en live (P12), qui passent par REST aussi mais avec un chemin optimisé.
+- Le WebSocket ne fait **qu'informer** : toute action (envoyer un message, enchérir) passe par un appel REST idempotent. Exception : enchères éclair en live (P13), qui passent par REST aussi mais avec un chemin optimisé.
 
-### 12.2 Moteur d'enchères (P11) — exigences
+### 12.2 Moteur d'enchères (P12) — exigences
 
 - **Un seul écrivain par lot** : verrou Redis `auction:<id>:lock` (`SET NX PX`), ou file Redis par lot consommée par un worker unique ; l'ordre des offres est donné par une séquence PostgreSQL et l'horodatage serveur en microsecondes.
 - Validation d'une offre : enchère en cours, enchérisseur ≠ vendeur, non lié au vendeur (`account_links`), empreinte bancaire valide ≥ montant, montant ≥ prix courant + pas d'enchère.
@@ -2273,12 +2451,12 @@ Les points d'accès des phases P9 à P19 sont spécifiés au début de chaque ph
 - Gagnant : paiement automatique sur le moyen enregistré (empreinte capturée + complément) sous 24 h ; à défaut, `second_chance`.
 - Tests de charge obligatoires : 1 000 enchérisseurs simultanés sur un lot, 500 offres/s, aucune offre perdue ni mal ordonnée.
 
-### 12.3 Live (P12) — exigences
+### 12.3 Live (P13) — exigences
 
 - Vidéo : service managé (LiveKit Cloud UE recommandé ; Mux ou Cloudflare Stream en alternative), latence < 3 s pour les spectateurs, < 1 s pour les co-hôtes.
-- Diffusion depuis le navigateur (WebRTC, page studio web) dès P12, puis depuis l'app (P20).
+- Diffusion depuis le navigateur (WebRTC, page studio web) dès P13, puis depuis l'app (P21).
 - Chat : canal `live:<id>`, anti-contournement appliqué à chaque message (masquage en direct), limite 1 message/2 s par spectateur, mots interdits, modérateurs délégués par le vendeur.
-- Transcription audio en continu (P12 : modèle de reconnaissance vocale UE) pour la détection de contournement et le chapitrage du replay.
+- Transcription audio en continu (P13 : modèle de reconnaissance vocale UE) pour la détection de contournement et le chapitrage du replay.
 - Enchères éclair (15 à 90 s) lancées par le vendeur sur un produit épinglé.
 - Replay chapitré par produit, achetable après le live.
 
@@ -2318,7 +2496,7 @@ Un document STRIDE (`docs/security/threat-model.md`, skill `stride-analysis-patt
 - **Dépendances** : Dependabot/Renovate, `pip-audit`, `pnpm audit`, SBOM (CycloneDX) à chaque build de production, revue `supply-chain-risk-auditor` avant tout ajout.
 - **Analyse statique** : `semgrep` (règles Python, TypeScript, secrets) en CI, bloquant sur sévérité haute.
 - **Journalisation** : jamais de données personnelles en clair dans les logs (masquage e-mail, téléphone, adresse, jeton) ; filtre `structlog` testé.
-- **Tests d'intrusion** : avant le lancement public (après P8), puis annuellement ; bug bounty public après P12.
+- **Tests d'intrusion** : avant le lancement public (après P8), puis annuellement ; bug bounty public après P13.
 
 ### 13.3 Contrôle d'accès par objet
 
@@ -2377,12 +2555,12 @@ TROVÉLYA est une **plateforme en ligne permettant la conclusion de contrats à 
 
 ### 14.4 Enchères
 
-En France, les ventes aux enchères en ligne entre particuliers via une plateforme relèvent du **courtage aux enchères par voie électronique** (art. L321-3 du Code de commerce) : l'opérateur n'est pas mandataire du vendeur et n'adjuge pas. Le schéma exact (pas d'adjudication par TROVÉLYA, la vente est conclue entre les parties au meilleur enchérisseur) DOIT être validé par un avocat avant P11 **[À VALIDER]**. Aucun développement des enchères ne passe en production sans ce feu vert.
+En France, les ventes aux enchères en ligne entre particuliers via une plateforme relèvent du **courtage aux enchères par voie électronique** (art. L321-3 du Code de commerce) : l'opérateur n'est pas mandataire du vendeur et n'adjuge pas. Le schéma exact (pas d'adjudication par TROVÉLYA, la vente est conclue entre les parties au meilleur enchérisseur) DOIT être validé par un avocat avant P12 **[À VALIDER]**. Aucun développement des enchères ne passe en production sans ce feu vert.
 
 ### 14.5 Fiscalité
 
 - **DAC7** : collecte des informations (identité, TIN, date de naissance, adresse, IBAN via prestataire) des vendeurs dépassant **30 ventes ou 2 000 €** par an ; déclaration annuelle avant le 31 janvier à la DGFiP ; information du vendeur ; suspension après deux relances sans réponse. Job `dac7_aggregate` (janvier) + export au format de l'administration **[À VALIDER : format exact]**.
-- **TVA** : section 10.8 ; OSS en P17.
+- **TVA** : section 10.8 ; OSS en P18.
 
 ### 14.6 Sécurité des produits (GPSR, règlement 2023/988)
 
@@ -2393,24 +2571,57 @@ En France, les ventes aux enchères en ligne entre particuliers via une platefor
 
 ### 14.7 Accessibilité (EAA, applicable depuis le 28 juin 2025)
 
-WCAG 2.2 niveau AA pour le web (et l'app en P20), déclaration d'accessibilité publiée, audit automatisé en CI (`axe-core` via Playwright) + audit manuel avant chaque jalon de mise en ligne (skill `wcag-audit-patterns`).
+WCAG 2.2 niveau AA pour le web (et l'app en P21), déclaration d'accessibilité publiée, audit automatisé en CI (`axe-core` via Playwright) + audit manuel avant chaque jalon de mise en ligne (skill `wcag-audit-patterns`).
 
-### 14.8 Documents légaux à produire avant le lancement public
+### 14.8 Immobilier (P9)
 
-CGU, CGV (vendeurs pros et particuliers), politique de confidentialité, politique cookies, règles de la communauté, conditions de la Garantie TROVÉLYA, page « Comment fonctionne le classement », page « Comment nous vérifions les avis », mentions légales, déclaration d'accessibilité, procédure de signalement, conditions des enchères (P11), conditions publicitaires (P10). Rédigés par un avocat **[À VALIDER]** ; l'interface les affiche depuis des fichiers Markdown versionnés (`apps/web/content/legal/`), chaque version acceptée étant enregistrée (`consents.policy_version`).
+- **Loi Hoguet** (loi n° 70-9) : vérification de la carte professionnelle des agents et mandataires ; TROVÉLYA ne fait **aucune** activité d'intermédiaire (pas de négociation pour compte d'autrui, pas de maniement de fonds) : elle publie des annonces et met en relation. Ce positionnement DOIT être validé par un avocat **[À VALIDER]**.
+- **Mentions obligatoires** des annonces (DPE, coûts d'énergie, honoraires, copropriété, encadrement des loyers) : section 8.20.2.
+- **Décence énergétique** : refus des locations de logements classés G (8.20.3).
+- **Non-discrimination** dans l'accès au logement : contrôle automatique et modération.
+- **Pièces justificatives locataires** : aucune collecte (8.20.4).
+- **Meublés de tourisme** : numéro d'enregistrement affiché si la commune l'exige ; réservation intégrée hors périmètre initial.
+- Données ouvertes (DVF) : respect de la licence et interdiction de ré-identifier les personnes.
+
+### 14.9 Véhicules (P9)
+
+- Contrôle technique, certificat de cession, non-gage : rappels et check-list (8.21.3) ; aucune démarche administrative n'est faite par TROVÉLYA.
+- Pros : informations obligatoires et garantie légale de conformité.
+- Paiement protégé : plafond et règles validés avec le prestataire et un avocat **[À VALIDER]**.
+
+### 14.10 Documents légaux à produire avant le lancement public
+
+CGU, CGV (vendeurs pros et particuliers), politique de confidentialité, politique cookies, règles de la communauté, conditions de la Garantie TROVÉLYA, page « Comment fonctionne le classement », page « Comment nous vérifions les avis », mentions légales, déclaration d'accessibilité, procédure de signalement, conditions des enchères (P12), conditions publicitaires (P11), conditions particulières Immobilier, Véhicules et Services (P9). Rédigés par un avocat **[À VALIDER]** ; l'interface les affiche depuis des fichiers Markdown versionnés (`apps/web/content/legal/`), chaque version acceptée étant enregistrée (`consents.policy_version`).
 
 ---
 
-## 15. Spécifications fonctionnelles des phases P9 à P20
+## 15. Spécifications fonctionnelles des phases P9 à P21
 
 Chaque phase commence par `brainstorming` puis `writing-plans` ; ces spécifications fixent le **quoi** et les critères, le plan fixe le **comment**.
 
-### 15.1 P9 — Boutiques et Atelier marchand
+### 15.1 P9 — Verticales : immobilier, véhicules, services
+
+Règles détaillées : sections 8.19 à 8.23, 14.8, 14.9.
+
+- **Moteur de catégories à modèle transactionnel** : l'interface (fiche, boutons, tunnel), les frais, la messagerie et la modération s'adaptent au `transaction_model` et à la `vertical` de la catégorie. Le gabarit de fiche est choisi par verticale.
+- **Formulaires de publication spécialisés** avec validation stricte par sous-catégorie (schémas JSON côté API, miroir Zod côté web), aide IA (lecture d'un DPE photographié, décodage du modèle de véhicule à partir des photos) — l'humain valide.
+- **Recherche** : filtres spécialisés, recherche par **carte** et **zone dessinée** (polygone PostGIS) pour l'immobilier, tri par prix au m², alertes instantanées.
+- **Mises en relation** : demandes (`leads`), créneaux de visite et d'essai, rappels, agenda W38, statistiques annonceur.
+- **Comptes pros vérifiés** : cartes professionnelles, garages, prestataires (`pro_licenses`), vérification manuelle en Tour de contrôle (nouvel onglet « Pros à vérifier »), affichage des mentions obligatoires.
+- **Import par flux** pour les pros (formats d'export standard des logiciels d'agence et de concession, XML/CSV) : synchronisation planifiée, rapport d'erreurs, retrait automatique des annonces disparues du flux.
+- **Estimation** : chargement et agrégation des données DVF par secteur (IRIS ou cellule H3), « Estimer mon bien », cote véhicule v1.
+- **Anti-arnaque** spécifique (8.20.5, 8.21.4) avec file prioritaire en Tour de contrôle.
+- **Paiement protégé optionnel** véhicules (8.21.3) en réutilisant commandes, séquestre et code de remise.
+- **Offres pros** des verticales (abonnements), options de visibilité pour les particuliers.
+
+**Critères de porte P9** : une agence vérifiée importe 200 annonces par flux en < 10 min ; une annonce de location classée G est refusée ; un message « envoyez un mandat cash avant la visite » est bloqué ; une recherche sur carte avec zone dessinée répond en < 200 ms p95 sur 500 000 biens ; une vente de véhicule avec paiement protégé et code de remise suit tout le parcours avec un grand livre équilibré ; aucun justificatif locataire n'est stocké (test).
+
+### 15.2 P10 — Boutiques et Atelier marchand
 
 **Vitrine (boutique de marque)**
 - Une boutique par abonnement Starter (plusieurs en Scale) : nom, logo, couleurs, thème, pages (accueil, collection, produit, à propos, contact, blog, FAQ), menus.
 - Éditeur visuel par **sections** (bandeau, grille de produits, collection, texte et image, avis, lives à venir, enchères en cours, newsletter) avec aperçu en direct sur ses propres produits, versions et retour arrière.
-- Thèmes : 6 thèmes officiels au lancement de P9 [PARAM] ; marché des templates en P18.
+- Thèmes : 6 thèmes officiels au lancement de P10 [PARAM] ; marché des templates en P19.
 - Domaine propre (achat via registrar revendeur, ou connexion d'un domaine existant), SSL automatique (Vercel domains API ou équivalent), sous-domaine gratuit `nom.trovelya.shop`.
 - SEO : sitemap, données structurées, URL propres, redirections après migration.
 - Recherche interne à la boutique (même moteur).
@@ -2435,13 +2646,13 @@ Chaque phase commence par `brainstorming` puis `writing-plans` ; ces spécificat
 - Équipe : rôles (propriétaire, administrateur, éditeur, support), sièges facturés.
 - B2B : listes de prix par client, devis, paiement à 30 jours (via prestataire).
 - Abonnement et facturation.
-- Publication Google Merchant Center (flux produits) dès P9 ; Meta, TikTok, Pinterest en P18.
+- Publication Google Merchant Center (flux produits) dès P10 ; Meta, TikTok, Pinterest en P19.
 
-**Critères de porte P9** : un marchand migre depuis Shopify, personnalise sa Vitrine, connecte son domaine, vend sur sa Vitrine (commission 0 %) et via le feed (commission selon rang), la commission est correctement attribuée, le stock reste juste sur 1 000 commandes concurrentes simulées.
+**Critères de porte P10** : un marchand migre depuis Shopify, personnalise sa Vitrine, connecte son domaine, vend sur sa Vitrine (commission 0 %) et via le feed (commission selon rang), la commission est correctement attribuée, le stock reste juste sur 1 000 commandes concurrentes simulées.
 
-### 15.2 P10 — TROVÉLYA Ads
+### 15.3 P11 — TROVÉLYA Ads
 
-**Formats** : produit sponsorisé (recherche, feed, similaires), boutique sponsorisée (bandeau + 3 produits en tête de recherche), vidéo sponsorisée (feed), live boosté (P12), enchère boostée (P11), remontée d'annonce (particuliers, prix fixe), sponsoring d'événement (forfait).
+**Formats** : produit sponsorisé (recherche, feed, similaires), boutique sponsorisée (bandeau + 3 produits en tête de recherche), vidéo sponsorisée (feed), live boosté (P13), enchère boostée (P12), remontée d'annonce (particuliers, prix fixe), sponsoring d'événement (forfait).
 
 **Enchère publicitaire** (à chaque recherche et rafraîchissement de feed, < 20 ms) :
 ```
@@ -2459,9 +2670,9 @@ prix payé = (score_pub du suivant / (P(clic) × P(achat) × qualité du gagnant
 - Tableau de bord annonceur : dépenses, ventes, ROAS, ventes causées, mots-clés, part de visibilité, recommandations IA.
 - Facturation : budget prépayé ou prélèvement mensuel ; écritures `revenue:ads`.
 
-**Critères de porte P10** : enchère simulée sur 10 000 requêtes respecte charge publicitaire et seuil de qualité ; mesure de lift fonctionnelle ; aucune facturation double (pub à la vente + commission).
+**Critères de porte P11** : enchère simulée sur 10 000 requêtes respecte charge publicitaire et seuil de qualité ; mesure de lift fonctionnelle ; aucune facturation double (pub à la vente + commission).
 
-### 15.3 P11 — Enchères
+### 15.4 P12 — Enchères
 
 Formats : **chronométrée** (1 h à 10 jours), **éclair** (15 à 90 s, en live), **hollandaise** (prix décroissant par paliers jusqu'au premier preneur), **scellée** (offres secrètes révélées à la fin, la plus haute gagne au prix offert), **multi-lots** (N exemplaires, les N meilleures offres gagnent, chacune paie son offre [PARAM : ou le prix de la N-ième]).
 
@@ -2471,24 +2682,24 @@ Commissions : 10 % (`auction_platform`) ou 5 % (`auction_external`) pour les pro
 
 Authentification par expert (10-30 €) : demande depuis la fiche, partenaires, badge « Authentifié » sur l'objet.
 
-**Critères de porte P11** : feu vert juridique (14.4) ; tests de charge 12.2 ; aucun écart entre l'historique des offres et le gagnant sur 10 000 enchères simulées ; non-paiement < 2 % en bêta.
+**Critères de porte P12** : feu vert juridique (14.4) ; tests de charge 12.2 ; aucun écart entre l'historique des offres et le gagnant sur 10 000 enchères simulées ; non-paiement < 2 % en bêta.
 
-### 15.4 P12 — Live shopping
+### 15.5 P13 — Live shopping
 
 Programmation (titre, date, produits, couverture), rappel « Me rappeler », salle d'attente et compte à rebours ; studio de diffusion web (caméra, micro, partage d'écran) ; produits épinglés et achat sans quitter la vidéo ; enchères éclair ; chat modéré (IA + modérateurs) ; co-live (deux vendeurs, audiences fusionnées, partage des revenus) ; replay chapitré et achetable ; multidiffusion RTMP vers TikTok, Instagram, YouTube avec lien retour ; **soirées de ventes** multi-vendeurs éditorialisées ; espace « Lives » de la Tour de contrôle (tuiles de risque, coupure, avertissement). Mesure du coût vidéo par live (porte : coût vidéo < 15 % du revenu live).
 
-### 15.5 P13 — Drops, précommandes, achats groupés, demande inversée
+### 15.6 P14 — Drops, précommandes, achats groupés, demande inversée
 
 - **Drop** : compte à rebours, salle d'attente, **file d'attente équitable** (ordre aléatoire parmi les présents à l'ouverture, pas premier arrivé), **tirage au sort** pour les produits très demandés, limite par acheteur, défi anti-robots, accès anticipé pour rangs Or+.
 - **Précommande participative** : seuil de commandes et date limite ; empreinte bancaire ou paiement capturé à l'atteinte du seuil ; sinon annulation et remboursement automatiques.
 - **Achat groupé** : paliers (ex. −10 % à 10 acheteurs, −20 % à 50) ; prix final appliqué à tous à la clôture ; partage incitatif.
 - **Demande inversée** : l'acheteur publie un besoin (texte, budget, zone, taille) ; les vendeurs proposent une annonce existante ou une offre ; l'acheteur accepte → commande. Proposée automatiquement en cas de recherche sans résultat.
 
-### 15.6 P14 — Communauté
+### 15.7 P15 — Communauté
 
 Profils sociaux et abonnements ; listes d'envies publiques ou privées ; **collections curatées** (« tableaux ») achetables, partageables, commissionnées pour leur auteur (affiliation) ; **cercles** thématiques (discussions, événements, lives réservés, modérateurs bénévoles, règles) ; shopping entre amis (panier partagé, sondage « demander l'avis », cadeau à plusieurs, listes de cadeaux) ; programme créateurs et affiliés ; quêtes, classements par cercle, saisons (récompenses non monétaires ou réductions de frais ; jamais récompenser la dépense pure) ; **score d'impact** (CO₂ et déchets évités par revente, méthode publiée) ; points de fidélité acheteurs.
 
-### 15.7 P15 — IA avancée
+### 15.8 P16 — IA avancée
 
 | Fonction | Exigence |
 |---|---|
@@ -2506,14 +2717,14 @@ Profils sociaux et abonnements ; listes d'envies publiques ou privées ; **colle
 
 Règle d'or : **l'IA propose, l'humain valide** ; rien n'est publié sans action de l'utilisateur. Chaque appel IA est journalisé (`ai_usage` : modèle, coût, latence), plafonné par compte, et les données envoyées aux fournisseurs restent dans l'UE.
 
-### 15.8 P16 — Vie de l'objet
+### 15.9 P17 — Vie de l'objet
 
 - **Passeport produit** : identifiant unique (`TRV-PP-…`, ex. certificat `AG-1857-0042` de la maquette renommé au format TRV), créé à la vente neuve par une boutique ou à l'authentification ; QR code ; chronologie (fabrication, ventes, reventes, réparations, authentifications). Préparation au passeport numérique produit européen (règlement écoconception).
 - **Royalties de revente** : la marque d'origine définit un pourcentage (ex. 3 %) prélevé à chaque revente sur TROVÉLYA ; TROVÉLYA garde 15 % de la royalty ; écritures dédiées.
 - **Histoire de l'objet** : chapitres ajoutés par chaque propriétaire (photo, lieu, réparation, souvenir), visibilité choisie, affichés sur l'annonce de revente.
 - **Patrimoine en temps réel** : chaque achat entre dans « Mon patrimoine », valeur recalculée chaque jour à partir des ventes réelles d'objets identiques ou proches, alertes (« vaut 30 % de plus »), **valeur de revente estimée à un an** sur chaque fiche (maquette : 18 500 € → 19 200 €), présentée comme indicative avec méthode expliquée.
 
-### 15.9 P17 — International UE
+### 15.10 P18 — International UE
 
 - Vague 2 (Espagne, Italie, Portugal, Pays-Bas, Allemagne, Autriche, Irlande) puis vague 3 (17 pays restants dont 6 hors euro : Pologne, Tchéquie, Hongrie, Roumanie, Suède, Danemark).
 - 24 langues d'interface (`next-intl`, skill `next-intl-add-language`), traduction automatique des annonces (affichée comme telle, original consultable), support dans la langue.
@@ -2522,21 +2733,21 @@ Règle d'or : **l'IA propose, l'humain valide** ; rien n'est publié sans action
 - Étiquette UE unique, réseaux de points relais locaux, prix total international affiché sur la fiche, panier multi-vendeurs regroupé par pays.
 - TVA par pays et catégorie, OSS, comptes pros dans tous les pays avec vérification VIES.
 
-### 15.10 P18 — Écosystème
+### 15.11 P19 — Écosystème
 
 API publique (REST + webhooks sortants signés ; GraphQL en option), OAuth 2.1 avec scopes fins, portail développeurs, bac à sable ; applications tierces (permissions minimales, revue avant publication, révocation immédiate, 20 % de commission) ; marché des templates (20 %) ; annuaire de fournisseurs vérifiés et notés, dropshipping, impression à la demande, demandes de devis groupées ; **TROVÉLYA+** (4,99 €/mois : livraison offerte selon conditions, accès anticipé aux drops) ; campagnes Google Shopping et Meta pilotées depuis l'Atelier ; rapports de tendances anonymisés et agrégés (seuil minimal d'agrégation pour empêcher la ré-identification) ; hébergement souverain (OVHcloud/Scaleway) pour l'offre Entreprise.
 
-### 15.11 P19 — Innovations signature
+### 15.12 P20 — Innovations signature
 
 | Innovation | Spécification minimale | Garde-fous |
 |---|---|---|
 | **Agents négociateurs** | Mission (objet, budget max, distance, prix plancher vendeur, délai de réponse) ; les agents échangent offres et contre-offres via l'API `offers` (`made_by = buyer_agent/seller_agent`) ; conclusion automatique dans les limites ou soumise à validation | Plafond de dépense par mission, historique complet, mention « négocié par agent », reprise en main à tout moment |
 | **Bourse des objets** | Page par modèle (identifié via passeport), historique des prix, dernier prix, volume ; ordres d'achat (« j'achète à 80 € en bon état ») et de vente ; appariement automatique → commande avec séquestre | Objets réels uniquement, pas de vente à découvert, pas de produit financier |
-| **Scan de la maison** | Vidéo de quelques secondes → objets identifiés, comparés aux ventes récentes, total estimé, annonces pré-remplies | Analyse sur l'appareil autant que possible (P20), vidéo non conservée sans accord, floutage visages et documents |
+| **Scan de la maison** | Vidéo de quelques secondes → objets identifiés, comparés aux ventes récentes, total estimé, annonces pré-remplies | Analyse sur l'appareil autant que possible (P21), vidéo non conservée sans accord, floutage visages et documents |
 | **Échanges en chaîne** | Annonces « ouvert à l'échange » + souhaits ; recherche de cycles de 2 à 5 personnes ; soulte d'ajustement ; acceptation de tous puis expéditions simultanées avec séquestre | Vidéo de vérification obligatoire, score de confiance minimum, frais fixes par participant |
 | **Membres copropriétaires** | Préparation uniquement : page d'intérêt, éligibilité par rang | Cadre européen du financement participatif et AMF, avocat obligatoire, aucune collecte dans l'application |
 
-### 15.12 P20 — Application mobile Expo
+### 15.13 P21 — Application mobile Expo
 
 - Skills obligatoires : `expo-overview` en premier, puis `expo-project-structure`, `expo-router`, `expo-data-fetching`, `expo-native-ui`, `expo-design-system`, `vercel-react-native-skills`, `eas-app-stores`, `eas-update`.
 - Parité fonctionnelle avec le web, mêmes routes logiques, même `packages/api-client`, mêmes tokens (`packages/design-tokens`), mêmes fichiers de traduction.
@@ -2666,7 +2877,7 @@ Script `apps/api/scripts/seed_demo.py` (idempotent, interdit en production) repr
 
 | Tâche | Contenu |
 |---|---|
-| P2-T01 | Catégories (ltree), attributs, marques ; graine des 9 univers et sous-catégories de la niche (livres rares, montres, vinyles, photo, déco, mode vintage, cartes, sneakers, art) ; `GET /categories` |
+| P2-T01 | Catégories (ltree), attributs, marques ; graine des **16 univers** et de leur arbre complet de sous-catégories (section 8.19), avec `vertical` et `transaction_model` ; univers Immobilier, Véhicules, Services présents mais masqués par le drapeau `verticals` jusqu'à P9 ; `GET /categories` |
 | P2-T02 | Médias : URL présignées, traitement (EXIF retiré, variantes AVIF/WebP 320/640/1080/1600, hachage perceptuel), vidéos (transcodage HLS via service managé ou ffmpeg en job) |
 | P2-T03 | Annonces : tables 7.5, création de brouillon, validation des attributs par catégorie, positions publique/réelle, H3, `place_name` |
 | P2-T04 | Machine à états 9.1, publication, retrait, renouvellement, expiration (job) |
@@ -2784,30 +2995,49 @@ Script `apps/api/scripts/seed_demo.py` (idempotent, interdit en production) repr
 | P8-T08 | Journal d'audit : recherche, filtres, vérification de chaîne |
 | P8-T09 | Configuration : `platform_settings`, flags, catégories (double validation) |
 | P8-T10 | Conformité : formulaire de signalement public W22, rapport de transparence, base de transparence UE, DAC7 (agrégation, export), rappels GPSR |
-| P8-T11 | Pages légales définitives (14.8) et centre d'aide W21 |
+| P8-T11 | Pages légales définitives (14.10) et centre d'aide W21 |
 | P8-T12 | Test d'intrusion externe, audit d'accessibilité, revue `security-review` complète |
 | P8-T13 | e2e parcours 7 (côté staff), 8, 9, 10 |
 
 **Porte P8 = lancement public Paris possible** : pentest sans faille haute ouverte ; WCAG AA sur parcours critiques ; avocat a validé CGU/CGV ; prestataire de paiement en production ; runbooks testés ; restauration testée.
 
-### 17.10 P9 à P20
+### 17.10 P9 — Verticales
+
+| Tâche | Contenu |
+|---|---|
+| P9-T01 | `transaction_model` et `vertical` pilotent API et web : boutons, tunnel, frais, règles de messagerie (8.23) |
+| P9-T02 | Tables `real_estate_details`, `vehicle_details`, `service_details`, schémas de validation par sous-catégorie |
+| P9-T03 | Comptes pros vérifiés (`pro_licenses`), onglet « Pros à vérifier » en Tour de contrôle |
+| P9-T04 | Publication immobilier : formulaire, mentions obligatoires, contrôles 8.20.3 (DPE G, encadrement, discrimination, doublons, prix anormal) |
+| P9-T05 | Recherche immobilière : carte, zone dessinée, filtres, alertes ; gabarit de fiche W35 |
+| P9-T06 | Visites et rendez-vous : créneaux, réservations, rappels, agenda W38 |
+| P9-T07 | Anti-arnaque immobilier et véhicules, file prioritaire |
+| P9-T08 | Estimation DVF (import, agrégats, « Estimer mon bien ») |
+| P9-T09 | Véhicules : formulaire, référentiel marques/modèles, contrôles, gabarit W36, essais |
+| P9-T10 | Paiement protégé véhicules et check-list de cession |
+| P9-T11 | Services : fiches prestataires, devis et rendez-vous, W37 |
+| P9-T12 | Import par flux pros |
+| P9-T13 | Offres pros et options de visibilité (facturation via le prestataire) |
+| P9-T14 | e2e : agence → flux → annonce → visite ; particulier → location refusée (G) ; vente de voiture avec paiement protégé |
+
+### 17.11 P10 à P21
 
 Chaque phase suit le même format : plan détaillé (`docs/plans/`), tâches numérotées, porte. Découpage indicatif :
 
 | Phase | Tâches indicatives (ordre) |
 |---|---|
-| **P9** Boutiques | T01 plans et abonnements (facturation récurrente via prestataire) · T02 boutiques et membres · T03 catalogue pro (produits, variantes, stock multi-entrepôts, stock unique) · T04 Vitrine : rendu public, thèmes, sections · T05 éditeur visuel · T06 domaines et SSL · T07 import CSV · T08 migration Shopify · T09 redirections SEO · T10 commandes pro, rétractation, factures pour compte · T11 marketing (codes, panier abandonné, fidélité) · T12 analytique marchand · T13 équipe et B2B · T14 Google Merchant Center · T15 Atelier W24 · T16 porte 15.1 |
-| **P10** Ads | T01 comptes, campagnes, budgets · T02 formats et créations · T03 estimation P(clic)/P(achat) v1 · T04 enchère au second prix + qualité · T05 insertion feed/recherche avec plafonds · T06 groupe témoin et lift · T07 pilote automatique v1 · T08 remontée d'annonce · T09 facturation · T10 tableau de bord annonceur W25 · T11 transparence (« Pourquoi cette pub ? ») |
-| **P11** Enchères | T00 feu vert avocat · T01 modèle et machine à états · T02 moteur à écrivain unique · T03 anti-sniping, auto-enchère, réserve, achat immédiat · T04 empreintes bancaires · T05 formats hollandaise, scellée, multi-lots · T06 collusion · T07 temps réel · T08 écrans W26 · T09 tests de charge · T10 authentification par expert |
-| **P12** Live | T01 intégration LiveKit, studio web · T02 programmation, rappels · T03 épinglage et achat dans la vidéo · T04 enchères éclair · T05 chat modéré et transcription · T06 co-live · T07 replay chapitré · T08 multidiffusion · T09 soirées de ventes · T10 espace Lives de la Tour de contrôle · T11 mesure des coûts |
-| **P13** Drops… | T01 drops et file équitable · T02 tirage au sort · T03 précommandes participatives · T04 achats groupés · T05 demande inversée + lien avec la recherche sans résultat |
-| **P14** Communauté | T01 collections curatées · T02 listes d'envies · T03 affiliation · T04 cercles · T05 shopping entre amis · T06 quêtes et saisons · T07 score d'impact · T08 fidélité acheteurs |
-| **P15** IA | T01 entrepôt de caractéristiques et jeux d'entraînement · T02 modèle deux tours · T03 classement multi-objectifs · T04 A/B et déploiement · T05 recherche photo · T06 recherche conversationnelle et vocale · T07 mode Chasse · T08 studio photo · T09 analyste marchand · T10 service client IA · T11 boutique générée · T12 prévisions |
-| **P16** Vie de l'objet | T01 passeport et QR · T02 événements de vie · T03 royalties · T04 histoire de l'objet · T05 valorisations quotidiennes · T06 patrimoine et alertes · T07 valeur de revente estimée sur fiche |
-| **P17** International | T01 pays, devises, taux · T02 traductions d'interface (vague 2) · T03 traduction des annonces · T04 moyens de paiement locaux · T05 étiquette UE · T06 TVA par pays et OSS · T07 vague 3 et devises hors euro |
-| **P18** Écosystème | T01 OAuth 2.1 et API publique · T02 webhooks sortants · T03 portail développeurs · T04 apps tierces · T05 marché des templates · T06 fournisseurs et dropshipping · T07 TROVÉLYA+ · T08 Google/Meta · T09 rapports de tendances · T10 hébergement souverain |
-| **P19** Innovations | T01 agents négociateurs · T02 bourse des objets · T03 scan de la maison (web d'abord, natif en P20) · T04 échanges en chaîne · T05 page copropriétaires |
-| **P20** Mobile | T01 `apps/mobile` (skills Expo) · T02 authentification mobile · T03 navigation et écrans principaux · T04 vente express caméra · T05 messagerie et notifications push · T06 achat et paiement natifs · T07 live natif · T08 scan QR, vérification vidéo, scan de la maison · T09 accessibilité et performance · T10 EAS Build/Submit/Update · T11 publication stores |
+| **P10** Boutiques | T01 plans et abonnements (facturation récurrente via prestataire) · T02 boutiques et membres · T03 catalogue pro (produits, variantes, stock multi-entrepôts, stock unique) · T04 Vitrine : rendu public, thèmes, sections · T05 éditeur visuel · T06 domaines et SSL · T07 import CSV · T08 migration Shopify · T09 redirections SEO · T10 commandes pro, rétractation, factures pour compte · T11 marketing (codes, panier abandonné, fidélité) · T12 analytique marchand · T13 équipe et B2B · T14 Google Merchant Center · T15 Atelier W24 · T16 porte 15.2 |
+| **P11** Ads | T01 comptes, campagnes, budgets · T02 formats et créations · T03 estimation P(clic)/P(achat) v1 · T04 enchère au second prix + qualité · T05 insertion feed/recherche avec plafonds · T06 groupe témoin et lift · T07 pilote automatique v1 · T08 remontée d'annonce · T09 facturation · T10 tableau de bord annonceur W25 · T11 transparence (« Pourquoi cette pub ? ») |
+| **P12** Enchères | T00 feu vert avocat · T01 modèle et machine à états · T02 moteur à écrivain unique · T03 anti-sniping, auto-enchère, réserve, achat immédiat · T04 empreintes bancaires · T05 formats hollandaise, scellée, multi-lots · T06 collusion · T07 temps réel · T08 écrans W26 · T09 tests de charge · T10 authentification par expert |
+| **P13** Live | T01 intégration LiveKit, studio web · T02 programmation, rappels · T03 épinglage et achat dans la vidéo · T04 enchères éclair · T05 chat modéré et transcription · T06 co-live · T07 replay chapitré · T08 multidiffusion · T09 soirées de ventes · T10 espace Lives de la Tour de contrôle · T11 mesure des coûts |
+| **P14** Drops… | T01 drops et file équitable · T02 tirage au sort · T03 précommandes participatives · T04 achats groupés · T05 demande inversée + lien avec la recherche sans résultat |
+| **P15** Communauté | T01 collections curatées · T02 listes d'envies · T03 affiliation · T04 cercles · T05 shopping entre amis · T06 quêtes et saisons · T07 score d'impact · T08 fidélité acheteurs |
+| **P16** IA | T01 entrepôt de caractéristiques et jeux d'entraînement · T02 modèle deux tours · T03 classement multi-objectifs · T04 A/B et déploiement · T05 recherche photo · T06 recherche conversationnelle et vocale · T07 mode Chasse · T08 studio photo · T09 analyste marchand · T10 service client IA · T11 boutique générée · T12 prévisions |
+| **P17** Vie de l'objet | T01 passeport et QR · T02 événements de vie · T03 royalties · T04 histoire de l'objet · T05 valorisations quotidiennes · T06 patrimoine et alertes · T07 valeur de revente estimée sur fiche |
+| **P18** International | T01 pays, devises, taux · T02 traductions d'interface (vague 2) · T03 traduction des annonces · T04 moyens de paiement locaux · T05 étiquette UE · T06 TVA par pays et OSS · T07 vague 3 et devises hors euro |
+| **P19** Écosystème | T01 OAuth 2.1 et API publique · T02 webhooks sortants · T03 portail développeurs · T04 apps tierces · T05 marché des templates · T06 fournisseurs et dropshipping · T07 TROVÉLYA+ · T08 Google/Meta · T09 rapports de tendances · T10 hébergement souverain |
+| **P20** Innovations | T01 agents négociateurs · T02 bourse des objets · T03 scan de la maison (web d'abord, natif en P21) · T04 échanges en chaîne · T05 page copropriétaires |
+| **P21** Mobile | T01 `apps/mobile` (skills Expo) · T02 authentification mobile · T03 navigation et écrans principaux · T04 vente express caméra · T05 messagerie et notifications push · T06 achat et paiement natifs · T07 live natif · T08 scan QR, vérification vidéo, scan de la maison · T09 accessibilité et performance · T10 EAS Build/Submit/Update · T11 publication stores |
 
 ---
 
@@ -2816,18 +3046,25 @@ Chaque phase suit le même format : plan détaillé (`docs/plans/`), tâches num
 | # | Décision | Valeur par défaut d'implémentation | Bloque | Responsable |
 |---|---|---|---|---|
 | D1 | Prestataire de paiement | Stripe Connect derrière `PaymentProvider` | P4 en production | Arcel |
-| D2 | Avocat : CGU/CGV, courtage des enchères, statut DSA, médiateur | — | P8 lancement, P11 | Arcel |
-| D3 | Expert-comptable : TVA plateforme, OSS, mandat de facturation, facturation électronique, DAC7 | TVA FR 20 % sur services plateforme | P4 production, P17 | Arcel |
+| D2 | Avocat : CGU/CGV, courtage des enchères, statut DSA, médiateur | — | P8 lancement, P12 | Arcel |
+| D3 | Expert-comptable : TVA plateforme, OSS, mandat de facturation, facturation électronique, DAC7 | TVA FR 20 % sur services plateforme | P4 production, P18 | Arcel |
 | D4 | Dépôt de la marque TROVÉLYA (INPI puis EUIPO) et domaines (`trovelya.com`, `.fr`, `.eu`) | — | P0-T14 | Arcel |
 | D5 | Agrégateur transport : Boxtal ou Sendcloud | Boxtal | P5 | Arcel |
 | D6 | Fournisseur IA (vision, LLM, embeddings) avec traitement UE | Adaptateur ; fournisseur à choisir | P2-T06 | Arcel |
-| D7 | Fournisseur vidéo live | LiveKit Cloud UE | P12 | Arcel |
-| D8 | Commission sur les lives/enchères entre particuliers | 0 % + protection acheteur | P11 | Arcel |
+| D7 | Fournisseur vidéo live | LiveKit Cloud UE | P13 | Arcel |
+| D8 | Commission sur les lives/enchères entre particuliers | 0 % + protection acheteur | P12 | Arcel |
 | D9 | Versement anticipé à l'expédition pour Or+ | Non | P7 | Arcel |
 | D10 | Alcool chez les vendeurs pros | Interdit | P2 | Arcel + avocat |
 | D11 | Jalons de mise en ligne (4.4) | Selon tableau | — | Arcel |
-| D12 | Achats intégrés stores pour services numériques (P20) | Analyse avant P20 | P20 | Arcel |
+| D12 | Achats intégrés stores pour services numériques (P21) | Analyse avant P21 | P21 | Arcel |
 | D13 | Moteur de recherche dédié (Typesense/OpenSearch) | PostgreSQL jusqu'aux seuils ADR-0003 | — | Technique |
+| D14 | Juriste immobilier : positionnement hors loi Hoguet, mentions obligatoires, DPE, encadrement des loyers, meublés de tourisme | Annonces + mise en relation, aucun fonds | P9 | Arcel |
+| D15 | Plafond du paiement protégé pour les véhicules (avec le prestataire) | 50 000 € | P9 | Arcel |
+| D16 | Tarifs des offres pros immobilier, auto, services | Section 8.20.6, 8.21.5, 8.22 | P9 | Arcel |
+| D17 | Univers mis en avant dans la communication de lancement | Aucune restriction de catalogue | Marketing | Arcel |
+| D18 | Ouvrir un univers Emploi (offres d'emploi) | Non | — | Arcel |
+| D19 | Réservation et paiement intégrés pour la location saisonnière et les services | Hors périmètre, étude en P19 | P19 | Arcel |
+| D20 | Fournisseur de décodage VIN / cote véhicule | Adaptateur ; à choisir | P9 | Arcel |
 
 ---
 
@@ -2851,7 +3088,7 @@ Chaque phase suit le même format : plan détaillé (`docs/plans/`), tâches num
 | Sécurité | `security-review`, `auth-implementation-patterns`, `stride-analysis-patterns`, `semgrep`, `sharp-edges`, `supply-chain-risk-auditor` |
 | RGPD | `gdpr-data-handling` |
 | Déploiement | `docker-patterns`, `deployment-patterns`, `deploy-to-vercel` |
-| Mobile (P20) | `expo-overview` (toujours en premier), `expo-project-structure`, `expo-router`, `expo-data-fetching`, `expo-native-ui`, `expo-design-system`, `vercel-react-native-skills`, `eas-app-stores`, `eas-update` |
+| Mobile (P21) | `expo-overview` (toujours en premier), `expo-project-structure`, `expo-router`, `expo-data-fetching`, `expo-native-ui`, `expo-design-system`, `vercel-react-native-skills`, `eas-app-stores`, `eas-update` |
 | Prototype jetable | `prototype` |
 | Passation entre sessions | `handoff` |
 | Besoin non couvert | `find-skills` |
@@ -2902,8 +3139,14 @@ Chaque phase suit le même format : plan détaillé (`docs/plans/`), tâches num
 | `auctions.anti_snipe_seconds` | 30 |
 | `listings.expiry_days` | 120 |
 | `retention.verification_video_days` | 365 |
+| `geo.default_radius_m_by_vertical` | `{"goods":5000,"services":10000,"vehicles":50000,"real_estate":null}` |
+| `real_estate.rent_min_energy_class` | `F` (G refusé) |
+| `real_estate.max_individual_rentals` | 3 |
+| `real_estate.price_anomaly_pct` | 40 |
+| `vehicles.protected_payment_cap_minor` | 5000000 |
+| `listings.max_photos_by_vertical` | `{"goods":12,"real_estate":30,"vehicles":30,"services":12}` |
 
 ---
 
-*Fin du cahier des charges v1.0 — TROVÉLYA, « La belle trouvaille ».*
+*Fin du cahier des charges v1.1 — TROVÉLYA, « La belle trouvaille ».*
 
