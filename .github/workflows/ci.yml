@@ -40,6 +40,8 @@ jobs:
       - uses: astral-sh/setup-uv@v6
         with:
           enable-cache: true
+      - name: Build TROVÉLYA PostgreSQL image (integration tests run against it)
+        run: docker build -t trovelya/postgres:17 ../../infra/postgres
       - run: uv sync --locked
       - run: uv run ruff check
       - run: uv run ruff format --check
