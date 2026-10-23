@@ -2,6 +2,15 @@
 
 TROVÉLYA (« La belle trouvaille ») est une marketplace européenne : boutiques de marque, vente entre particuliers, enchères, live shopping, recherche locale (priorité 5 km), passeport produit et séquestre.
 
+## Document de référence (à lire avant toute tâche)
+**`docs/CAHIER_DES_CHARGES.md` est la source de vérité du projet** : règles métier, modèle de données, API, sécurité, conformité et plan de construction. Relire la section concernée avant chaque tâche ; ne jamais inventer une règle métier absente : poser la question.
+
+## Ordre de construction (décision d'Arcel)
+- **Web d'abord** : `apps/web` couvre 100 % des fonctionnalités (mobile first, PWA) avant l'app mobile.
+- **Tout le produit est construit, dans l'ordre chronologique** : phases P0 → P20 (section 4 et section 17). Une phase ne commence qu'après la validation de la porte de la précédente par Arcel.
+- L'application mobile Expo est la dernière phase (P20).
+- Phase en cours : **P0 — Fondations**.
+
 ## Pile technique (décidée)
 - Monorepo pnpm + Turborepo : `apps/web` (Next.js, App Router), `apps/mobile` (Expo), `apps/api` (FastAPI, Python géré avec uv), `packages/api-client` (types générés depuis l'OpenAPI de FastAPI), `packages/ui`, `packages/core`.
 - PostgreSQL (extensions PostGIS et pgvector) + Redis, hébergés sur Railway en région Europe. Pas de MongoDB.
