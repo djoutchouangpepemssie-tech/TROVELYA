@@ -1,0 +1,7 @@
+.claude/
+docs/
+pnpm-lock.yaml
+**/dist/
+**/.next/
+**/coverage/
+*.md
