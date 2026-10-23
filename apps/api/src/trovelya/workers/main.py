@@ -9,6 +9,7 @@ from arq.cron import CronJob
 
 from trovelya.core.config import get_settings
 from trovelya.core.db import make_engine, make_sessionmaker
+from trovelya.core.idempotency import purge_idempotency_keys
 from trovelya.core.logging import configure_logging
 from trovelya.core.redis import make_redis
 from trovelya.shared.clock import SystemClock
@@ -51,11 +52,16 @@ async def audit_verify_chain_job(ctx: Context) -> int:
     return len(await verify_audit_chain(ctx["sessionmaker"]))
 
 
+async def purge_idempotency_keys_job(ctx: Context) -> int:
+    return await purge_idempotency_keys(ctx["sessionmaker"], clock=ctx["clock"])
+
+
 class WorkerSettings:
     functions: ClassVar[list[Any]] = []
     cron_jobs: ClassVar[list[CronJob]] = [
         cron(relay_outbox, second=EVERY_SECOND, unique=True, timeout=30),
         cron(audit_verify_chain_job, hour=3, minute=0, unique=True, timeout=600),
+        cron(purge_idempotency_keys_job, hour=4, minute=30, unique=True, timeout=600),
     ]
     on_startup = startup
     on_shutdown = shutdown

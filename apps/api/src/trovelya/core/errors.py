@@ -22,6 +22,8 @@ class ErrorCode(StrEnum):
     BAD_REQUEST = "bad_request"
     NOT_FOUND = "not_found"
     METHOD_NOT_ALLOWED = "method_not_allowed"
+    IDEMPOTENCY_KEY_REQUIRED = "idempotency_key_required"
+    IDEMPOTENCY_KEY_INVALID = "idempotency_key_invalid"
     IDEMPOTENCY_CONFLICT = "idempotency_conflict"
     IDEMPOTENCY_IN_PROGRESS = "idempotency_in_progress"
     RATE_LIMITED = "rate_limited"
@@ -37,6 +39,8 @@ _TITLES: dict[ErrorCode, str] = {
     ErrorCode.BAD_REQUEST: "Requête mal formée",
     ErrorCode.NOT_FOUND: "Introuvable",
     ErrorCode.METHOD_NOT_ALLOWED: "Méthode non autorisée",
+    ErrorCode.IDEMPOTENCY_KEY_REQUIRED: "Clé d'idempotence obligatoire",
+    ErrorCode.IDEMPOTENCY_KEY_INVALID: "Clé d'idempotence invalide",
     ErrorCode.IDEMPOTENCY_CONFLICT: "Clé d'idempotence déjà utilisée",
     ErrorCode.IDEMPOTENCY_IN_PROGRESS: "Requête déjà en cours",
     ErrorCode.RATE_LIMITED: "Trop de requêtes",
