@@ -26,7 +26,25 @@ jobs:
           cache: pnpm
       - run: pnpm install --frozen-lockfile
       - run: pnpm format:check
-      - run: pnpm turbo run lint typecheck test build
+      - run: pnpm turbo run lint typecheck test build --filter=!@trovelya/api
+
+  py:
+    name: py
+    runs-on: ubuntu-latest
+    timeout-minutes: 15
+    defaults:
+      run:
+        working-directory: apps/api
+    steps:
+      - uses: actions/checkout@v4
+      - uses: astral-sh/setup-uv@v6
+        with:
+          enable-cache: true
+      - run: uv sync --locked
+      - run: uv run ruff check
+      - run: uv run ruff format --check
+      - run: uv run pyright
+      - run: uv run pytest
 
   postgres-image:
     name: postgres-image
