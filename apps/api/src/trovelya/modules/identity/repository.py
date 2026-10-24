@@ -1,6 +1,6 @@
 """SQL of the identity module. Only this module's service reads or writes these tables."""
 
-from datetime import datetime
+from datetime import datetime, timedelta
 from typing import Any
 from uuid import UUID
 
@@ -226,3 +226,24 @@ async def create_user(
 
 async def mark_email_verified(db: AsyncSession, user_id: UUID, *, now: datetime) -> None:
     await db.execute(_MARK_EMAIL_VERIFIED, {"id": user_id, "now": now})
+
+
+_NEW_SESSION = text(
+    "SELECT s.created_at, s.device_label, s.country_code, u.email,"
+    " EXISTS (SELECT 1 FROM sessions p WHERE p.user_id = s.user_id AND p.id <> s.id"
+    "   AND p.created_at <= s.created_at) AS has_previous,"
+    " EXISTS (SELECT 1 FROM sessions p WHERE p.user_id = s.user_id AND p.id <> s.id"
+    "   AND p.created_at <= s.created_at"
+    "   AND p.created_at > s.created_at - CAST(:window AS interval)"
+    "   AND p.device_label IS NOT DISTINCT FROM s.device_label"
+    "   AND p.country_code IS NOT DISTINCT FROM s.country_code) AS known_context"
+    " FROM sessions s JOIN users u ON u.id = s.user_id WHERE s.id = :id"
+)
+
+
+async def find_session_context(
+    db: AsyncSession, session_id: UUID, *, window: timedelta
+) -> Row[Any] | None:
+    """A session with its owner's address and whether its device and country were seen."""
+    result = await db.execute(_NEW_SESSION, {"id": session_id, "window": window})
+    return result.one_or_none()

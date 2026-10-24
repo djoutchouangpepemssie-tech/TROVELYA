@@ -57,6 +57,18 @@ class OutboxEvent:
     occurred_at: datetime
 
 
+Handler = Callable[[AsyncSession, OutboxEvent], Awaitable[None]]
+
+
+@dataclass(frozen=True, slots=True)
+class Subscription:
+    """A handler for one event type; `consumer` is its stable name in `processed_events`."""
+
+    consumer: str
+    event_type: str
+    handler: Handler
+
+
 class EventPublisher(Protocol):
     async def publish(self, event: OutboxEvent) -> None: ...
 
