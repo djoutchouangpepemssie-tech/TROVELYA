@@ -4,7 +4,7 @@ Rule (section 5.4): services never commit. The boundary (an HTTP route through `
 or a job) owns the transaction: commit on success, rollback on error.
 """
 
-from collections.abc import AsyncIterator
+from collections.abc import AsyncIterator, Awaitable, Callable
 
 from fastapi import Request
 from sqlalchemy import text
@@ -29,6 +29,27 @@ async def ping(engine: AsyncEngine) -> None:
         await connection.execute(text("SELECT 1"))
 
 
+AfterCommit = Callable[[], Awaitable[None]]
+_AFTER_COMMIT_KEY = "trovelya.after_commit"
+
+
+def on_commit(session: AsyncSession, callback: AfterCommit) -> None:
+    """Run `callback` once this session's transaction is committed (never on rollback).
+
+    Use for side effects that must not happen for a rolled-back change, such as cache
+    invalidation. Callbacks run only when the boundary commits through `commit()`.
+    """
+    session.info.setdefault(_AFTER_COMMIT_KEY, []).append(callback)
+
+
+async def commit(session: AsyncSession) -> None:
+    """Commit, then run the `on_commit` callbacks. The only way boundaries should commit."""
+    await session.commit()
+    callbacks: list[AfterCommit] = session.info.pop(_AFTER_COMMIT_KEY, [])
+    for callback in callbacks:
+        await callback()
+
+
 async def get_uow(request: Request) -> AsyncIterator[AsyncSession]:
     """FastAPI dependency: one transaction per request, committed only if the route succeeds."""
     sessionmaker: async_sessionmaker[AsyncSession] = request.app.state.sessionmaker
@@ -36,6 +57,7 @@ async def get_uow(request: Request) -> AsyncIterator[AsyncSession]:
         try:
             yield session
         except BaseException:
+            session.info.pop(_AFTER_COMMIT_KEY, None)
             await session.rollback()
             raise
-        await session.commit()
+        await commit(session)
