@@ -71,10 +71,17 @@ export function Onboarding() {
     router.push(home);
   }
 
-  if (step === null) {
+  // Steps 2 to 4 save over the stored preferences: never shown before they are loaded.
+  if (step === null || (step > 1 && preferences === null)) {
     return (
-      <main className="flex min-h-dvh items-center justify-center" aria-busy="true">
-        <p className="text-ink-2">{t("loading")}</p>
+      <main className="flex min-h-dvh items-center justify-center" aria-busy={!error}>
+        {error ? (
+          <p role="alert" className="text-danger">
+            {error}
+          </p>
+        ) : (
+          <p className="text-ink-2">{t("loading")}</p>
+        )}
       </main>
     );
   }

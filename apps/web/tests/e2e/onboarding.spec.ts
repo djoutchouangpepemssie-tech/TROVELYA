@@ -125,6 +125,11 @@ test("too young message, and nothing is kept", async ({ page }) => {
 
 test("keyboard only: interests toggle with Space and focus follows the steps", async ({ page }) => {
   await signIn(page, { completed: true });
+  // Slow preferences: the step must not be usable before they are loaded (CI race).
+  await page.route("**/api/v1/me/preferences", async (route) => {
+    if (route.request().method() === "GET") await new Promise((r) => setTimeout(r, 1500));
+    await route.continue();
+  });
   await page.goto("/fr/bienvenue");
   const heading = page.getByRole("heading", { level: 1, name: t.interests.title });
   await expect(heading).toBeVisible();
