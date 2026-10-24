@@ -4,6 +4,8 @@ If Redis is unavailable the request is let through and the failure is logged: an
 the limiter must not take the site down (choice recorded in docs/plans/P0-fondations.md).
 """
 
+import hashlib
+import hmac
 import math
 import time
 from uuid import uuid4
@@ -47,12 +49,18 @@ async def hit(redis: Redis, key: str, *, limit: int, window_s: int) -> int | Non
     return max(1, math.ceil(int(retry_ms) / 1000))  # pyright: ignore[reportUnknownArgumentType]
 
 
+def client_fingerprint(ip: str, *, secret: str) -> str:
+    """Keyed hash of the client IP: Redis keys and telemetry never hold the address itself."""
+    return hmac.new(secret.encode(), ip.encode(), hashlib.sha256).hexdigest()[:32]
+
+
 class AnonymousRateLimitMiddleware:
     """Default limit per client IP for every request (authenticated limits arrive in P1)."""
 
-    def __init__(self, app: ASGIApp, *, per_minute: int) -> None:
+    def __init__(self, app: ASGIApp, *, per_minute: int, secret: str) -> None:
         self.app = app
         self.per_minute = per_minute
+        self._secret = secret
 
     async def __call__(self, scope: Scope, receive: Receive, send: Send) -> None:
         if scope["type"] != "http" or scope["path"] in EXEMPT_PATHS:
@@ -62,7 +70,8 @@ class AnonymousRateLimitMiddleware:
         ip = client[0] if client else "unknown"
         try:
             redis: Redis = scope["app"].state.redis
-            retry_after = await hit(redis, f"anon:{ip}", limit=self.per_minute, window_s=60)
+            key = f"anon:{client_fingerprint(ip, secret=self._secret)}"
+            retry_after = await hit(redis, key, limit=self.per_minute, window_s=60)
         except Exception as exc:  # noqa: BLE001 — fail open, see module docstring
             logger.warning("ratelimit.redis_unavailable", error=type(exc).__name__)
             retry_after = None

@@ -5,7 +5,7 @@ import sentry_sdk
 from fastapi import FastAPI
 
 from tests.conftest import make_settings
-from trovelya.core.observability import configure_observability
+from trovelya.core.observability import configure_observability, scrub_breadcrumb, scrub_event
 
 FAKE_DSN = "https://public@o0.ingest.de.sentry.io/0"
 
@@ -32,3 +32,22 @@ def test_sentry_initialised_without_personal_data() -> None:
     assert collected["http_bodies"] == []
     assert collected["url_query_params"] == {"mode": "off"}
     assert collected["stack_frame_variables"] is False
+
+
+def test_access_log_breadcrumbs_are_dropped() -> None:
+    crumb = {"category": "uvicorn.access", "message": '92.170.253.181:0 - "GET / HTTP/1.1" 200'}
+    assert scrub_breadcrumb(crumb, {}) is None
+
+
+def test_breadcrumbs_and_events_are_redacted() -> None:
+    crumb = scrub_breadcrumb(
+        {"category": "app", "message": "contact jean.dupont@gmail.com from 92.170.253.181"}, {}
+    )
+    assert crumb is not None
+    assert "jean.dupont@gmail.com" not in str(crumb)
+    assert "92.170.253.181" not in str(crumb)
+    event = scrub_event(
+        {"spans": [{"description": "ZADD rl:anon:92.170.253.181", "data": {"ip": "1.2.3.4"}}]}, {}
+    )
+    assert "92.170.253.181" not in str(event)
+    assert "1.2.3.4" not in str(event)
