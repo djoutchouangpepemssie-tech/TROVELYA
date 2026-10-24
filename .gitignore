@@ -10,3 +10,4 @@ build/
 .turbo/
 .expo/
 .DS_Store
+coverage/
