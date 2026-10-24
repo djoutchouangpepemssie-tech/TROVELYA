@@ -25,6 +25,7 @@ class Settings(BaseSettings):
     sentry_dsn: str | None = None
     otel_exporter_otlp_endpoint: str | None = None
     feature_flags_default: dict[str, bool] = Field(default_factory=dict[str, bool])
+    rate_limit_anonymous_per_minute: int = Field(default=120, ge=1)  # section 11.4
 
 
 @lru_cache(maxsize=1)

@@ -5,13 +5,17 @@ from contextlib import asynccontextmanager
 
 from fastapi import FastAPI
 
-from trovelya.core import db, redis
+from trovelya.core import db, redis, testing_routes
 from trovelya.core.config import Settings, get_settings
+from trovelya.core.csrf import CsrfMiddleware
+from trovelya.core.csrf import router as csrf_router
 from trovelya.core.errors import install_error_handlers
 from trovelya.core.health import ReadinessCheck
 from trovelya.core.health import router as health_router
+from trovelya.core.idempotency import IdempotencyMiddleware
 from trovelya.core.logging import configure_logging
 from trovelya.core.middleware import RequestIdMiddleware
+from trovelya.core.ratelimit import AnonymousRateLimitMiddleware
 
 
 def create_app(
@@ -37,6 +41,8 @@ def create_app(
             await redis.ping(redis_client)
 
         app.state.readiness_checks = {"database": database_check, "redis": redis_check}
+        app.state.sessionmaker = db.make_sessionmaker(engine)
+        app.state.redis = redis_client
         try:
             yield
         finally:
@@ -54,6 +60,16 @@ def create_app(
     app.state.settings = settings
     app.state.readiness_checks = readiness_checks or {}
     install_error_handlers(app)
+    # Starlette runs the last added middleware first: request id → rate limit → CSRF →
+    # idempotency → routes.
+    app.add_middleware(IdempotencyMiddleware)
+    app.add_middleware(CsrfMiddleware, secret=settings.secret_key.get_secret_value())
+    app.add_middleware(
+        AnonymousRateLimitMiddleware, per_minute=settings.rate_limit_anonymous_per_minute
+    )
     app.add_middleware(RequestIdMiddleware)
     app.include_router(health_router)
+    app.include_router(csrf_router)
+    if settings.env in {"local", "test"}:
+        app.include_router(testing_routes.router)
     return app
