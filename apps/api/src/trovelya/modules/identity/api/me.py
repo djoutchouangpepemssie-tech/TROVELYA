@@ -14,6 +14,9 @@ from trovelya.modules.identity.schemas import (
     ConsentIn,
     ConsentOut,
     ConsentState,
+    DataExportAccepted,
+    DataRequestList,
+    DataRequestOut,
     EmailChangeRequest,
     MeOut,
     ProfilePatch,
@@ -27,6 +30,7 @@ from trovelya.modules.identity.service import (
     clear_session_cookie,
     consents,
     current_user,
+    gdpr,
     get_clock,
     get_session_policy,
     limit_magic_link_requests,
@@ -217,3 +221,80 @@ async def post_consent(
         clock=clock,
     )
     return await _consent_state(db, user=user, anonymous_id=anonymous_id)
+
+
+def _audit_context(request: Request) -> tuple[str | None, str | None]:
+    secret = request.app.state.settings.proxy_shared_secret.get_secret_value()
+    return client_ip(request.scope, proxy_secret=secret), request.headers.get("user-agent")
+
+
+@router.post(
+    "/data-export",
+    operation_id="me_data_export_request",
+    status_code=status.HTTP_202_ACCEPTED,
+    responses={403: {"description": "step_up_required"}},
+)
+async def post_data_export(
+    request: Request,
+    db: Uow,
+    user: Annotated[CurrentUser, Depends(recent_mfa_user)],
+    clock: ClockDep,
+) -> DataExportAccepted:
+    """GDPR export (ADR-0016): built by the worker, announced by e-mail. A request still in
+    progress is answered again instead of starting a second one."""
+    ip, user_agent = _audit_context(request)
+    request_id = await gdpr.request_export(
+        db,
+        user_id=user.id,
+        queue=request.app.state.queue,
+        clock=clock,
+        ip=ip,
+        user_agent=user_agent,
+    )
+    return DataExportAccepted(request_id=request_id)
+
+
+@router.get("/data-requests", operation_id="me_data_requests_list")
+async def get_data_requests(db: Uow, user: Me) -> DataRequestList:
+    rows = await gdpr.list_requests(db, user.id)
+    return DataRequestList(
+        data=[DataRequestOut.model_validate(row, from_attributes=True) for row in rows]
+    )
+
+
+@router.get(
+    "/data-export/{request_id}/download",
+    operation_id="me_data_export_download",
+    response_class=Response,
+    responses={
+        200: {"content": {"application/zip": {}}, "description": "The export archive"},
+        403: {"description": "step_up_required"},
+        404: {"description": "Unknown, someone else's, not ready or expired"},
+    },
+)
+async def get_data_export(
+    request_id: UUID,
+    request: Request,
+    db: Uow,
+    user: Annotated[CurrentUser, Depends(recent_mfa_user)],
+    clock: ClockDep,
+) -> Response:
+    ip, user_agent = _audit_context(request)
+    archive = await gdpr.download_export(
+        db,
+        user_id=user.id,
+        request_id=request_id,
+        settings=request.app.state.settings,
+        clock=clock,
+        ip=ip,
+        user_agent=user_agent,
+    )
+    filename = f"trovelya-export-{clock.now().date().isoformat()}.zip"
+    return Response(
+        archive,
+        media_type="application/zip",
+        headers={
+            "content-disposition": f'attachment; filename="{filename}"',
+            "cache-control": "no-store",
+        },
+    )

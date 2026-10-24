@@ -2,6 +2,7 @@
 
 import socket
 from typing import Any, ClassVar
+from uuid import UUID
 from zoneinfo import ZoneInfo
 
 import httpx
@@ -17,7 +18,13 @@ from trovelya.core.idempotency import purge_idempotency_keys
 from trovelya.core.logging import configure_logging
 from trovelya.core.observability import configure_observability, outbox_oldest_unpublished_seconds
 from trovelya.core.redis import make_redis
-from trovelya.modules.identity.service import identity_subscriptions, purge_expired_magic_links
+from trovelya.modules.identity.service import (
+    EXPORT_JOB,
+    build_data_export,
+    identity_subscriptions,
+    purge_expired_exports,
+    purge_expired_magic_links,
+)
 from trovelya.shared.clock import SystemClock
 from trovelya.workers.consumers import consume_events, ensure_group
 from trovelya.workers.email_jobs import MAX_TRIES, deliver_email
@@ -94,14 +101,32 @@ async def purge_magic_links_job(ctx: Context) -> int:
     return await purge_expired_magic_links(ctx["sessionmaker"], clock=ctx["clock"])
 
 
+async def build_data_export_job(ctx: Context, request_id: str) -> bool:
+    return await build_data_export(
+        ctx["sessionmaker"],
+        UUID(request_id),
+        settings=ctx["settings"],
+        clock=ctx["clock"],
+        queue=ctx["redis"],
+    )
+
+
+async def purge_data_exports_job(ctx: Context) -> int:
+    return await purge_expired_exports(ctx["sessionmaker"], clock=ctx["clock"])
+
+
 class WorkerSettings:
-    functions: ClassVar[list[Any]] = [func(deliver_email, max_tries=MAX_TRIES, timeout=60)]
+    functions: ClassVar[list[Any]] = [
+        func(deliver_email, max_tries=MAX_TRIES, timeout=60),
+        func(build_data_export_job, name=EXPORT_JOB, max_tries=3, timeout=300),
+    ]
     cron_jobs: ClassVar[list[CronJob]] = [
         cron(relay_outbox, second=EVERY_SECOND, unique=True, timeout=30),
         cron(consume_events_job, second=EVERY_SECOND, unique=True, timeout=30),
         cron(audit_verify_chain_job, hour=3, minute=0, unique=True, timeout=600),
         cron(purge_idempotency_keys_job, hour=4, minute=30, unique=True, timeout=600),
         cron(purge_magic_links_job, hour=4, minute=45, unique=True, timeout=600),
+        cron(purge_data_exports_job, hour=5, minute=0, unique=True, timeout=600),
     ]
     on_startup = startup
     on_shutdown = shutdown

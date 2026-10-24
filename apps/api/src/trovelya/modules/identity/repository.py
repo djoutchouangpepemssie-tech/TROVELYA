@@ -4,7 +4,7 @@ from datetime import datetime, timedelta
 from typing import Any
 from uuid import UUID
 
-from sqlalchemy import Row, bindparam, text
+from sqlalchemy import Row, TextClause, bindparam, text
 from sqlalchemy.dialects.postgresql import JSONB
 from sqlalchemy.ext.asyncio import AsyncSession
 
@@ -825,3 +825,163 @@ async def preferences(db: AsyncSession, user_id: UUID) -> dict[str, Any] | None:
 
 async def save_preferences(db: AsyncSession, *, user_id: UUID, values: dict[str, Any]) -> None:
     await db.execute(_SAVE_PREFERENCES, {"user_id": user_id, **values})
+
+
+# --- GDPR export (ADR-0016) ------------------------------------------------------------------
+# One statement per table, columns listed explicitly: secrets (token hashes, passkey keys) and
+# other people's data never leave. `:u` is the person exporting.
+
+EXPORT_QUERIES: dict[str, TextClause] = {
+    "users": text(
+        "SELECT id, email::text AS email, email_verified_at, phone_e164, phone_verified_at,"
+        " username::text AS username, display_name, avatar_media_id, bio, locale, timezone,"
+        " country_code, status::text AS status, visibility_factor, is_staff, birth_year,"
+        " marketing_opt_in, last_seen_at, profile_completed_at, erasure_requested_at,"
+        " created_at, updated_at FROM users WHERE id = :u"
+    ),
+    "auth_identities": text(
+        "SELECT provider, provider_subject, created_at FROM auth_identities"
+        " WHERE user_id = :u ORDER BY created_at"
+    ),
+    "passkeys": text(
+        "SELECT id, name, transports, created_at, last_used_at FROM passkeys"
+        " WHERE user_id = :u ORDER BY created_at"
+    ),
+    "sessions": text(
+        "SELECT id, kind, created_at, last_used_at, expires_at, revoked_at, host(ip) AS ip,"
+        " user_agent, device_label, country_code FROM sessions"
+        " WHERE user_id = :u ORDER BY created_at"
+    ),
+    "user_roles": text(
+        "SELECT role_key, granted_at FROM user_roles WHERE user_id = :u ORDER BY granted_at"
+    ),
+    # The payload may describe someone else: only the request's own fields.
+    "approval_requests": text(
+        "SELECT id, permission_key, status, reason, created_at, decided_at, expires_at,"
+        " CASE WHEN requested_by = :u THEN 'requested' ELSE 'decided' END AS my_role"
+        " FROM approval_requests WHERE requested_by = :u OR decided_by = :u"
+        " ORDER BY created_at"
+    ),
+    "addresses": text(
+        "SELECT id, label, full_name, line1, line2, postal_code, city, country_code,"
+        " phone_e164, ST_Y(location::geometry) AS lat, ST_X(location::geometry) AS lon,"
+        " is_default_shipping, created_at, updated_at, deleted_at FROM addresses"
+        " WHERE user_id = :u ORDER BY created_at"
+    ),
+    "search_zones": text(
+        "SELECT id, label, place_name, ST_Y(center::geometry) AS lat,"
+        " ST_X(center::geometry) AS lon, radius_m, is_default, created_at, updated_at"
+        " FROM search_zones WHERE user_id = :u ORDER BY created_at"
+    ),
+    "user_preferences": text(
+        "SELECT interests, sizes, budget_max_minor, blocked_brands, feed_discovery_level,"
+        " paused_categories, not_now_until, personalised_feed, notification_settings,"
+        " updated_at FROM user_preferences WHERE user_id = :u"
+    ),
+    "consents": text(
+        "SELECT purpose, granted, policy_version, source, anonymous_id, created_at"
+        " FROM consents WHERE user_id = :u ORDER BY created_at"
+    ),
+    # Only the person's own blocks: who blocked them stays private.
+    "blocks": text(
+        "SELECT blocked_id, created_at FROM blocks WHERE blocker_id = :u ORDER BY created_at"
+    ),
+    "data_requests": text(
+        "SELECT id, kind, status, refusal_reason, created_at, completed_at FROM data_requests"
+        " WHERE user_id = :u ORDER BY created_at"
+    ),
+}
+
+_EXPORT_FOLLOWING = text(
+    "SELECT followee_user_id, followee_shop_id, created_at FROM follows"
+    " WHERE follower_id = :u ORDER BY created_at"
+)
+# Followers are other people: counted, not named.
+_EXPORT_FOLLOWERS_COUNT = text("SELECT count(*) FROM follows WHERE followee_user_id = :u")
+
+_PENDING_REQUEST = text(
+    "SELECT id FROM data_requests WHERE user_id = :u AND kind = :kind"
+    " AND status IN ('received', 'processing')"
+)
+_INSERT_REQUEST = text(
+    "INSERT INTO data_requests (id, user_id, kind, status, created_at)"
+    " VALUES (:id, :u, :kind, 'received', :now)"
+)
+_REQUEST_FOR_BUILD = text(
+    "SELECT r.user_id, r.status, u.email::text AS email FROM data_requests r"
+    " JOIN users u ON u.id = r.user_id WHERE r.id = :id AND r.kind = 'export' FOR UPDATE OF r"
+)
+_INSERT_EXPORT = text(
+    "INSERT INTO data_exports (id, data_request_id, ciphertext, expires_at, created_at)"
+    " VALUES (:id, :request_id, :ciphertext, :expires_at, :now)"
+)
+_COMPLETE_REQUEST = text(
+    "UPDATE data_requests SET status = 'completed', completed_at = :now WHERE id = :id"
+)
+_LIST_REQUESTS = text(
+    "SELECT r.id, r.kind, r.status, r.created_at, r.completed_at, e.expires_at"
+    " FROM data_requests r LEFT JOIN data_exports e ON e.data_request_id = r.id"
+    " WHERE r.user_id = :u ORDER BY r.created_at DESC"
+)
+_EXPORT_CIPHERTEXT = text(
+    "SELECT e.ciphertext FROM data_exports e JOIN data_requests r ON r.id = e.data_request_id"
+    " WHERE r.id = :id AND r.user_id = :u AND e.expires_at > :now"
+)
+_PURGE_EXPORTS = text("DELETE FROM data_exports WHERE expires_at <= :now")
+
+
+async def export_rows(db: AsyncSession, query: TextClause, user_id: UUID) -> list[dict[str, Any]]:
+    return [dict(row) for row in (await db.execute(query, {"u": user_id})).mappings()]
+
+
+async def export_follows(db: AsyncSession, user_id: UUID) -> dict[str, Any]:
+    return {
+        "following": await export_rows(db, _EXPORT_FOLLOWING, user_id),
+        "followers_count": int(await db.scalar(_EXPORT_FOLLOWERS_COUNT, {"u": user_id}) or 0),
+    }
+
+
+async def pending_data_request(db: AsyncSession, user_id: UUID, kind: str) -> UUID | None:
+    return await db.scalar(_PENDING_REQUEST, {"u": user_id, "kind": kind})
+
+
+async def insert_data_request(
+    db: AsyncSession, *, request_id: UUID, user_id: UUID, kind: str, now: datetime
+) -> None:
+    await db.execute(_INSERT_REQUEST, {"id": request_id, "u": user_id, "kind": kind, "now": now})
+
+
+async def export_request_for_build(db: AsyncSession, request_id: UUID) -> Row[Any] | None:
+    return (await db.execute(_REQUEST_FOR_BUILD, {"id": request_id})).one_or_none()
+
+
+async def store_export(
+    db: AsyncSession, *, request_id: UUID, ciphertext: bytes, expires_at: datetime, now: datetime
+) -> None:
+    await db.execute(
+        _INSERT_EXPORT,
+        {
+            "id": new_id(),
+            "request_id": request_id,
+            "ciphertext": ciphertext,
+            "expires_at": expires_at,
+            "now": now,
+        },
+    )
+    await db.execute(_COMPLETE_REQUEST, {"id": request_id, "now": now})
+
+
+async def list_data_requests(db: AsyncSession, user_id: UUID) -> list[Row[Any]]:
+    return list((await db.execute(_LIST_REQUESTS, {"u": user_id})).all())
+
+
+async def export_ciphertext(
+    db: AsyncSession, *, request_id: UUID, user_id: UUID, now: datetime
+) -> bytes | None:
+    value = await db.scalar(_EXPORT_CIPHERTEXT, {"id": request_id, "u": user_id, "now": now})
+    return bytes(value) if value is not None else None
+
+
+async def purge_expired_exports(db: AsyncSession, *, now: datetime) -> int:
+    result = await db.execute(_PURGE_EXPORTS, {"now": now})
+    return result.rowcount  # pyright: ignore[reportAttributeAccessIssue, reportUnknownMemberType, reportUnknownVariableType]
