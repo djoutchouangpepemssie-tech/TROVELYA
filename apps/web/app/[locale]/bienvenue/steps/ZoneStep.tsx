@@ -4,6 +4,9 @@ import { Button, Card, Input, Select } from "@trovelya/ui";
 import { useTranslations } from "next-intl";
 import { useEffect, useState } from "react";
 
+import { recordConsents } from "@/lib/consent";
+import { PRIVACY_POLICY_VERSION } from "@/lib/legal";
+
 import { onboardingApi, type Place } from "../api";
 import { StepLayout } from "../StepLayout";
 
@@ -70,12 +73,19 @@ export function ZoneStep({ error, onError, onSkip, onSave }: ZoneStepProps) {
     }
     navigator.geolocation.getCurrentPosition(
       (position) => {
-        void onboardingApi
-          .reversePlace(position.coords.latitude, position.coords.longitude)
-          .then((result) => {
-            if (result.ok) setPlace(result.data);
-            else setLocationError(true);
-          });
+        void (async () => {
+          // Precise location is sent only with a recorded consent (purpose `location`).
+          const consent = await recordConsents({ location: true }, PRIVACY_POLICY_VERSION);
+          const result =
+            consent === null
+              ? null
+              : await onboardingApi.reversePlace(
+                  position.coords.latitude,
+                  position.coords.longitude,
+                );
+          if (result?.ok) setPlace(result.data);
+          else setLocationError(true);
+        })();
       },
       () => {
         setLocationError(true);

@@ -17,6 +17,8 @@ const API_ENV = {
   EMAIL_PROVIDER: "fake",
   GEOCODER_PROVIDER: "fake",
   FEATURE_FLAGS_DEFAULT: "{}",
+  // Every browser of the suite shares one IP: the per-IP limit would throttle the tests.
+  RATE_LIMIT_ANONYMOUS_PER_MINUTE: "10000",
 };
 
 export default defineConfig({
