@@ -21,3 +21,21 @@ def test_unknown_env_fails() -> None:
 
 def test_secret_key_is_not_printed() -> None:
     assert "s" * 64 not in repr(make_settings())
+
+
+@pytest.mark.parametrize(
+    "given",
+    [
+        "postgresql://u:p@host:5432/db",
+        "postgres://u:p@host:5432/db",
+        "postgresql+asyncpg://u:p@host:5432/db",
+    ],
+)
+def test_database_url_uses_asyncpg_driver(given: str) -> None:
+    """Railway provides postgresql:// URLs; the application always needs the asyncpg driver."""
+    assert make_settings(database_url=given).database_url == "postgresql+asyncpg://u:p@host:5432/db"
+
+
+def test_database_url_rejects_other_schemes() -> None:
+    with pytest.raises(ValidationError):
+        make_settings(database_url="mysql://u:p@host/db")

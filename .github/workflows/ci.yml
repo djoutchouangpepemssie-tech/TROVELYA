@@ -105,3 +105,33 @@ jobs:
         run: |
           docker cp infra/postgres/check_extensions.sql pg:/check_extensions.sql
           docker exec pg psql -U postgres -v ON_ERROR_STOP=1 -f /check_extensions.sql
+
+  api-image:
+    name: api-image
+    runs-on: ubuntu-latest
+    timeout-minutes: 20
+    steps:
+      - uses: actions/checkout@v5
+      - name: Build the images Railway deploys
+        run: |
+          docker build -t trovelya/postgres:17 infra/postgres
+          docker build -t trovelya/api apps/api
+      - name: Migrate, start, and probe the API like Railway does
+        run: |
+          docker network create smoke
+          docker run -d --name pg --network smoke -e POSTGRES_USER=trovelya -e POSTGRES_PASSWORD=ci -e POSTGRES_DB=trovelya trovelya/postgres:17
+          docker run -d --name redis --network smoke redis:8.2-alpine
+          for i in $(seq 1 60); do docker exec pg pg_isready -h 127.0.0.1 -U trovelya && break; sleep 2; done
+          cat > api.env <<'ENV'
+          ENV=staging
+          DATABASE_URL=postgresql://trovelya:ci@pg:5432/trovelya
+          REDIS_URL=redis://redis:6379/0
+          SECRET_KEY=ci-only-secret-key-ci-only-secret-key-ci-only-secret-key-0123456789
+          WEB_ORIGIN=https://example.vercel.app
+          ADMIN_ORIGIN=https://example.vercel.app
+          ENV
+          docker run --rm --network smoke --env-file api.env trovelya/api alembic upgrade head
+          docker run -d --name api --network smoke --env-file api.env -p 8000:8000 trovelya/api
+          for i in $(seq 1 30); do curl -fsS localhost:8000/ready && break; sleep 2; done
+          curl -fsS localhost:8000/health
+          curl -fsS localhost:8000/ready
