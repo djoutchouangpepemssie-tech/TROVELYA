@@ -7,6 +7,9 @@
   A new address creates the account; an existing one with a verified address gets the
   identity attached and an information e-mail; an existing unverified address is refused.
 - Staff and blocked accounts are refused like any failure. Sessions are not "strong".
+- Apple answers with a cross-site POST (`form_post`), which does not carry the `SameSite=Lax`
+  cookie: the code and state are parked 5 minutes under a one-time reference and the browser
+  is sent to a same-site GET (`finish`), where the cookie is checked as usual.
 """
 
 import hashlib
@@ -36,7 +39,9 @@ from trovelya.shared.ids import new_id
 
 OAUTH_COOKIE = "__Host-trv_oauth"
 STATE_TTL_S = 600
+FORM_POST_TTL_S = 300
 _KEY_PREFIX = "oauth:"
+_PARKED_PREFIX = "oauth:post:"
 _BLOCKED = {status.value for status in BLOCKED_STATUSES}
 PROVIDER_LABELS = {"google": "Google", "apple": "Apple"}
 
@@ -47,25 +52,43 @@ class OAuthStart:
     cookie_value: str
 
 
-def _state_hash(state: str) -> str:
-    return hashlib.sha256(state.encode()).hexdigest()
+def _digest(value: str) -> str:
+    return hashlib.sha256(value.encode()).hexdigest()
 
 
 async def start_oauth(redis: Redis, provider: OidcProvider) -> OAuthStart:
     state = secrets.token_urlsafe(32)
     nonce = secrets.token_urlsafe(32)
     verifier, challenge = new_pkce()
-    state_hash = _state_hash(state)
+    state_hash = _digest(state)
     attempt = {"provider": provider.config.name, "nonce": nonce, "verifier": verifier}
     await redis.set(_KEY_PREFIX + state_hash, json.dumps(attempt), ex=STATE_TTL_S)
     url = provider.authorization_url(state=state, nonce=nonce, code_challenge=challenge)
     return OAuthStart(redirect_url=url, cookie_value=state_hash)
 
 
+async def park_form_post(redis: Redis, *, code: str, state: str) -> str:
+    ref = secrets.token_urlsafe(32)
+    await redis.set(
+        _PARKED_PREFIX + _digest(ref),
+        json.dumps({"code": code, "state": state}),
+        ex=FORM_POST_TTL_S,
+    )
+    return ref
+
+
+async def take_form_post(redis: Redis, ref: str) -> tuple[str, str]:
+    raw = await redis.getdel(_PARKED_PREFIX + _digest(ref))
+    if raw is None:
+        raise AppError(ErrorCode.OAUTH_FAILED, 400)
+    parked: dict[str, str] = json.loads(raw)
+    return parked["code"], parked["state"]
+
+
 async def _take_attempt(
     redis: Redis, provider: OidcProvider, *, state: str, cookie: str | None
 ) -> dict[str, Any]:
-    state_hash = _state_hash(state)
+    state_hash = _digest(state)
     if cookie is None or not hmac.compare_digest(cookie, state_hash):
         raise AppError(ErrorCode.OAUTH_FAILED, 400)
     raw = await redis.getdel(_KEY_PREFIX + state_hash)

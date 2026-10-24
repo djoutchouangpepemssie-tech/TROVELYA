@@ -20,22 +20,43 @@ from trovelya.core.logging import configure_logging
 from trovelya.core.middleware import RequestIdMiddleware
 from trovelya.core.observability import configure_observability
 from trovelya.core.ratelimit import AnonymousRateLimitMiddleware
-from trovelya.modules.identity.adapters.oidc import OidcProvider, google_config
+from trovelya.modules.identity.adapters.oidc import (
+    AppleProvider,
+    OidcProvider,
+    apple_config,
+    google_config,
+)
 from trovelya.modules.identity.adapters.turnstile import AlwaysPass, TurnstileVerifier
 from trovelya.modules.identity.api import router as identity_router
 from trovelya.shared.clock import SystemClock
 
 
 def _oidc_providers(settings: Settings) -> dict[str, OidcProvider]:
+    # Callbacks go through the web relay, so the cookies stay first-party (ADR-0015).
+    callback = f"{settings.web_origin.rstrip('/')}/api/v1/auth/oauth/{{}}/callback"
     providers: dict[str, OidcProvider] = {}
     if settings.oauth_google_client_id and settings.oauth_google_client_secret:
         config = google_config(
             client_id=settings.oauth_google_client_id,
             client_secret=settings.oauth_google_client_secret.get_secret_value(),
-            # Through the web relay, so the callback is first-party (ADR-0015).
-            redirect_uri=f"{settings.web_origin.rstrip('/')}/api/v1/auth/oauth/google/callback",
+            redirect_uri=callback.format("google"),
         )
         providers["google"] = OidcProvider(config, httpx.AsyncClient())
+    if (
+        settings.oauth_apple_client_id
+        and settings.oauth_apple_team_id
+        and settings.oauth_apple_key_id
+        and settings.oauth_apple_private_key
+    ):
+        providers["apple"] = AppleProvider(
+            apple_config(
+                client_id=settings.oauth_apple_client_id, redirect_uri=callback.format("apple")
+            ),
+            httpx.AsyncClient(),
+            team_id=settings.oauth_apple_team_id,
+            key_id=settings.oauth_apple_key_id,
+            private_key=settings.oauth_apple_private_key.get_secret_value(),
+        )
     return providers
 
 

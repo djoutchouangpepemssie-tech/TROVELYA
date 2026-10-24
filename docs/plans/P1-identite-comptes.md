@@ -250,6 +250,8 @@ Parallélisables : T03 et T04 après T02c ; T06, T09a et T10 après T05 ; T08 d�
 - Les erreurs du rappel redirigent vers `/fr/connexion?erreur=<code>` (navigation du navigateur, pas un appel d'API) ; après succès : `/fr/bienvenue` tant que le profil n'est pas complété, sinon `/fr`.
 - Les comptes staff sont refusés comme toute autre erreur (`oauth_failed`), comme pour le lien magique (ADR-0018).
 - Activation sur staging : `OAUTH_GOOGLE_CLIENT_ID`, `OAUTH_GOOGLE_CLIENT_SECRET` et `FEATURE_FLAGS_DEFAULT={"auth.oauth_google": true}`.
+- Décision d'Arcel (24/10/2026) : le vrai client Google et le compte Apple Developer sont branchés **à la fin du projet**, avec les autres actions externes. D'ici là, Google et Apple sont testés uniquement avec le fournisseur factice (`tests/fake_oidc.py`) et restent éteints sur staging et en production.
+- Apple (T03b) : secret client JWT ES256 de 5 min ; retour `form_post` garé 5 min sous une référence à usage unique, puis `GET /v1/auth/oauth/apple/finish?ref=…` où le cookie `Lax` est vérifié. PKCE est envoyé aussi à Apple (sans effet connu s'il l'ignore).
 
 ### P1-T04 — Passkeys et step-up
 

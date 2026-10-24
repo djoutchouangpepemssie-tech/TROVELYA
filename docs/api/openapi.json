@@ -349,7 +349,7 @@
     },
     "/v1/auth/oauth/{provider}/callback": {
       "get": {
-        "description": "Back from the provider: open a session, then go to onboarding or the home page.\n\nAny failure (cancelled consent, replayed or foreign state, invalid token, refused\naccount) sends the browser to the sign-in page with an error code.",
+        "description": "Back from the provider (Google): query string `code` and `state`.",
         "operationId": "auth_oauth_callback",
         "parameters": [
           {
@@ -415,6 +415,96 @@
           }
         },
         "summary": "Oauth Callback",
+        "tags": [
+          "auth"
+        ]
+      },
+      "post": {
+        "description": "Back from Apple by a cross-site POST: park the answer, continue with a same-site GET.",
+        "operationId": "auth_oauth_callback_form",
+        "parameters": [
+          {
+            "in": "path",
+            "name": "provider",
+            "required": true,
+            "schema": {
+              "title": "Provider",
+              "type": "string"
+            }
+          }
+        ],
+        "responses": {
+          "303": {
+            "content": {
+              "application/json": {
+                "schema": {}
+              }
+            },
+            "description": "Successful Response"
+          },
+          "422": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/HTTPValidationError"
+                }
+              }
+            },
+            "description": "Validation Error"
+          }
+        },
+        "summary": "Oauth Callback Form",
+        "tags": [
+          "auth"
+        ]
+      }
+    },
+    "/v1/auth/oauth/{provider}/finish": {
+      "get": {
+        "description": "Second half of the form_post return: the `Lax` cookie is sent on this same-site GET.",
+        "operationId": "auth_oauth_finish",
+        "parameters": [
+          {
+            "in": "path",
+            "name": "provider",
+            "required": true,
+            "schema": {
+              "title": "Provider",
+              "type": "string"
+            }
+          },
+          {
+            "in": "query",
+            "name": "ref",
+            "required": false,
+            "schema": {
+              "default": "",
+              "title": "Ref",
+              "type": "string"
+            }
+          }
+        ],
+        "responses": {
+          "302": {
+            "content": {
+              "application/json": {
+                "schema": {}
+              }
+            },
+            "description": "Successful Response"
+          },
+          "422": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/HTTPValidationError"
+                }
+              }
+            },
+            "description": "Validation Error"
+          }
+        },
+        "summary": "Oauth Finish",
         "tags": [
           "auth"
         ]

@@ -7,10 +7,11 @@ from urllib.parse import parse_qs
 
 import httpx
 import jwt
-from cryptography.hazmat.primitives.asymmetric import rsa
+from cryptography.hazmat.primitives import serialization
+from cryptography.hazmat.primitives.asymmetric import ec, rsa
 from jwt.algorithms import RSAAlgorithm
 
-from trovelya.modules.identity.adapters.oidc import OidcConfig
+from trovelya.modules.identity.adapters.oidc import AppleProvider, OidcConfig
 
 ISSUER = "https://idp.example.test"
 CLIENT_ID = "client-123.apps.example.test"
@@ -29,6 +30,34 @@ def fake_config() -> OidcConfig:
         client_id=CLIENT_ID,
         client_secret=CLIENT_SECRET,
         redirect_uri=REDIRECT_URI,
+    )
+
+
+APPLE_TEAM_ID = "TEAM123456"
+APPLE_KEY_ID = "KEY1234567"
+APPLE_KEY = ec.generate_private_key(ec.SECP256R1())
+
+
+def fake_apple_provider(client: httpx.AsyncClient) -> AppleProvider:
+    pem = APPLE_KEY.private_bytes(
+        serialization.Encoding.PEM,
+        serialization.PrivateFormat.PKCS8,
+        serialization.NoEncryption(),
+    ).decode()
+    config = OidcConfig(
+        name="apple",
+        issuers=(ISSUER,),
+        authorization_endpoint=f"{ISSUER}/authorize",
+        token_endpoint=f"{ISSUER}/token",
+        jwks_uri=f"{ISSUER}/jwks",
+        client_id=CLIENT_ID,
+        client_secret="",
+        redirect_uri="https://web.example.test/api/v1/auth/oauth/apple/callback",
+        scope="name email",
+        response_mode="form_post",
+    )
+    return AppleProvider(
+        config, client, team_id=APPLE_TEAM_ID, key_id=APPLE_KEY_ID, private_key=pem
     )
 
 

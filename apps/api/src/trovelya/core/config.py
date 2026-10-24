@@ -45,6 +45,11 @@ class Settings(BaseSettings):
     # Sign-in with Google (P1-T03): OAuth client of the Google Cloud project; off while unset.
     oauth_google_client_id: str | None = None
     oauth_google_client_secret: SecretStr | None = None
+    # Sign in with Apple (P1-T03b): Services ID, team, key id and `.p8` key; off while unset.
+    oauth_apple_client_id: str | None = None
+    oauth_apple_team_id: str | None = None
+    oauth_apple_key_id: str | None = None
+    oauth_apple_private_key: SecretStr | None = None
     web_origin: str
     admin_origin: str
     sentry_dsn: str | None = None
@@ -67,6 +72,20 @@ class Settings(BaseSettings):
     def _google_needs_both(self) -> "Settings":
         if (self.oauth_google_client_id is None) != (self.oauth_google_client_secret is None):
             raise ValueError("OAUTH_GOOGLE_CLIENT_ID and OAUTH_GOOGLE_CLIENT_SECRET go together")
+        return self
+
+    @model_validator(mode="after")
+    def _apple_needs_all(self) -> "Settings":
+        values = (
+            self.oauth_apple_client_id,
+            self.oauth_apple_team_id,
+            self.oauth_apple_key_id,
+            self.oauth_apple_private_key,
+        )
+        if any(v is None for v in values) and any(v is not None for v in values):
+            raise ValueError(
+                "OAUTH_APPLE_CLIENT_ID, _TEAM_ID, _KEY_ID and _PRIVATE_KEY go together"
+            )
         return self
 
     @field_validator("database_url")
