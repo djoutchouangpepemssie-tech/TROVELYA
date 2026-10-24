@@ -9,6 +9,7 @@ from pydantic_settings import BaseSettings, SettingsConfigDict
 Environment = Literal["local", "preview", "staging", "production", "test"]
 
 MIN_SECRET_KEY_LENGTH = 64
+MIN_PROXY_SECRET_LENGTH = 32
 
 
 def asyncpg_url(url: str) -> str:
@@ -28,6 +29,8 @@ class Settings(BaseSettings):
     database_url: str
     redis_url: str
     secret_key: SecretStr = Field(min_length=MIN_SECRET_KEY_LENGTH)
+    # Shared with the web relay; authenticates the client IP it forwards (ADR-0015).
+    proxy_shared_secret: SecretStr = Field(min_length=MIN_PROXY_SECRET_LENGTH)
     web_origin: str
     admin_origin: str
     sentry_dsn: str | None = None

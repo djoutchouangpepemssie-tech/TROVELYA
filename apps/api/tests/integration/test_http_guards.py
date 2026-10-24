@@ -9,8 +9,8 @@ from httpx import ASGITransport, AsyncClient
 from redis.asyncio import Redis
 from sqlalchemy.ext.asyncio import AsyncSession, async_sessionmaker
 
-from tests.conftest import make_settings
-from trovelya.core.csrf import CSRF_COOKIE, issue_csrf_token
+from tests.conftest import TEST_PROXY_SECRET, make_settings
+from trovelya.core.csrf import CSRF_COOKIE, SESSION_COOKIE, issue_csrf_token
 from trovelya.main import create_app
 
 PROBLEM_JSON = "application/problem+json"
@@ -143,6 +143,23 @@ async def test_rate_limit_429_with_retry_after(
     assert 1 <= int(limited.headers["retry-after"]) <= 60
 
 
+async def test_rate_limit_keys_on_trusted_client_ip(
+    sessionmaker: async_sessionmaker[AsyncSession], redis_client: Redis
+) -> None:
+    """Behind the web relay every request comes from Vercel: the relayed IP is the key."""
+
+    def relayed(ip: str) -> dict[str, str]:
+        return {"x-trv-proxy-secret": TEST_PROXY_SECRET, "x-trv-client-ip": ip}
+
+    async with _client(sessionmaker, redis_client, rate_limit_anonymous_per_minute=2) as c:
+        first = [(await c.get("/v1/_test/ping", headers=relayed("203.0.113.1"))).status_code]
+        first += [(await c.get("/v1/_test/ping", headers=relayed("203.0.113.1"))).status_code]
+        first += [(await c.get("/v1/_test/ping", headers=relayed("203.0.113.1"))).status_code]
+        other = (await c.get("/v1/_test/ping", headers=relayed("203.0.113.2"))).status_code
+    assert first == [200, 200, 429]
+    assert other == 200
+
+
 async def test_health_is_not_rate_limited(
     sessionmaker: async_sessionmaker[AsyncSession], redis_client: Redis
 ) -> None:
@@ -177,7 +194,7 @@ async def test_csrf_endpoint_sets_cookie(client: AsyncClient) -> None:
 
 async def test_csrf_required_with_session_cookie(client: AsyncClient) -> None:
     response = await client.post(
-        "/v1/_test/echo", json={"a": 1}, headers={**_key(), "cookie": "trv_session=abc"}
+        "/v1/_test/echo", json={"a": 1}, headers={**_key(), "cookie": f"{SESSION_COOKIE}=abc"}
     )
     assert response.status_code == 403
     assert response.json()["code"] == "csrf_failed"
@@ -190,7 +207,7 @@ async def test_csrf_valid_token_accepted(client: AsyncClient) -> None:
         json={"a": 1},
         headers={
             **_key(),
-            "cookie": f"trv_session=abc; {CSRF_COOKIE}={token}",
+            "cookie": f"{SESSION_COOKIE}=abc; {CSRF_COOKIE}={token}",
             "X-CSRF-Token": token,
         },
     )
@@ -204,7 +221,7 @@ async def test_csrf_bad_signature_403(client: AsyncClient) -> None:
         json={"a": 1},
         headers={
             **_key(),
-            "cookie": f"trv_session=abc; {CSRF_COOKIE}={forged}",
+            "cookie": f"{SESSION_COOKIE}=abc; {CSRF_COOKIE}={forged}",
             "X-CSRF-Token": forged,
         },
     )
@@ -217,7 +234,7 @@ async def test_csrf_header_must_match_cookie(client: AsyncClient) -> None:
         json={"a": 1},
         headers={
             **_key(),
-            "cookie": f"trv_session=abc; {CSRF_COOKIE}={issue_csrf_token(SECRET)}",
+            "cookie": f"{SESSION_COOKIE}=abc; {CSRF_COOKIE}={issue_csrf_token(SECRET)}",
             "X-CSRF-Token": issue_csrf_token(SECRET),
         },
     )

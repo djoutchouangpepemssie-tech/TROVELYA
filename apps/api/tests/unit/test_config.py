@@ -39,3 +39,12 @@ def test_database_url_uses_asyncpg_driver(given: str) -> None:
 def test_database_url_rejects_other_schemes() -> None:
     with pytest.raises(ValidationError):
         make_settings(database_url="mysql://u:p@host/db")
+
+
+def test_short_proxy_secret_fails() -> None:
+    with pytest.raises(ValidationError):
+        make_settings(proxy_shared_secret="too-short")
+
+
+def test_proxy_secret_is_not_printed() -> None:
+    assert "p" * 48 not in repr(make_settings())

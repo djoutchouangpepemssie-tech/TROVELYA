@@ -1,6 +1,7 @@
 """CSRF protection for cookie-authenticated requests: signed double-submit cookie (11.1).
 
-`GET /v1/csrf` sets `trv_csrf` = `<random>.<HMAC(SECRET_KEY, random)>` (readable by the page).
+`GET /v1/csrf` sets `__Host-trv_csrf` = `<random>.<HMAC(SECRET_KEY, random)>`, readable by
+the page. Cookies use the `__Host-` prefix: Secure, Path=/ and no Domain (ADR-0015).
 Any unsafe request that carries the session cookie must echo it in `X-CSRF-Token`.
 Requests without the session cookie (mobile bearer tokens, anonymous) are not concerned.
 """
@@ -14,9 +15,9 @@ from starlette.types import ASGIApp, Receive, Scope, Send
 
 from trovelya.core.errors import ErrorCode, problem_response
 
-CSRF_COOKIE = "trv_csrf"
+CSRF_COOKIE = "__Host-trv_csrf"
 CSRF_HEADER = "x-csrf-token"
-SESSION_COOKIE = "trv_session"
+SESSION_COOKIE = "__Host-trv_session"
 SAFE_METHODS = frozenset({"GET", "HEAD", "OPTIONS"})
 
 

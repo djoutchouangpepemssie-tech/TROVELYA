@@ -38,9 +38,11 @@ Mise en production : voir `docs/runbooks/deploy.md`.
 | Commande avant déploiement | `alembic upgrade head` |
 | Healthcheck | `/ready` (120 s) |
 | Redémarrage | `ON_FAILURE`, 5 essais |
-| Variables | `ENV`, `DATABASE_URL=${{pg.DATABASE_URL}}`, `REDIS_URL=${{Redis.REDIS_URL}}`, `SECRET_KEY=${{secret(64)}}`, `WEB_ORIGIN`, `ADMIN_ORIGIN`, `SENTRY_DSN` |
+| Variables | `ENV`, `DATABASE_URL=${{pg.DATABASE_URL}}`, `REDIS_URL=${{Redis.REDIS_URL}}`, `SECRET_KEY=${{secret(64)}}`, `PROXY_SHARED_SECRET=${{secret(48)}}`, `WEB_ORIGIN`, `ADMIN_ORIGIN`, `SENTRY_DSN` |
 
 `DATABASE_URL` peut être en `postgresql://` : l'application et Alembic passent d'eux-mêmes au pilote asyncpg.
+
+Uvicorn tourne sans `--proxy-headers` : l'API lit l'IP du visiteur dans les en-têtes du relais web authentifiés par `PROXY_SHARED_SECRET`, sinon dans `X-Real-IP` (ADR-0015). Création et rotation des secrets : `docs/runbooks/secrets.md`.
 
 ## `worker` — tâches de fond arq
 
@@ -52,6 +54,6 @@ Mise en production : voir `docs/runbooks/deploy.md`.
 | Commande de démarrage | `arq trovelya.workers.main.WorkerSettings` |
 | Chemins surveillés | `/apps/api/**` |
 | Redémarrage | `ON_FAILURE`, 10 essais |
-| Variables | références vers l'API : `${{TROVELYA.ENV}}`, `${{TROVELYA.SECRET_KEY}}`, `${{TROVELYA.WEB_ORIGIN}}`, `${{TROVELYA.ADMIN_ORIGIN}}`, `${{TROVELYA.SENTRY_DSN}}` ; `DATABASE_URL=${{pg.DATABASE_URL}}`, `REDIS_URL=${{Redis.REDIS_URL}}` |
+| Variables | références vers l'API : `${{TROVELYA.ENV}}`, `${{TROVELYA.SECRET_KEY}}`, `${{TROVELYA.PROXY_SHARED_SECRET}}`, `${{TROVELYA.WEB_ORIGIN}}`, `${{TROVELYA.ADMIN_ORIGIN}}`, `${{TROVELYA.SENTRY_DSN}}` ; `DATABASE_URL=${{pg.DATABASE_URL}}`, `REDIS_URL=${{Redis.REDIS_URL}}` |
 
 Pas de domaine public ni de healthcheck HTTP : les migrations restent l'affaire de l'API (commande avant déploiement).

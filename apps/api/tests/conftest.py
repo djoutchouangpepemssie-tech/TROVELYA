@@ -8,6 +8,7 @@ from trovelya.core.health import ReadinessCheck
 from trovelya.main import create_app
 
 TEST_SECRET = "s" * 64
+TEST_PROXY_SECRET = "p" * 48
 
 
 def make_settings(**overrides: object) -> Settings:
@@ -16,6 +17,7 @@ def make_settings(**overrides: object) -> Settings:
         "database_url": "postgresql+asyncpg://test:test@localhost:5432/test",
         "redis_url": "redis://localhost:6379/0",
         "secret_key": TEST_SECRET,
+        "proxy_shared_secret": TEST_PROXY_SECRET,
         "web_origin": "http://localhost:3000",
         "admin_origin": "http://localhost:3001",
     }

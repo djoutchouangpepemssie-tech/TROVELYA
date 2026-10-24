@@ -18,3 +18,4 @@ Format : contexte, décision, conséquences. Une décision qui change donne un n
 | [0012](0012-cle-idempotence.md) | Clé d'idempotence : identifiant technique et unicité NULLS NOT DISTINCT | Acceptée (écart E1) |
 | [0013](0013-branche-release.md) | Production sur la branche `release` | Acceptée (écart E5) |
 | [0014](0014-chaine-audit-en-base.md) | Chaîne du journal d'audit calculée en base | Acceptée (écart E2) |
+| [0015](0015-relais-same-origin.md) | Relais same-origin entre le web et l'API, IP de confiance | Acceptée (écarts E1 à E4 du plan P1) |

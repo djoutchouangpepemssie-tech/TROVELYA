@@ -15,6 +15,7 @@ from redis.asyncio import Redis
 from starlette.requests import Request
 from starlette.types import ASGIApp, Receive, Scope, Send
 
+from trovelya.core.client_ip import client_ip
 from trovelya.core.errors import ErrorCode, problem_response
 
 logger = structlog.get_logger(__name__)
@@ -57,17 +58,17 @@ def client_fingerprint(ip: str, *, secret: str) -> str:
 class AnonymousRateLimitMiddleware:
     """Default limit per client IP for every request (authenticated limits arrive in P1)."""
 
-    def __init__(self, app: ASGIApp, *, per_minute: int, secret: str) -> None:
+    def __init__(self, app: ASGIApp, *, per_minute: int, secret: str, proxy_secret: str) -> None:
         self.app = app
         self.per_minute = per_minute
         self._secret = secret
+        self._proxy_secret = proxy_secret
 
     async def __call__(self, scope: Scope, receive: Receive, send: Send) -> None:
         if scope["type"] != "http" or scope["path"] in EXEMPT_PATHS:
             await self.app(scope, receive, send)
             return
-        client = scope.get("client")
-        ip = client[0] if client else "unknown"
+        ip = client_ip(scope, proxy_secret=self._proxy_secret)
         try:
             redis: Redis = scope["app"].state.redis
             key = f"anon:{client_fingerprint(ip, secret=self._secret)}"

@@ -70,6 +70,7 @@ def create_app(
         AnonymousRateLimitMiddleware,
         per_minute=settings.rate_limit_anonymous_per_minute,
         secret=settings.secret_key.get_secret_value(),
+        proxy_secret=settings.proxy_shared_secret.get_secret_value(),
     )
     app.add_middleware(RequestIdMiddleware)
     app.include_router(health_router)
