@@ -5,8 +5,9 @@ or a job) owns the transaction: commit on success, rollback on error.
 """
 
 from collections.abc import AsyncIterator, Awaitable, Callable
+from typing import Annotated
 
-from fastapi import Request
+from fastapi import Depends, Request
 from sqlalchemy import text
 from sqlalchemy.ext.asyncio import (
     AsyncEngine,
@@ -61,3 +62,9 @@ async def get_uow(request: Request) -> AsyncIterator[AsyncSession]:
             await session.rollback()
             raise
         await commit(session)
+
+
+# `scope="function"`: the transaction commits before the response is sent. With the default
+# scope FastAPI sends the response first, so a client could read stale data on its next
+# request, or be told "success" for a commit that then fails.
+Uow = Annotated[AsyncSession, Depends(get_uow, scope="function")]
