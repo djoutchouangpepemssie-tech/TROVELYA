@@ -4,6 +4,7 @@
 per-user rate limit (600 requests per minute, section 11.4; fails open like the anonymous one).
 """
 
+from datetime import timedelta
 from typing import Annotated
 
 import structlog
@@ -14,6 +15,7 @@ from trovelya.core.csrf import SESSION_COOKIE
 from trovelya.core.db import get_uow
 from trovelya.core.errors import AppError, ErrorCode
 from trovelya.core.ratelimit import hit
+from trovelya.modules.identity import repository
 from trovelya.modules.identity.service.sessions import (
     CurrentUser,
     IssuedSession,
@@ -66,6 +68,27 @@ async def current_user(
 ) -> CurrentUser:
     if user is None:
         raise AppError(ErrorCode.UNAUTHENTICATED, 401)
+    return user
+
+
+DEFAULT_STEP_UP_MAX_AGE_H = 12
+
+
+async def recent_mfa_user(
+    request: Request,
+    db: Uow,
+    user: Annotated[CurrentUser, Depends(current_user)],
+) -> CurrentUser:
+    """For sensitive actions (13.2): a strong sign-in less than `auth.step_up_max_age_h` old.
+
+    Otherwise `403 step_up_required`, and the client asks for a passkey or an e-mailed link.
+    """
+    max_age_h = await repository.setting_int(
+        db, "auth.step_up_max_age_h", default=DEFAULT_STEP_UP_MAX_AGE_H
+    )
+    now = get_clock(request).now()
+    if user.mfa_at is None or user.mfa_at <= now - timedelta(hours=max_age_h):
+        raise AppError(ErrorCode.STEP_UP_REQUIRED, 403)
     return user
 
 

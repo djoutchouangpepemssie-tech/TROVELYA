@@ -1,6 +1,7 @@
 """Request and response bodies of the identity routes (snake_case, section 11.1)."""
 
 from datetime import datetime
+from typing import Any
 from uuid import UUID
 
 from pydantic import BaseModel, Field
@@ -34,3 +35,27 @@ class SignInResult(BaseModel):
     user_id: UUID
     is_new: bool
     profile_completed: bool
+
+
+class PasskeyRegisterVerify(BaseModel):
+    credential: dict[str, Any]  # navigator.credentials.create() answer, JSON-encoded
+    name: str = Field(default="Clé d'accès", min_length=1, max_length=64)
+
+
+class PasskeyLoginVerify(BaseModel):
+    credential: dict[str, Any]  # navigator.credentials.get() answer, JSON-encoded
+
+
+class PasskeyOut(BaseModel):
+    id: UUID
+    name: str | None
+    created_at: datetime
+    last_used_at: datetime | None
+
+
+class PasskeyList(BaseModel):
+    data: list[PasskeyOut]
+
+
+class PasskeyRename(BaseModel):
+    name: str = Field(min_length=1, max_length=64)

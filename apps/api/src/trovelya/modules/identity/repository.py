@@ -289,3 +289,104 @@ async def find_session_context(
     """A session with its owner's address and whether its device and country were seen."""
     result = await db.execute(_NEW_SESSION, {"id": session_id, "window": window})
     return result.one_or_none()
+
+
+# --- Passkeys -------------------------------------------------------------------------------
+
+_INSERT_PASSKEY = text(
+    "INSERT INTO passkeys (id, user_id, credential_id, public_key, sign_count, transports, name,"
+    " created_at) VALUES (:id, :user_id, :credential_id, :public_key, :sign_count, :transports,"
+    " :name, :now) ON CONFLICT (credential_id) DO NOTHING"
+    " RETURNING id, name, created_at, last_used_at"
+)
+
+_CREDENTIAL_IDS = text("SELECT credential_id FROM passkeys WHERE user_id = :user_id")
+
+_FIND_PASSKEY = text(
+    "SELECT p.id, p.user_id, p.public_key, p.sign_count, u.is_staff, u.status::text AS status,"
+    " u.profile_completed_at IS NOT NULL AS profile_completed"
+    " FROM passkeys p JOIN users u ON u.id = p.user_id WHERE p.credential_id = :credential_id"
+)
+
+# Two sign-ins racing with the same counter: only one moves it forward.
+_USE_PASSKEY = text(
+    "UPDATE passkeys SET sign_count = :new_count, last_used_at = :now"
+    " WHERE id = :id AND sign_count = :old_count RETURNING id"
+)
+
+_LIST_PASSKEYS = text(
+    "SELECT id, name, created_at, last_used_at FROM passkeys WHERE user_id = :user_id"
+    " ORDER BY created_at"
+)
+
+_RENAME_PASSKEY = text(
+    "UPDATE passkeys SET name = :name WHERE id = :id AND user_id = :user_id"
+    " RETURNING id, name, created_at, last_used_at"
+)
+
+_DELETE_PASSKEY = text("DELETE FROM passkeys WHERE id = :id AND user_id = :user_id RETURNING id")
+
+
+async def insert_passkey(
+    db: AsyncSession,
+    *,
+    passkey_id: UUID,
+    user_id: UUID,
+    credential_id: bytes,
+    public_key: bytes,
+    sign_count: int,
+    transports: list[str] | None,
+    name: str,
+    now: datetime,
+) -> Row[Any] | None:
+    """None when this credential is already registered."""
+    result = await db.execute(
+        _INSERT_PASSKEY,
+        {
+            "id": passkey_id,
+            "user_id": user_id,
+            "credential_id": credential_id,
+            "public_key": public_key,
+            "sign_count": sign_count,
+            "transports": transports,
+            "name": name,
+            "now": now,
+        },
+    )
+    return result.one_or_none()
+
+
+async def user_email(db: AsyncSession, user_id: UUID) -> str:
+    email: str = await db.scalar(text("SELECT email FROM users WHERE id = :id"), {"id": user_id})
+    return email
+
+
+async def credential_ids(db: AsyncSession, user_id: UUID) -> list[bytes]:
+    return list((await db.scalars(_CREDENTIAL_IDS, {"user_id": user_id})).all())
+
+
+async def find_passkey(db: AsyncSession, credential_id: bytes) -> Row[Any] | None:
+    return (await db.execute(_FIND_PASSKEY, {"credential_id": credential_id})).one_or_none()
+
+
+async def use_passkey(
+    db: AsyncSession, passkey_id: UUID, *, old_count: int, new_count: int, now: datetime
+) -> bool:
+    params = {"id": passkey_id, "old_count": old_count, "new_count": new_count, "now": now}
+    return (await db.execute(_USE_PASSKEY, params)).one_or_none() is not None
+
+
+async def list_passkeys(db: AsyncSession, user_id: UUID) -> list[Row[Any]]:
+    return list((await db.execute(_LIST_PASSKEYS, {"user_id": user_id})).all())
+
+
+async def rename_passkey(
+    db: AsyncSession, *, passkey_id: UUID, user_id: UUID, name: str
+) -> Row[Any] | None:
+    params = {"id": passkey_id, "user_id": user_id, "name": name}
+    return (await db.execute(_RENAME_PASSKEY, params)).one_or_none()
+
+
+async def delete_passkey(db: AsyncSession, *, passkey_id: UUID, user_id: UUID) -> bool:
+    params = {"id": passkey_id, "user_id": user_id}
+    return (await db.execute(_DELETE_PASSKEY, params)).one_or_none() is not None
