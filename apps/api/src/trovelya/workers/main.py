@@ -1,5 +1,6 @@
 """arq worker. Run with: arq trovelya.workers.main.WorkerSettings"""
 
+import socket
 from typing import Any, ClassVar
 from zoneinfo import ZoneInfo
 
@@ -16,8 +17,9 @@ from trovelya.core.idempotency import purge_idempotency_keys
 from trovelya.core.logging import configure_logging
 from trovelya.core.observability import configure_observability, outbox_oldest_unpublished_seconds
 from trovelya.core.redis import make_redis
-from trovelya.modules.identity.service import purge_expired_magic_links
+from trovelya.modules.identity.service import identity_subscriptions, purge_expired_magic_links
 from trovelya.shared.clock import SystemClock
+from trovelya.workers.consumers import consume_events, ensure_group
 from trovelya.workers.email_jobs import MAX_TRIES, deliver_email
 from trovelya.workers.outbox_relay import (
     RedisStreamPublisher,
@@ -44,6 +46,10 @@ async def startup(ctx: Context) -> None:
     ctx["settings"] = settings
     ctx["http"] = httpx.AsyncClient()
     ctx["email_sender"] = make_email_sender(settings, ctx["http"])
+    # Handlers enqueue their e-mails on arq's own pool (ctx["redis"]).
+    ctx["subscriptions"] = identity_subscriptions(ctx["redis"], settings)
+    ctx["consumer_name"] = socket.gethostname()
+    await ensure_group(ctx["redis_client"])
 
 
 async def shutdown(ctx: Context) -> None:
@@ -67,6 +73,15 @@ async def relay_outbox(ctx: Context) -> int:
     return total
 
 
+async def consume_events_job(ctx: Context) -> int:
+    return await consume_events(
+        ctx["redis_client"],
+        ctx["sessionmaker"],
+        ctx["subscriptions"],
+        consumer_name=ctx["consumer_name"],
+    )
+
+
 async def audit_verify_chain_job(ctx: Context) -> int:
     return len(await verify_audit_chain(ctx["sessionmaker"]))
 
@@ -83,6 +98,7 @@ class WorkerSettings:
     functions: ClassVar[list[Any]] = [func(deliver_email, max_tries=MAX_TRIES, timeout=60)]
     cron_jobs: ClassVar[list[CronJob]] = [
         cron(relay_outbox, second=EVERY_SECOND, unique=True, timeout=30),
+        cron(consume_events_job, second=EVERY_SECOND, unique=True, timeout=30),
         cron(audit_verify_chain_job, hour=3, minute=0, unique=True, timeout=600),
         cron(purge_idempotency_keys_job, hour=4, minute=30, unique=True, timeout=600),
         cron(purge_magic_links_job, hour=4, minute=45, unique=True, timeout=600),
