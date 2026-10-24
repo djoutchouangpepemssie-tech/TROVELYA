@@ -18,6 +18,7 @@ from trovelya.modules.identity.schemas import (
     DataRequestList,
     DataRequestOut,
     EmailChangeRequest,
+    ErasureAccepted,
     MeOut,
     ProfilePatch,
     SessionList,
@@ -298,3 +299,44 @@ async def get_data_export(
             "cache-control": "no-store",
         },
     )
+
+
+@router.post(
+    "/erasure",
+    operation_id="me_erasure_request",
+    status_code=status.HTTP_202_ACCEPTED,
+    responses={403: {"description": "step_up_required"}},
+)
+async def post_erasure(
+    request: Request,
+    response: Response,
+    db: Uow,
+    user: Annotated[CurrentUser, Depends(recent_mfa_user)],
+    clock: ClockDep,
+) -> ErasureAccepted:
+    """Account erasure (Q10): every session is revoked (this one too) and the public profile
+    hidden at once; the account is erased after the grace period unless the person signs in
+    again and cancels."""
+    ip, user_agent = _audit_context(request)
+    erase_at = await gdpr.request_erasure(
+        db,
+        user_id=user.id,
+        queue=request.app.state.queue,
+        settings=request.app.state.settings,
+        clock=clock,
+        ip=ip,
+        user_agent=user_agent,
+    )
+    clear_session_cookie(response)
+    return ErasureAccepted(erase_at=erase_at)
+
+
+@router.post(
+    "/erasure/cancel",
+    operation_id="me_erasure_cancel",
+    status_code=status.HTTP_204_NO_CONTENT,
+    responses={409: {"description": "no_erasure_pending"}},
+)
+async def post_erasure_cancel(request: Request, db: Uow, user: Me, clock: ClockDep) -> None:
+    ip, user_agent = _audit_context(request)
+    await gdpr.cancel_erasure(db, user_id=user.id, clock=clock, ip=ip, user_agent=user_agent)

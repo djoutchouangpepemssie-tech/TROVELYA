@@ -665,6 +665,20 @@
         "title": "EmailChangeVerify",
         "type": "object"
       },
+      "ErasureAccepted": {
+        "properties": {
+          "erase_at": {
+            "format": "date-time",
+            "title": "Erase At",
+            "type": "string"
+          }
+        },
+        "required": [
+          "erase_at"
+        ],
+        "title": "ErasureAccepted",
+        "type": "object"
+      },
       "HTTPValidationError": {
         "properties": {
           "detail": {
@@ -2793,6 +2807,48 @@
           }
         },
         "summary": "Post Email Change",
+        "tags": [
+          "me"
+        ]
+      }
+    },
+    "/v1/me/erasure": {
+      "post": {
+        "description": "Account erasure (Q10): every session is revoked (this one too) and the public profile\nhidden at once; the account is erased after the grace period unless the person signs in\nagain and cancels.",
+        "operationId": "me_erasure_request",
+        "responses": {
+          "202": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErasureAccepted"
+                }
+              }
+            },
+            "description": "Successful Response"
+          },
+          "403": {
+            "description": "step_up_required"
+          }
+        },
+        "summary": "Post Erasure",
+        "tags": [
+          "me"
+        ]
+      }
+    },
+    "/v1/me/erasure/cancel": {
+      "post": {
+        "operationId": "me_erasure_cancel",
+        "responses": {
+          "204": {
+            "description": "Successful Response"
+          },
+          "409": {
+            "description": "no_erasure_pending"
+          }
+        },
+        "summary": "Post Erasure Cancel",
         "tags": [
           "me"
         ]

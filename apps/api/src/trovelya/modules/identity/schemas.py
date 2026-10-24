@@ -410,3 +410,7 @@ class DataRequestOut(BaseModel):
 
 class DataRequestList(BaseModel):
     data: list[DataRequestOut]
+
+
+class ErasureAccepted(BaseModel):
+    erase_at: datetime  # end of the grace period; signing in again allows to cancel

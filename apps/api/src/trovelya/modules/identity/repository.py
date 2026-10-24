@@ -985,3 +985,93 @@ async def export_ciphertext(
 async def purge_expired_exports(db: AsyncSession, *, now: datetime) -> int:
     result = await db.execute(_PURGE_EXPORTS, {"now": now})
     return result.rowcount  # pyright: ignore[reportAttributeAccessIssue, reportUnknownMemberType, reportUnknownVariableType]
+
+
+# --- GDPR erasure (P1-T09b) ------------------------------------------------------------------
+
+_REQUEST_ERASURE = text(
+    "UPDATE users SET erasure_requested_at = coalesce(erasure_requested_at, :now)"
+    " WHERE id = :u AND status <> 'deleted' RETURNING erasure_requested_at"
+)
+_CANCEL_ERASURE = text(
+    "UPDATE users SET erasure_requested_at = NULL"
+    " WHERE id = :u AND erasure_requested_at IS NOT NULL AND status <> 'deleted' RETURNING id"
+)
+_CLOSE_ERASURE_REQUEST = text(
+    "UPDATE data_requests SET status = :status, refusal_reason = :reason, completed_at = :now"
+    " WHERE user_id = :u AND kind = 'erasure' AND status IN ('received', 'processing')"
+)
+_DUE_ERASURES = text(
+    "SELECT id FROM users WHERE erasure_requested_at <= :cutoff AND status <> 'deleted'"
+    " ORDER BY erasure_requested_at LIMIT :limit"
+)
+_LOCK_DUE_ERASURE = text(
+    "SELECT email::text AS email FROM users WHERE id = :u AND erasure_requested_at <= :cutoff"
+    " AND status <> 'deleted' FOR UPDATE SKIP LOCKED"
+)
+# What the identity module holds about the person, in dependency order. Consents stay as proof
+# with the internal identifier only; data requests stay as proof the rights were exercised.
+ERASE_IDENTITY: tuple[TextClause, ...] = (
+    text("DELETE FROM magic_links WHERE email = (SELECT email FROM users WHERE id = :u)"),
+    text("DELETE FROM sessions WHERE user_id = :u"),
+    text("DELETE FROM auth_identities WHERE user_id = :u"),
+    text("DELETE FROM passkeys WHERE user_id = :u"),
+    text("DELETE FROM addresses WHERE user_id = :u"),
+    text("DELETE FROM search_zones WHERE user_id = :u"),
+    text("DELETE FROM user_preferences WHERE user_id = :u"),
+    text("DELETE FROM user_roles WHERE user_id = :u"),
+    text("DELETE FROM follows WHERE follower_id = :u OR followee_user_id = :u"),
+    text("DELETE FROM blocks WHERE blocker_id = :u OR blocked_id = :u"),
+    text(
+        "DELETE FROM data_exports WHERE data_request_id IN"
+        " (SELECT id FROM data_requests WHERE user_id = :u)"
+    ),
+    text("DELETE FROM idempotency_keys WHERE user_id = :u"),
+    text("UPDATE consents SET anonymous_id = NULL WHERE user_id = :u"),
+)
+_ANONYMISE_USER = text(
+    "UPDATE users SET email = 'efface+' || replace(CAST(:u AS text), '-', '') || '@invalid',"
+    " email_verified_at = NULL, phone_e164 = NULL, phone_verified_at = NULL,"
+    " username = 'efface_' || right(replace(CAST(:u AS text), '-', ''), 8),"
+    " display_name = 'Compte supprimé', avatar_media_id = NULL, bio = NULL,"
+    " birth_year = NULL, marketing_opt_in = false, last_seen_at = NULL,"
+    " status = 'deleted', deleted_at = :now WHERE id = :u"
+)
+
+
+async def request_erasure(db: AsyncSession, *, user_id: UUID, now: datetime) -> datetime | None:
+    """The date of the request (the first one stands); None for an erased account."""
+    return await db.scalar(_REQUEST_ERASURE, {"u": user_id, "now": now})
+
+
+async def cancel_erasure(db: AsyncSession, *, user_id: UUID, now: datetime) -> bool:
+    if (await db.execute(_CANCEL_ERASURE, {"u": user_id})).one_or_none() is None:
+        return False
+    await db.execute(
+        _CLOSE_ERASURE_REQUEST,
+        {"u": user_id, "status": "refused", "reason": "cancelled_by_user", "now": now},
+    )
+    return True
+
+
+async def due_erasures(db: AsyncSession, *, cutoff: datetime, limit: int) -> list[UUID]:
+    return list((await db.scalars(_DUE_ERASURES, {"cutoff": cutoff, "limit": limit})).all())
+
+
+async def lock_due_erasure(db: AsyncSession, *, user_id: UUID, cutoff: datetime) -> bool:
+    """True when the account is still due and this worker holds it."""
+    row = (await db.execute(_LOCK_DUE_ERASURE, {"u": user_id, "cutoff": cutoff})).one_or_none()
+    return row is not None
+
+
+async def erase_identity(db: AsyncSession, user_id: UUID) -> None:
+    for statement in ERASE_IDENTITY:
+        await db.execute(statement, {"u": user_id})
+
+
+async def anonymise_user(db: AsyncSession, *, user_id: UUID, now: datetime) -> None:
+    await db.execute(_ANONYMISE_USER, {"u": user_id, "now": now})
+    await db.execute(
+        _CLOSE_ERASURE_REQUEST,
+        {"u": user_id, "status": "completed", "reason": None, "now": now},
+    )
