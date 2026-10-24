@@ -56,3 +56,27 @@ def new_login_message(
     return EmailMessage(
         to=to, subject="Nouvelle connexion à votre compte TROVÉLYA", text=text, html=html
     )
+
+
+def identity_linked_message(*, to: str, provider: str, security_link: str) -> EmailMessage:
+    """Sent when a sign-in with an external account is attached to an existing account."""
+    text = (
+        "Bonjour,\n\n"
+        f"Votre compte {provider} vient d'être associé à votre compte TROVÉLYA : vous pouvez "
+        f"désormais vous connecter avec {provider}.\n\n"
+        "Si vous n'êtes pas à l'origine de cette action, sécurisez votre compte :\n"
+        f"{security_link}\n\n"
+        "TROVÉLYA — La belle trouvaille"
+    )
+    safe_provider = escape(provider)
+    html = (
+        "<p>Bonjour,</p>"
+        f"<p>Votre compte {safe_provider} vient d'être associé à votre compte TROVÉLYA : "
+        f"vous pouvez désormais vous connecter avec {safe_provider}.</p>"
+        "<p>Si vous n'êtes pas à l'origine de cette action, sécurisez votre compte :</p>"
+        f'<p><a href="{escape(security_link, quote=True)}">Sécurité de mon compte</a></p>'
+        "<p>TROVÉLYA — La belle trouvaille</p>"
+    )
+    return EmailMessage(
+        to=to, subject=f"{provider} a été associé à votre compte TROVÉLYA", text=text, html=html
+    )

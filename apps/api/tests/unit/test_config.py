@@ -59,3 +59,13 @@ def test_resend_requires_an_api_key() -> None:
 def test_short_field_encryption_key_fails() -> None:
     with pytest.raises(ValidationError):
         make_settings(field_encryption_key="too-short")
+
+
+def test_google_client_id_and_secret_go_together() -> None:
+    with pytest.raises(ValidationError):
+        make_settings(oauth_google_client_id="id.apps.googleusercontent.com")
+    settings = make_settings(
+        oauth_google_client_id="id.apps.googleusercontent.com",
+        oauth_google_client_secret="gocspx-test-secret",
+    )
+    assert "gocspx-test-secret" not in repr(settings)

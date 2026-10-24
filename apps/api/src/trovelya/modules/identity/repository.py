@@ -135,10 +135,26 @@ _CONSUME_MAGIC_LINK = text(
 
 _PURGE_MAGIC_LINKS = text("DELETE FROM magic_links WHERE expires_at < :cutoff")
 
+# Both return the same columns: id, is_staff, status, profile_completed, email_verified.
 _FIND_USER_BY_EMAIL = text(
-    "SELECT id, is_staff, status::text AS status,"
-    " profile_completed_at IS NOT NULL AS profile_completed"
-    " FROM users WHERE email = :email"
+    "SELECT u.id, u.is_staff, u.status::text AS status,"
+    " u.profile_completed_at IS NOT NULL AS profile_completed,"
+    " u.email_verified_at IS NOT NULL AS email_verified"
+    " FROM users u WHERE u.email = :email"
+)
+
+_FIND_USER_BY_IDENTITY = text(
+    "SELECT u.id, u.is_staff, u.status::text AS status,"
+    " u.profile_completed_at IS NOT NULL AS profile_completed,"
+    " u.email_verified_at IS NOT NULL AS email_verified"
+    " FROM auth_identities i JOIN users u ON u.id = i.user_id"
+    " WHERE i.provider = :provider AND i.provider_subject = :subject"
+)
+
+_INSERT_IDENTITY = text(
+    "INSERT INTO auth_identities (id, user_id, provider, provider_subject, created_at)"
+    " VALUES (:id, :user_id, :provider, :subject, :now)"
+    " ON CONFLICT (provider, provider_subject) DO NOTHING"
 )
 
 _CREATE_USER = text(
@@ -202,6 +218,32 @@ async def purge_magic_links(db: AsyncSession, *, cutoff: datetime) -> int:
 
 async def find_user_by_email(db: AsyncSession, email: str) -> Row[Any] | None:
     return (await db.execute(_FIND_USER_BY_EMAIL, {"email": email})).one_or_none()
+
+
+async def find_user_by_identity(db: AsyncSession, provider: str, subject: str) -> Row[Any] | None:
+    params = {"provider": provider, "subject": subject}
+    return (await db.execute(_FIND_USER_BY_IDENTITY, params)).one_or_none()
+
+
+async def link_identity(
+    db: AsyncSession,
+    *,
+    identity_id: UUID,
+    user_id: UUID,
+    provider: str,
+    subject: str,
+    now: datetime,
+) -> None:
+    await db.execute(
+        _INSERT_IDENTITY,
+        {
+            "id": identity_id,
+            "user_id": user_id,
+            "provider": provider,
+            "subject": subject,
+            "now": now,
+        },
+    )
 
 
 async def create_user(

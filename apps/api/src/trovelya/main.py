@@ -12,6 +12,7 @@ from trovelya.core.config import Settings, get_settings
 from trovelya.core.csrf import CsrfMiddleware
 from trovelya.core.csrf import router as csrf_router
 from trovelya.core.errors import install_error_handlers
+from trovelya.core.flags import FlagService
 from trovelya.core.health import ReadinessCheck
 from trovelya.core.health import router as health_router
 from trovelya.core.idempotency import IdempotencyMiddleware
@@ -19,9 +20,23 @@ from trovelya.core.logging import configure_logging
 from trovelya.core.middleware import RequestIdMiddleware
 from trovelya.core.observability import configure_observability
 from trovelya.core.ratelimit import AnonymousRateLimitMiddleware
+from trovelya.modules.identity.adapters.oidc import OidcProvider, google_config
 from trovelya.modules.identity.adapters.turnstile import AlwaysPass, TurnstileVerifier
 from trovelya.modules.identity.api import router as identity_router
 from trovelya.shared.clock import SystemClock
+
+
+def _oidc_providers(settings: Settings) -> dict[str, OidcProvider]:
+    providers: dict[str, OidcProvider] = {}
+    if settings.oauth_google_client_id and settings.oauth_google_client_secret:
+        config = google_config(
+            client_id=settings.oauth_google_client_id,
+            client_secret=settings.oauth_google_client_secret.get_secret_value(),
+            # Through the web relay, so the callback is first-party (ADR-0015).
+            redirect_uri=f"{settings.web_origin.rstrip('/')}/api/v1/auth/oauth/google/callback",
+        )
+        providers["google"] = OidcProvider(config, httpx.AsyncClient())
+    return providers
 
 
 def create_app(
@@ -49,6 +64,9 @@ def create_app(
         app.state.readiness_checks = {"database": database_check, "redis": redis_check}
         app.state.sessionmaker = db.make_sessionmaker(engine)
         app.state.redis = redis_client
+        app.state.flags = FlagService(
+            app.state.sessionmaker, redis_client, settings.feature_flags_default
+        )
         # Job queue for the worker (e-mails…), on the same Redis connection pool.
         app.state.queue = ArqRedis(connection_pool=redis_client.connection_pool)
         try:
@@ -67,6 +85,7 @@ def create_app(
     )
     app.state.settings = settings
     app.state.clock = SystemClock()
+    app.state.oidc = _oidc_providers(settings)
     app.state.captcha = (
         TurnstileVerifier(
             secret=settings.turnstile_secret_key.get_secret_value(), client=httpx.AsyncClient()
