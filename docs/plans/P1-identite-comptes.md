@@ -1,7 +1,7 @@
 # P1 — Identité et comptes : plan d'implémentation
 
 > **Pour les agents qui exécutent ce plan :** skill obligatoire `subagent-driven-development` (recommandé) ou `executing-plans`, tâche par tâche. Les étapes utilisent des cases à cocher (`- [ ]`).
-> Statut : **brouillon, à valider par Arcel**. Aucun code ne doit être écrit avant sa validation explicite.
+> Statut : **validé par Arcel le 24 octobre 2026** (règle d'âge B, E14).
 
 **Objectif :** toute personne de 15 ans ou plus crée un compte et se connecte sans mot de passe (lien magique, Google, Apple, passkey), gère son profil, ses adresses, ses zones et ses préférences, exerce seule ses droits RGPD, et le serveur contrôle chaque accès par permission nommée et par objet.
 
@@ -55,7 +55,7 @@
 | E11 | 7.3 `user_preferences.interests` « clés de catégories » | L'arbre des catégories arrive en P2. | Clés stables des 16 univers de 8.19 (`mode`, `montres_bijoux`, `maison_jardin`, `high_tech`, `culture_loisirs`, `collection`, `enfants_bebe`, `sport_plein_air`, `art_antiquites`, `beaute_bien_etre`, `animaux`, `materiel_pro`, `vehicules`, `immobilier`, `services`, `autres`), reprises telles quelles par la graine P2-T01. | — |
 | E12 | 3.2 « rôle au moins équivalent » | Hiérarchie non définie. | Q17. | — |
 | E13 | Avatar (7.3 `avatar_media_id`) | Pas de stockage d'images avant P2. | Avatar à initiales ; téléversement en P2 (colonne déjà présente, nulle). | — |
-| E14 | Âge (8.18) | Seule l'année est connue : quelqu'un né en 2011 a 14 ou 15 ans en 2026. | **À valider par Arcel** : âge retenu = année courante − année de naissance (peut admettre une personne à quelques mois de ses 15 ans) ; l'alternative stricte (− 1) refuse des personnes qui ont déjà 15 ans. Même règle pour 18 ans. | — |
+| E14 | Âge (8.18) | Seule l'année est connue : quelqu'un né en 2011 a 14 ou 15 ans en 2026. | **Règle stricte (B), décidée par Arcel** : âge retenu = année courante − année de naissance − 1 (on suppose l'anniversaire pas encore passé). Inscription si âge ≥ 15, achat, vente et enchères si âge ≥ 18 ; peut refuser une personne qui a déjà l'âge depuis quelques mois. | — |
 
 ### 0.3 ADR produits par cette phase
 
@@ -269,9 +269,9 @@ Parallélisables : T03 et T04 après T02c ; T06, T09a et T10 après T05 ; T08 d�
 - `POST /v1/me/email` 🔑 + step-up `{new_email}` → `202` et lien `change_email` à la nouvelle adresse ; sa vérification change l'e-mail, émet `user.email_changed`, prévient l'ancienne adresse.
 - `GET /v1/users/{username}` 🔓 → `{username, display_name, bio, member_since, followers_count, following_count}` ; 404 si `status` ≠ `active`/`restricted` ou effacement demandé.
 - `require_completed_profile()` : toutes les routes 🔑 sauf `/me`, `/me/complete-profile`, `/me/username-suggestion`, sessions, consentements, effacement et déconnexion.
-- `is_minor` calculé selon E14 ; jamais exposé publiquement.
+- `is_minor` calculé selon E14 (règle B) ; jamais exposé publiquement.
 
-- [ ] Tests d'abord : `test_complete_profile_ok` ; `test_too_young_rejected_and_nothing_kept` ; `test_complete_profile_username_race` et `test_username_case_insensitive` (point de revue 2) ; `test_incomplete_profile_blocks_private_routes` ; `test_patch_requires_if_match` (412) ; `test_change_email_requires_step_up` ; `test_change_email_flow_emits_event` ; `test_public_profile_has_no_email_or_location` ; `test_public_profile_404_when_erasure_requested` ; `test_birth_year_not_in_logs`.
+- [ ] Tests d'abord : `test_complete_profile_ok` ; `test_too_young_rejected_and_nothing_kept` ; `test_age_rule_b` (en 2026 : 2010 accepté, 2011 refusé ; 2007 majeur, 2008 mineur) ; `test_complete_profile_username_race` et `test_username_case_insensitive` (point de revue 2) ; `test_incomplete_profile_blocks_private_routes` ; `test_patch_requires_if_match` (412) ; `test_change_email_requires_step_up` ; `test_change_email_flow_emits_event` ; `test_public_profile_has_no_email_or_location` ; `test_public_profile_404_when_erasure_requested` ; `test_birth_year_not_in_logs`.
 - [ ] ÉCHEC → implémenter → vert. Commit `feat(identity): private and public profiles, profile completion and email change`.
 
 ### P1-T06 — Adresses, zones de recherche, géocodage, préférences
@@ -404,7 +404,7 @@ Parallélisables : T03 et T04 après T02c ; T06, T09a et T10 après T05 ; T08 d�
 
 ## 7. Actions qui reviennent à Arcel pendant P1
 
-1. Valider ce plan, et trancher E14 (règle d'âge à partir de l'année seule).
+1. ~~Valider ce plan et trancher E14~~ : fait le 24 octobre 2026 (règle B).
 2. Créer le compte Resend avec l'adresse de son compte client et transmettre la clé dans les variables Railway (guidage en P1-T02c).
 3. Créer le client OAuth Google en mode Test (guidage en P1-T03).
 4. Ajouter `PROXY_SHARED_SECRET`, `API_INTERNAL_URL` et `FIELD_ENCRYPTION_KEY` (guidage en P1-T02a et T02c).
