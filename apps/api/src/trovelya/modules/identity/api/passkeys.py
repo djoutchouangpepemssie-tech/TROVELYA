@@ -81,9 +81,9 @@ async def register_verify(
 
 
 @auth_router.post("/login/options", operation_id="auth_passkeys_login_options")
-async def login_options(request: Request, clock: ClockDep) -> dict[str, Any]:
+async def login_options(request: Request, db: Uow, clock: ClockDep) -> dict[str, Any]:
     """WebAuthn request options for `navigator.credentials.get()` (any passkey of this site)."""
-    return await service.login_options(request.app.state.redis, rp=_rp(request), clock=clock)
+    return await service.login_options(db, request.app.state.redis, rp=_rp(request), clock=clock)
 
 
 @auth_router.post("/login/verify", operation_id="auth_passkeys_login_verify")

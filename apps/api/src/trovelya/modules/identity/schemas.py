@@ -1,10 +1,10 @@
 """Request and response bodies of the identity routes (snake_case, section 11.1)."""
 
 from datetime import datetime
-from typing import Any
+from typing import Any, Literal
 from uuid import UUID
 
-from pydantic import BaseModel, Field
+from pydantic import BaseModel, Field, model_validator
 
 
 class SessionOut(BaseModel):
@@ -59,3 +59,18 @@ class PasskeyList(BaseModel):
 
 class PasskeyRename(BaseModel):
     name: str = Field(min_length=1, max_length=64)
+
+
+class StepUpRequest(BaseModel):
+    method: Literal["passkey", "magic_link"]
+    credential: dict[str, Any] | None = None  # required for "passkey"
+
+    @model_validator(mode="after")
+    def _passkey_needs_credential(self) -> "StepUpRequest":
+        if self.method == "passkey" and self.credential is None:
+            raise ValueError("credential is required for the passkey method")
+        return self
+
+
+class StepUpVerify(BaseModel):
+    token: str = Field(min_length=1, max_length=128)

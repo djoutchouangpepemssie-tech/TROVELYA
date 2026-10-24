@@ -271,6 +271,7 @@ Parallélisables : T03 et T04 après T02c ; T06, T09a et T10 après T05 ; T08 d�
 - Vérification de l'utilisateur **obligatoire** (`user_verification=required`) : une passkey seule vaut connexion forte. Identifiants découvrables obligatoires.
 - Le challenge est à usage unique (`GETDEL`), avec une expiration de 5 min vérifiée aussi avec l'horloge de l'application. Toute erreur répond `passkey_invalid`, sans dire quelle vérification a échoué.
 - Un compteur de signatures qui recule (authentificateur peut-être cloné) est refusé ; la mise à jour du compteur est conditionnelle (deux connexions simultanées ne l'avancent qu'une fois).
+- T04b : `POST /v1/auth/step-up/options` (ajouté au plan) donne un challenge lié à l'utilisateur, limité à ses passkeys ; `POST /v1/auth/step-up` répond `204` avec rotation de session (passkey) ou `202` (lien envoyé, page `/fr/confirmer`) ; `POST /v1/auth/step-up/verify {token}` fait la rotation. Un lien `step_up` présenté par un autre compte est refusé et la transaction annulée : l'intrus ne peut pas « griller » le lien du propriétaire, qui reste à usage unique.
 - Valeurs par défaut : `WEBAUTHN_RP_ID` = hôte de `WEB_ORIGIN` ; `WEBAUTHN_ORIGINS` = `[WEB_ORIGIN]`. Comme pour Google, le flag `auth.passkeys` reste éteint sur staging tant que les écrans n'existent pas.
 
 ### P1-T05 — Profil privé et public, changement d'e-mail

@@ -80,3 +80,29 @@ def identity_linked_message(*, to: str, provider: str, security_link: str) -> Em
     return EmailMessage(
         to=to, subject=f"{provider} a été associé à votre compte TROVÉLYA", text=text, html=html
     )
+
+
+def step_up_message(*, to: str, link: str, ttl_minutes: int) -> EmailMessage:
+    text = (
+        "Bonjour,\n\n"
+        "Pour confirmer votre identité avant une action sensible sur TROVÉLYA, ouvrez ce lien "
+        "dans le même navigateur puis cliquez sur « Confirmer » :\n"
+        f"{link}\n\n"
+        f"Ce lien ne sert qu'une fois et expire dans {ttl_minutes} minutes.\n"
+        "Si vous n'êtes pas à l'origine de cette demande, ignorez cet e-mail et vérifiez les "
+        "sessions ouvertes sur votre compte.\n\n"
+        "TROVÉLYA — La belle trouvaille"
+    )
+    html = (
+        "<p>Bonjour,</p>"
+        "<p>Pour confirmer votre identité avant une action sensible sur TROVÉLYA, ouvrez ce lien "
+        "dans le même navigateur puis cliquez sur « Confirmer » :</p>"
+        f'<p><a href="{escape(link, quote=True)}">Confirmer mon identité</a></p>'
+        f"<p>Ce lien ne sert qu'une fois et expire dans {ttl_minutes} minutes.</p>"
+        "<p>Si vous n'êtes pas à l'origine de cette demande, ignorez cet e-mail et vérifiez les "
+        "sessions ouvertes sur votre compte.</p>"
+        "<p>TROVÉLYA — La belle trouvaille</p>"
+    )
+    return EmailMessage(
+        to=to, subject="Confirmez votre identité sur TROVÉLYA", text=text, html=html
+    )

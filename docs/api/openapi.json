@@ -263,6 +263,50 @@
         "title": "SignInResult",
         "type": "object"
       },
+      "StepUpRequest": {
+        "properties": {
+          "credential": {
+            "anyOf": [
+              {
+                "additionalProperties": true,
+                "type": "object"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Credential"
+          },
+          "method": {
+            "enum": [
+              "passkey",
+              "magic_link"
+            ],
+            "title": "Method",
+            "type": "string"
+          }
+        },
+        "required": [
+          "method"
+        ],
+        "title": "StepUpRequest",
+        "type": "object"
+      },
+      "StepUpVerify": {
+        "properties": {
+          "token": {
+            "maxLength": 128,
+            "minLength": 1,
+            "title": "Token",
+            "type": "string"
+          }
+        },
+        "required": [
+          "token"
+        ],
+        "title": "StepUpVerify",
+        "type": "object"
+      },
       "ValidationError": {
         "properties": {
           "ctx": {
@@ -787,6 +831,103 @@
           }
         },
         "summary": "Register Verify",
+        "tags": [
+          "auth"
+        ]
+      }
+    },
+    "/v1/auth/step-up": {
+      "post": {
+        "description": "`passkey`: 204 and a rotated session. `magic_link`: 202, a link is e-mailed.",
+        "operationId": "auth_step_up",
+        "requestBody": {
+          "content": {
+            "application/json": {
+              "schema": {
+                "$ref": "#/components/schemas/StepUpRequest"
+              }
+            }
+          },
+          "required": true
+        },
+        "responses": {
+          "202": {
+            "description": "Confirmation link sent to the account's address"
+          },
+          "204": {
+            "description": "Successful Response"
+          },
+          "422": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/HTTPValidationError"
+                }
+              }
+            },
+            "description": "Validation Error"
+          }
+        },
+        "summary": "Step Up",
+        "tags": [
+          "auth"
+        ]
+      }
+    },
+    "/v1/auth/step-up/options": {
+      "post": {
+        "description": "WebAuthn request options limited to the signed-in user's passkeys.",
+        "operationId": "auth_step_up_options",
+        "responses": {
+          "200": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "additionalProperties": true,
+                  "title": "Response Auth Step Up Options",
+                  "type": "object"
+                }
+              }
+            },
+            "description": "Successful Response"
+          }
+        },
+        "summary": "Options",
+        "tags": [
+          "auth"
+        ]
+      }
+    },
+    "/v1/auth/step-up/verify": {
+      "post": {
+        "description": "Use the e-mailed confirmation link (in the browser of the session it confirms).",
+        "operationId": "auth_step_up_verify",
+        "requestBody": {
+          "content": {
+            "application/json": {
+              "schema": {
+                "$ref": "#/components/schemas/StepUpVerify"
+              }
+            }
+          },
+          "required": true
+        },
+        "responses": {
+          "204": {
+            "description": "Successful Response"
+          },
+          "422": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/HTTPValidationError"
+                }
+              }
+            },
+            "description": "Validation Error"
+          }
+        },
+        "summary": "Verify",
         "tags": [
           "auth"
         ]
