@@ -4,11 +4,23 @@ Projet Railway `trovelya`, région Europe (europe-west4). La configuration des s
 dans Railway (le format `railway.json` est obsolète chez Railway) ; ce fichier en est la référence :
 toute modification faite dans le tableau de bord doit y être reportée.
 
+## Environnements
+
+| Environnement | Branche suivie | `ENV` | Domaine de l'API |
+| --- | --- | --- | --- |
+| `staging` | `main` | `staging` | `trovelya-staging.up.railway.app` |
+| `production` | `release` | `production` | `trovelya-production.up.railway.app` |
+
+Chaque environnement a ses propres instances de `pg`, `Redis` et de leurs volumes. Les variables
+`${{pg.DATABASE_URL}}` et `${{Redis.REDIS_URL}}` pointent vers les services du même environnement.
+En staging, `WEB_ORIGIN` et `ADMIN_ORIGIN` valent l'adresse de prévisualisation Vercel de `main`.
+Mise en production : voir `docs/runbooks/deploy.md`.
+
 ## `pg` — PostgreSQL 17 + PostGIS + pgvector + h3
 
 | Réglage | Valeur |
 | --- | --- |
-| Source | dépôt GitHub, branche `main` |
+| Source | dépôt GitHub (branche selon l'environnement) |
 | Répertoire racine | `/infra/postgres` |
 | Dockerfile | `Dockerfile` |
 | Chemins surveillés | `/infra/postgres/**` |
@@ -19,7 +31,7 @@ toute modification faite dans le tableau de bord doit y être reportée.
 
 | Réglage | Valeur |
 | --- | --- |
-| Source | dépôt GitHub, branche `main` |
+| Source | dépôt GitHub (branche selon l'environnement) |
 | Répertoire racine | `/apps/api` |
 | Dockerfile | `Dockerfile` (uvicorn sur `$PORT`) |
 | Chemins surveillés | `/apps/api/**` |
@@ -34,7 +46,7 @@ toute modification faite dans le tableau de bord doit y être reportée.
 
 | Réglage | Valeur |
 | --- | --- |
-| Source | dépôt GitHub, branche `main` |
+| Source | dépôt GitHub (branche selon l'environnement) |
 | Répertoire racine | `/apps/api` (même image que l'API) |
 | Dockerfile | `Dockerfile` |
 | Commande de démarrage | `arq trovelya.workers.main.WorkerSettings` |

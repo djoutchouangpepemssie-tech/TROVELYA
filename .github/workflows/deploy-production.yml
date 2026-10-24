@@ -1,0 +1,56 @@
+name: Deploy production
+
+# Production (Railway environment "production", Vercel production) follows the
+# `release` branch (E5). This workflow is the only way to move it: it fast-forwards
+# `release` to a commit of `main` whose CI run is green.
+on:
+  workflow_dispatch:
+    inputs:
+      sha:
+        description: Commit of main to release (empty = current head of main)
+        required: false
+        default: ""
+
+concurrency:
+  group: deploy-production
+  cancel-in-progress: false
+
+permissions:
+  contents: write
+  actions: read
+
+jobs:
+  promote:
+    name: promote main to release
+    runs-on: ubuntu-latest
+    timeout-minutes: 10
+    environment: production
+    steps:
+      - uses: actions/checkout@v5
+        with:
+          fetch-depth: 0
+      - name: Resolve the commit to release
+        id: target
+        env:
+          INPUT_SHA: ${{ inputs.sha }}
+        run: |
+          git fetch origin main release
+          sha="${INPUT_SHA:-$(git rev-parse origin/main)}"
+          sha="$(git rev-parse --verify "${sha}^{commit}")"
+          git merge-base --is-ancestor "$sha" origin/main || { echo "::error::$sha is not on main"; exit 1; }
+          git merge-base --is-ancestor origin/release "$sha" || { echo "::error::release is not an ancestor of $sha (no fast-forward)"; exit 1; }
+          echo "sha=$sha" >> "$GITHUB_OUTPUT"
+      - name: Require a green CI run on that commit
+        env:
+          GH_TOKEN: ${{ github.token }}
+          SHA: ${{ steps.target.outputs.sha }}
+        run: |
+          conclusion="$(gh run list --workflow ci.yml --commit "$SHA" --event push --json conclusion --jq '.[0].conclusion')"
+          echo "CI on $SHA: ${conclusion:-none}"
+          [ "$conclusion" = "success" ] || { echo "::error::CI is not green on $SHA"; exit 1; }
+      - name: Fast-forward release
+        env:
+          SHA: ${{ steps.target.outputs.sha }}
+        run: |
+          git push origin "$SHA:refs/heads/release"
+          echo "### release → \`$SHA\`" >> "$GITHUB_STEP_SUMMARY"
