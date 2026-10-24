@@ -43,6 +43,7 @@ class ErrorCode(StrEnum):
     USERNAME_TAKEN = "username_taken"
     PROFILE_INCOMPLETE = "profile_incomplete"
     PROFILE_ALREADY_COMPLETED = "profile_already_completed"
+    EMAIL_TAKEN = "email_taken"
 
 
 # French titles by default (section 2); translation by Accept-Language arrives with P1.
@@ -73,6 +74,7 @@ _TITLES: dict[ErrorCode, str] = {
     ErrorCode.USERNAME_TAKEN: "Pseudo déjà utilisé",
     ErrorCode.PROFILE_INCOMPLETE: "Profil à compléter",
     ErrorCode.PROFILE_ALREADY_COMPLETED: "Profil déjà complété",
+    ErrorCode.EMAIL_TAKEN: "Adresse e-mail déjà utilisée",
 }
 
 _STATUS_CODES: dict[int, ErrorCode] = {

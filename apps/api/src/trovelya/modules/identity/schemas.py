@@ -166,3 +166,11 @@ class PublicProfile(BaseModel):
     member_since: date
     followers_count: int
     following_count: int
+
+
+class EmailChangeRequest(BaseModel):
+    new_email: str = Field(pattern=r"^[^@\s]+@[^@\s]+\.[^@\s]+$", max_length=254)
+
+
+class EmailChangeVerify(BaseModel):
+    token: str = Field(min_length=1, max_length=200)

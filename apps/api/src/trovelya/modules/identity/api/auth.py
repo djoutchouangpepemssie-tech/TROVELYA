@@ -7,7 +7,12 @@ from fastapi import APIRouter, Depends, Request, Response, status
 from trovelya.core.client_ip import client_country, client_ip
 from trovelya.core.config import Settings
 from trovelya.core.errors import AppError, ErrorCode
-from trovelya.modules.identity.schemas import MagicLinkRequest, MagicLinkVerify, SignInResult
+from trovelya.modules.identity.schemas import (
+    EmailChangeVerify,
+    MagicLinkRequest,
+    MagicLinkVerify,
+    SignInResult,
+)
 from trovelya.modules.identity.service import (
     CurrentUser,
     SessionPolicy,
@@ -22,6 +27,7 @@ from trovelya.modules.identity.service import (
     verify_magic_link,
 )
 from trovelya.modules.identity.service.auth import Uow
+from trovelya.modules.identity.service.email_change import verify_email_change
 from trovelya.shared.clock import Clock
 
 router = APIRouter(prefix="/v1/auth", tags=["auth"])
@@ -95,3 +101,17 @@ async def logout(
     """Revoke the current session and clear its cookie."""
     await revoke_session(db, user_id=user.id, session_id=user.session_id, clock=clock)
     clear_session_cookie(response)
+
+
+@router.post(
+    "/email-change/verify",
+    operation_id="auth_email_change_verify",
+    status_code=status.HTTP_204_NO_CONTENT,
+)
+async def post_email_change_verify(
+    body: EmailChangeVerify, request: Request, db: Uow, clock: ClockDep
+) -> None:
+    """Use the link sent to the new address (no session needed). The old address is told."""
+    await verify_email_change(
+        db, request.app.state.queue, body.token, settings=_settings(request), clock=clock
+    )

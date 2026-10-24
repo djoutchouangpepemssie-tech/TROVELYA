@@ -521,3 +521,21 @@ async def update_profile(
 
 async def public_profile(db: AsyncSession, username: str) -> Row[Any] | None:
     return (await db.execute(_PUBLIC_PROFILE, {"username": username})).one_or_none()
+
+
+_EMAIL_IN_USE = text("SELECT EXISTS (SELECT 1 FROM users WHERE email = :email)")
+
+_CHANGE_EMAIL = text(
+    "UPDATE users SET email = :email, email_verified_at = :now"
+    " WHERE id = :id AND status::text <> ALL(:blocked) RETURNING id"
+)
+
+
+async def email_in_use(db: AsyncSession, email: str) -> bool:
+    return bool(await db.scalar(_EMAIL_IN_USE, {"email": email}))
+
+
+async def change_email(db: AsyncSession, *, user_id: UUID, email: str, now: datetime) -> bool:
+    """False for an unknown or blocked account. Raises IntegrityError if the address is taken."""
+    params = {"id": user_id, "email": email, "now": now, "blocked": _BLOCKED}
+    return (await db.execute(_CHANGE_EMAIL, params)).one_or_none() is not None
