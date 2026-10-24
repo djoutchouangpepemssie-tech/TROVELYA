@@ -3,18 +3,21 @@
 from typing import Any, ClassVar
 from zoneinfo import ZoneInfo
 
+import httpx
 import structlog
-from arq import cron
+from arq import cron, func
 from arq.connections import RedisSettings
 from arq.cron import CronJob
 
 from trovelya.core.config import get_settings
 from trovelya.core.db import make_engine, make_sessionmaker
+from trovelya.core.email import make_email_sender
 from trovelya.core.idempotency import purge_idempotency_keys
 from trovelya.core.logging import configure_logging
 from trovelya.core.observability import configure_observability, outbox_oldest_unpublished_seconds
 from trovelya.core.redis import make_redis
 from trovelya.shared.clock import SystemClock
+from trovelya.workers.email_jobs import MAX_TRIES, deliver_email
 from trovelya.workers.outbox_relay import (
     RedisStreamPublisher,
     oldest_unpublished_age_seconds,
@@ -37,9 +40,13 @@ async def startup(ctx: Context) -> None:
     ctx["sessionmaker"] = make_sessionmaker(engine)
     ctx["redis_client"] = make_redis(settings.redis_url)
     ctx["clock"] = SystemClock()
+    ctx["settings"] = settings
+    ctx["http"] = httpx.AsyncClient()
+    ctx["email_sender"] = make_email_sender(settings, ctx["http"])
 
 
 async def shutdown(ctx: Context) -> None:
+    await ctx["http"].aclose()
     await ctx["redis_client"].aclose()
     await ctx["engine"].dispose()
 
@@ -68,7 +75,7 @@ async def purge_idempotency_keys_job(ctx: Context) -> int:
 
 
 class WorkerSettings:
-    functions: ClassVar[list[Any]] = []
+    functions: ClassVar[list[Any]] = [func(deliver_email, max_tries=MAX_TRIES, timeout=60)]
     cron_jobs: ClassVar[list[CronJob]] = [
         cron(relay_outbox, second=EVERY_SECOND, unique=True, timeout=30),
         cron(audit_verify_chain_job, hour=3, minute=0, unique=True, timeout=600),

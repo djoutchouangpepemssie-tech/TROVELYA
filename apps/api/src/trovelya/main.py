@@ -3,6 +3,7 @@
 from collections.abc import AsyncGenerator, Mapping
 from contextlib import asynccontextmanager
 
+from arq.connections import ArqRedis
 from fastapi import FastAPI
 
 from trovelya.core import db, debug_routes, redis, testing_routes
@@ -46,6 +47,8 @@ def create_app(
         app.state.readiness_checks = {"database": database_check, "redis": redis_check}
         app.state.sessionmaker = db.make_sessionmaker(engine)
         app.state.redis = redis_client
+        # Job queue for the worker (e-mails…), on the same Redis connection pool.
+        app.state.queue = ArqRedis(connection_pool=redis_client.connection_pool)
         try:
             yield
         finally:
