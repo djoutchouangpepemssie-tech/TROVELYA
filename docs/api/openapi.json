@@ -382,6 +382,52 @@
         "title": "AddressPatch",
         "type": "object"
       },
+      "BlockList": {
+        "properties": {
+          "data": {
+            "items": {
+              "$ref": "#/components/schemas/BlockedMember"
+            },
+            "title": "Data",
+            "type": "array"
+          }
+        },
+        "required": [
+          "data"
+        ],
+        "title": "BlockList",
+        "type": "object"
+      },
+      "BlockedMember": {
+        "properties": {
+          "blocked_at": {
+            "format": "date-time",
+            "title": "Blocked At",
+            "type": "string"
+          },
+          "display_name": {
+            "title": "Display Name",
+            "type": "string"
+          },
+          "user_id": {
+            "format": "uuid",
+            "title": "User Id",
+            "type": "string"
+          },
+          "username": {
+            "title": "Username",
+            "type": "string"
+          }
+        },
+        "required": [
+          "user_id",
+          "username",
+          "display_name",
+          "blocked_at"
+        ],
+        "title": "BlockedMember",
+        "type": "object"
+      },
       "CompleteProfile": {
         "properties": {
           "accept_terms": {
@@ -1191,6 +1237,11 @@
             "title": "Following Count",
             "type": "integer"
           },
+          "id": {
+            "format": "uuid",
+            "title": "Id",
+            "type": "string"
+          },
           "member_since": {
             "format": "date",
             "title": "Member Since",
@@ -1199,9 +1250,20 @@
           "username": {
             "title": "Username",
             "type": "string"
+          },
+          "viewer": {
+            "anyOf": [
+              {
+                "$ref": "#/components/schemas/Relationship"
+              },
+              {
+                "type": "null"
+              }
+            ]
           }
         },
         "required": [
+          "id",
           "username",
           "display_name",
           "bio",
@@ -1210,6 +1272,25 @@
           "following_count"
         ],
         "title": "PublicProfile",
+        "type": "object"
+      },
+      "Relationship": {
+        "description": "The signed-in viewer's own actions towards a member (never whether they are blocked).",
+        "properties": {
+          "blocking": {
+            "title": "Blocking",
+            "type": "boolean"
+          },
+          "following": {
+            "title": "Following",
+            "type": "boolean"
+          }
+        },
+        "required": [
+          "following",
+          "blocking"
+        ],
+        "title": "Relationship",
         "type": "object"
       },
       "SessionList": {
@@ -2568,6 +2649,27 @@
         ]
       }
     },
+    "/v1/me/blocks": {
+      "get": {
+        "operationId": "me_blocks_list",
+        "responses": {
+          "200": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/BlockList"
+                }
+              }
+            },
+            "description": "Successful Response"
+          }
+        },
+        "summary": "Get Blocks",
+        "tags": [
+          "me"
+        ]
+      }
+    },
     "/v1/me/complete-profile": {
       "post": {
         "description": "First step of /bienvenue (Q11). Under the minimum age nothing is kept: the account is\nerased, the session cookie cleared, and the answer is `400 too_young`.",
@@ -3261,9 +3363,142 @@
         ]
       }
     },
+    "/v1/users/{user_id}/block": {
+      "delete": {
+        "operationId": "users_unblock",
+        "parameters": [
+          {
+            "in": "path",
+            "name": "user_id",
+            "required": true,
+            "schema": {
+              "format": "uuid",
+              "title": "User Id",
+              "type": "string"
+            }
+          }
+        ],
+        "responses": {
+          "204": {
+            "description": "Successful Response"
+          },
+          "422": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/HTTPValidationError"
+                }
+              }
+            },
+            "description": "Validation Error"
+          }
+        },
+        "summary": "Delete Block",
+        "tags": [
+          "users"
+        ]
+      },
+      "post": {
+        "description": "Also removes the follows in both directions; unblocking does not bring them back.",
+        "operationId": "users_block",
+        "parameters": [
+          {
+            "in": "path",
+            "name": "user_id",
+            "required": true,
+            "schema": {
+              "format": "uuid",
+              "title": "User Id",
+              "type": "string"
+            }
+          }
+        ],
+        "responses": {
+          "204": {
+            "description": "Successful Response"
+          },
+          "404": {
+            "description": "Unknown or hidden member, or a block in either direction"
+          },
+          "422": {
+            "description": "Oneself"
+          }
+        },
+        "summary": "Post Block",
+        "tags": [
+          "users"
+        ]
+      }
+    },
+    "/v1/users/{user_id}/follow": {
+      "delete": {
+        "operationId": "users_unfollow",
+        "parameters": [
+          {
+            "in": "path",
+            "name": "user_id",
+            "required": true,
+            "schema": {
+              "format": "uuid",
+              "title": "User Id",
+              "type": "string"
+            }
+          }
+        ],
+        "responses": {
+          "204": {
+            "description": "Successful Response"
+          },
+          "422": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/HTTPValidationError"
+                }
+              }
+            },
+            "description": "Validation Error"
+          }
+        },
+        "summary": "Delete Follow",
+        "tags": [
+          "users"
+        ]
+      },
+      "post": {
+        "operationId": "users_follow",
+        "parameters": [
+          {
+            "in": "path",
+            "name": "user_id",
+            "required": true,
+            "schema": {
+              "format": "uuid",
+              "title": "User Id",
+              "type": "string"
+            }
+          }
+        ],
+        "responses": {
+          "204": {
+            "description": "Successful Response"
+          },
+          "404": {
+            "description": "Unknown or hidden member, or a block in either direction"
+          },
+          "422": {
+            "description": "Oneself"
+          }
+        },
+        "summary": "Post Follow",
+        "tags": [
+          "users"
+        ]
+      }
+    },
     "/v1/users/{username}": {
       "get": {
-        "description": "404 for an unknown name, an account not active or restricted, a profile not yet\ncompleted, or an account whose erasure was requested.",
+        "description": "404 for an unknown name, an account not active or restricted, a profile not yet\ncompleted, or an account whose erasure was requested. Visible to the people it blocks.",
         "operationId": "users_get_public",
         "parameters": [
           {

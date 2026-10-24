@@ -159,15 +159,24 @@ class ProfilePatch(BaseModel):
         return sent
 
 
+class Relationship(BaseModel):
+    """The signed-in viewer's own actions towards a member (never whether they are blocked)."""
+
+    following: bool
+    blocking: bool
+
+
 class PublicProfile(BaseModel):
     """What anybody can see. Never the e-mail, location, age or account status."""
 
+    id: UUID
     username: str
     display_name: str
     bio: str | None
     member_since: date
     followers_count: int
     following_count: int
+    viewer: Relationship | None = None  # None when nobody is signed in
 
 
 class EmailChangeRequest(BaseModel):
@@ -414,3 +423,14 @@ class DataRequestList(BaseModel):
 
 class ErasureAccepted(BaseModel):
     erase_at: datetime  # end of the grace period; signing in again allows to cancel
+
+
+class BlockedMember(BaseModel):
+    user_id: UUID
+    username: str
+    display_name: str
+    blocked_at: datetime
+
+
+class BlockList(BaseModel):
+    data: list[BlockedMember]

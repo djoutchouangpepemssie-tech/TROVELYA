@@ -116,13 +116,16 @@ async def test_public_profile_has_no_email_or_location(
     assert response.status_code == 200
     profile = response.json()
     assert set(profile) == {
+        "id",
         "username",
         "display_name",
         "bio",
         "member_since",
         "followers_count",
         "following_count",
+        "viewer",
     }
+    assert profile["viewer"] is None  # nobody signed in
     assert profile["username"] == username
     assert (profile["followers_count"], profile["following_count"]) == (1, 0)
     assert account.email not in response.text
