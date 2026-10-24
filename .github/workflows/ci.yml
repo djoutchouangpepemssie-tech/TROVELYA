@@ -152,7 +152,7 @@ jobs:
       - uses: actions/setup-node@v7
         with:
           node-version-file: .nvmrc
-          cache: pnpm
+          # No pnpm cache: this job never installs, and v7 fails when saving an empty cache.
       - name: Semgrep (public rulesets + .semgrep.yml, blocking on ERROR)
         env:
           SEMGREP_SEND_METRICS: "off"
