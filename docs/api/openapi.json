@@ -423,6 +423,104 @@
         "title": "CompleteProfile",
         "type": "object"
       },
+      "ConsentIn": {
+        "additionalProperties": false,
+        "properties": {
+          "granted": {
+            "title": "Granted",
+            "type": "boolean"
+          },
+          "policy_version": {
+            "maxLength": 64,
+            "minLength": 1,
+            "title": "Policy Version",
+            "type": "string"
+          },
+          "purpose": {
+            "enum": [
+              "analytics",
+              "marketing_email",
+              "personalised_ads",
+              "location"
+            ],
+            "title": "Purpose",
+            "type": "string"
+          }
+        },
+        "required": [
+          "purpose",
+          "granted",
+          "policy_version"
+        ],
+        "title": "ConsentIn",
+        "type": "object"
+      },
+      "ConsentOut": {
+        "properties": {
+          "created_at": {
+            "format": "date-time",
+            "title": "Created At",
+            "type": "string"
+          },
+          "granted": {
+            "title": "Granted",
+            "type": "boolean"
+          },
+          "policy_version": {
+            "title": "Policy Version",
+            "type": "string"
+          },
+          "purpose": {
+            "enum": [
+              "analytics",
+              "marketing_email",
+              "personalised_ads",
+              "location"
+            ],
+            "title": "Purpose",
+            "type": "string"
+          }
+        },
+        "required": [
+          "purpose",
+          "granted",
+          "policy_version",
+          "created_at"
+        ],
+        "title": "ConsentOut",
+        "type": "object"
+      },
+      "ConsentState": {
+        "description": "Latest choice per purpose; the banner shows only if `active_purposes` is not empty.",
+        "properties": {
+          "active_purposes": {
+            "items": {
+              "enum": [
+                "analytics",
+                "marketing_email",
+                "personalised_ads",
+                "location"
+              ],
+              "type": "string"
+            },
+            "title": "Active Purposes",
+            "type": "array"
+          },
+          "consents": {
+            "items": {
+              "$ref": "#/components/schemas/ConsentOut"
+            },
+            "title": "Consents",
+            "type": "array"
+          }
+        },
+        "required": [
+          "active_purposes",
+          "consents"
+        ],
+        "title": "ConsentState",
+        "type": "object"
+      },
       "Counters": {
         "properties": {
           "notifications": {
@@ -2400,6 +2498,68 @@
           }
         },
         "summary": "Post Complete Profile",
+        "tags": [
+          "me"
+        ]
+      }
+    },
+    "/v1/me/consents": {
+      "get": {
+        "description": "Signed in or not: an anonymous browser is recognised by `__Host-trv_anon`.",
+        "operationId": "me_consents_get",
+        "responses": {
+          "200": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ConsentState"
+                }
+              }
+            },
+            "description": "Successful Response"
+          }
+        },
+        "summary": "Get Consents",
+        "tags": [
+          "me"
+        ]
+      },
+      "post": {
+        "description": "Records a choice (granting or withdrawing) and answers the new state. An anonymous\nbrowser without a valid `__Host-trv_anon` receives one (13 months).",
+        "operationId": "me_consents_record",
+        "requestBody": {
+          "content": {
+            "application/json": {
+              "schema": {
+                "$ref": "#/components/schemas/ConsentIn"
+              }
+            }
+          },
+          "required": true
+        },
+        "responses": {
+          "201": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ConsentState"
+                }
+              }
+            },
+            "description": "Successful Response"
+          },
+          "422": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/HTTPValidationError"
+                }
+              }
+            },
+            "description": "Validation Error"
+          }
+        },
+        "summary": "Post Consent",
         "tags": [
           "me"
         ]

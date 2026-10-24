@@ -345,6 +345,9 @@ Parallélisables : T03 et T04 après T02c ; T06, T09a et T10 après T05 ; T08 d�
 - [ ] Tests d'abord : API `test_consent_recorded_with_policy_version` ; `test_anonymous_consent_attached_on_login` ; `test_latest_consent_wins`. Vitest : bandeau masqué sans finalité active ; boutons de même taille. e2e : refuser puis retirer depuis la page cookies ; aucun cookie autre que `__Host-trv_*` et `NEXT_LOCALE` avant consentement ; axe 0 violation.
 - [ ] ÉCHEC → implémenter → vert. Commit `feat(identity): consent records, cnil cookie banner and provisional legal pages`.
 
+**Réalisation (24/10/2026) :** découpée en T08a (API) et T08b (bandeau et pages).
+- T08a : `GET /v1/me/consents` → `{active_purposes, consents}` (dernier choix par finalité, hors `terms`) ; `POST /v1/me/consents` → 201 et le nouvel état, historique conservé (preuve). Connecté (profil complet ou non) ou anonyme ; le jeton CSRF est exigé même sans session, pour qu'un autre site ne puisse pas enregistrer un consentement dans le navigateur du visiteur. Cookie `__Host-trv_anon` (aléatoire, `HttpOnly`, 13 mois) posé au premier choix seulement ; une valeur inattendue est remplacée. Rattachement des choix anonymes au compte à chaque connexion (lien magique, clé d'accès, Google/Apple). Finalités actives : réglage `consent.active_purposes` (liste JSON, absente donc vide en P1, Q15). `source = 'web'`.
+
 ### P1-T09a — Export RGPD (ADR-0016)
 
 **Fichiers :** `core/gdpr.py`, `service/gdpr.py`, `tasks.py`, `api/me.py`, `docs/adr/0016-export-rgpd.md`, tests.
