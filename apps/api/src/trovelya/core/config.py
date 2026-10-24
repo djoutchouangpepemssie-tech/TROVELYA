@@ -40,6 +40,8 @@ class Settings(BaseSettings):
     email_api_key: SecretStr | None = None
     email_from: str = "TROVÉLYA <no-reply@localhost>"
     smtp_url: str = "smtp://localhost:1025"
+    # Cloudflare Turnstile on sign-in requests (section 13.1); off while unset.
+    turnstile_secret_key: SecretStr | None = None
     web_origin: str
     admin_origin: str
     sentry_dsn: str | None = None

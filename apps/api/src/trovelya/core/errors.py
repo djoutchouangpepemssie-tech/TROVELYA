@@ -32,6 +32,8 @@ class ErrorCode(StrEnum):
     SERVICE_UNAVAILABLE = "service_unavailable"
     UNAUTHENTICATED = "unauthenticated"
     FORBIDDEN = "forbidden"
+    MAGIC_LINK_INVALID = "magic_link_invalid"
+    CAPTCHA_FAILED = "captcha_failed"
 
 
 # French titles by default (section 2); translation by Accept-Language arrives with P1.
@@ -51,6 +53,8 @@ _TITLES: dict[ErrorCode, str] = {
     ErrorCode.SERVICE_UNAVAILABLE: "Service indisponible",
     ErrorCode.UNAUTHENTICATED: "Connexion requise",
     ErrorCode.FORBIDDEN: "Action non autorisée",
+    ErrorCode.MAGIC_LINK_INVALID: "Lien de connexion invalide ou expiré",
+    ErrorCode.CAPTCHA_FAILED: "Vérification anti-robots échouée",
 }
 
 _STATUS_CODES: dict[int, ErrorCode] = {

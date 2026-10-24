@@ -58,6 +58,46 @@ export interface paths {
         patch?: never;
         trace?: never;
     };
+    "/v1/auth/magic-link": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        get?: never;
+        put?: never;
+        /**
+         * Post Magic Link
+         * @description Send a sign-in link. Same answer whether the address has an account or not.
+         */
+        post: operations["auth_magic_link_request"];
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/v1/auth/magic-link/verify": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        get?: never;
+        put?: never;
+        /**
+         * Post Magic Link Verify
+         * @description Exchange the link's token for a session (cookie `__Host-trv_session`).
+         */
+        post: operations["auth_magic_link_verify"];
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
     "/v1/csrf": {
         parameters: {
             query?: never;
@@ -122,6 +162,18 @@ export interface components {
             /** Detail */
             detail?: components["schemas"]["ValidationError"][];
         };
+        /** MagicLinkRequest */
+        MagicLinkRequest: {
+            /** Captcha Token */
+            captcha_token?: string | null;
+            /** Email */
+            email: string;
+        };
+        /** MagicLinkVerify */
+        MagicLinkVerify: {
+            /** Token */
+            token: string;
+        };
         /** SessionList */
         SessionList: {
             /** Data */
@@ -153,6 +205,18 @@ export interface components {
              * Format: date-time
              */
             last_used_at: string;
+        };
+        /** SignInResult */
+        SignInResult: {
+            /** Is New */
+            is_new: boolean;
+            /** Profile Completed */
+            profile_completed: boolean;
+            /**
+             * User Id
+             * Format: uuid
+             */
+            user_id: string;
         };
         /** ValidationError */
         ValidationError: {
@@ -233,6 +297,74 @@ export interface operations {
                     [name: string]: unknown;
                 };
                 content?: never;
+            };
+        };
+    };
+    auth_magic_link_request: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        requestBody: {
+            content: {
+                "application/json": components["schemas"]["MagicLinkRequest"];
+            };
+        };
+        responses: {
+            /** @description Successful Response */
+            202: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": {
+                        [key: string]: string;
+                    };
+                };
+            };
+            /** @description Validation Error */
+            422: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["HTTPValidationError"];
+                };
+            };
+        };
+    };
+    auth_magic_link_verify: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        requestBody: {
+            content: {
+                "application/json": components["schemas"]["MagicLinkVerify"];
+            };
+        };
+        responses: {
+            /** @description Successful Response */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["SignInResult"];
+                };
+            };
+            /** @description Validation Error */
+            422: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["HTTPValidationError"];
+                };
             };
         };
     };

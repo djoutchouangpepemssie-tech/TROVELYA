@@ -16,6 +16,7 @@ from trovelya.core.idempotency import purge_idempotency_keys
 from trovelya.core.logging import configure_logging
 from trovelya.core.observability import configure_observability, outbox_oldest_unpublished_seconds
 from trovelya.core.redis import make_redis
+from trovelya.modules.identity.service import purge_expired_magic_links
 from trovelya.shared.clock import SystemClock
 from trovelya.workers.email_jobs import MAX_TRIES, deliver_email
 from trovelya.workers.outbox_relay import (
@@ -74,12 +75,17 @@ async def purge_idempotency_keys_job(ctx: Context) -> int:
     return await purge_idempotency_keys(ctx["sessionmaker"], clock=ctx["clock"])
 
 
+async def purge_magic_links_job(ctx: Context) -> int:
+    return await purge_expired_magic_links(ctx["sessionmaker"], clock=ctx["clock"])
+
+
 class WorkerSettings:
     functions: ClassVar[list[Any]] = [func(deliver_email, max_tries=MAX_TRIES, timeout=60)]
     cron_jobs: ClassVar[list[CronJob]] = [
         cron(relay_outbox, second=EVERY_SECOND, unique=True, timeout=30),
         cron(audit_verify_chain_job, hour=3, minute=0, unique=True, timeout=600),
         cron(purge_idempotency_keys_job, hour=4, minute=30, unique=True, timeout=600),
+        cron(purge_magic_links_job, hour=4, minute=45, unique=True, timeout=600),
     ]
     on_startup = startup
     on_shutdown = shutdown

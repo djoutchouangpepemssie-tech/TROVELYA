@@ -115,3 +115,114 @@ async def list_active_sessions(
         _LIST_ACTIVE, {"user_id": user_id, "now": now, "idle_cutoff": idle_cutoff}
     )
     return list(result.all())
+
+
+# --- Magic links and sign-up -----------------------------------------------------------------
+
+_SETTING_INT = text("SELECT value FROM platform_settings WHERE key = :key")
+
+_INSERT_MAGIC_LINK = text(
+    "INSERT INTO magic_links (id, email, token_hash, purpose, expires_at, ip, created_at)"
+    " VALUES (:id, :email, :token_hash, :purpose, :expires_at, CAST(:ip AS inet), :now)"
+)
+
+# Atomic: two concurrent clicks on the same link, only one gets the row back.
+_CONSUME_MAGIC_LINK = text(
+    "UPDATE magic_links SET consumed_at = :now"
+    " WHERE token_hash = :token_hash AND purpose = :purpose"
+    " AND consumed_at IS NULL AND expires_at > :now RETURNING email"
+)
+
+_PURGE_MAGIC_LINKS = text("DELETE FROM magic_links WHERE expires_at < :cutoff")
+
+_FIND_USER_BY_EMAIL = text(
+    "SELECT id, is_staff, status::text AS status,"
+    " profile_completed_at IS NOT NULL AS profile_completed"
+    " FROM users WHERE email = :email"
+)
+
+_CREATE_USER = text(
+    "INSERT INTO users (id, email, username, display_name, email_verified_at, created_at)"
+    " VALUES (:id, :email, :username, :display_name, :now, :now)"
+    " ON CONFLICT (email) DO NOTHING RETURNING id"
+)
+
+_CREATE_PREFERENCES = text(
+    "INSERT INTO user_preferences (user_id) VALUES (:user_id) ON CONFLICT DO NOTHING"
+)
+
+_MARK_EMAIL_VERIFIED = text(
+    "UPDATE users SET email_verified_at = coalesce(email_verified_at, :now) WHERE id = :id"
+)
+
+
+async def setting_int(db: AsyncSession, key: str, *, default: int) -> int:
+    value = await db.scalar(_SETTING_INT, {"key": key})
+    return int(value) if value is not None else default
+
+
+async def insert_magic_link(
+    db: AsyncSession,
+    *,
+    link_id: UUID,
+    email: str,
+    token_hash: bytes,
+    purpose: str,
+    expires_at: datetime,
+    ip: str | None,
+    now: datetime,
+) -> None:
+    await db.execute(
+        _INSERT_MAGIC_LINK,
+        {
+            "id": link_id,
+            "email": email,
+            "token_hash": token_hash,
+            "purpose": purpose,
+            "expires_at": expires_at,
+            "ip": ip,
+            "now": now,
+        },
+    )
+
+
+async def consume_magic_link(
+    db: AsyncSession, *, token_hash: bytes, purpose: str, now: datetime
+) -> str | None:
+    result = await db.execute(
+        _CONSUME_MAGIC_LINK, {"token_hash": token_hash, "purpose": purpose, "now": now}
+    )
+    return result.scalar_one_or_none()
+
+
+async def purge_magic_links(db: AsyncSession, *, cutoff: datetime) -> int:
+    result = await db.execute(_PURGE_MAGIC_LINKS, {"cutoff": cutoff})
+    return result.rowcount  # pyright: ignore[reportAttributeAccessIssue, reportUnknownMemberType, reportUnknownVariableType]
+
+
+async def find_user_by_email(db: AsyncSession, email: str) -> Row[Any] | None:
+    return (await db.execute(_FIND_USER_BY_EMAIL, {"email": email})).one_or_none()
+
+
+async def create_user(
+    db: AsyncSession, *, user_id: UUID, email: str, username: str, display_name: str, now: datetime
+) -> bool:
+    """False when another request created the account for this e-mail at the same time."""
+    result = await db.execute(
+        _CREATE_USER,
+        {
+            "id": user_id,
+            "email": email,
+            "username": username,
+            "display_name": display_name,
+            "now": now,
+        },
+    )
+    if result.scalar_one_or_none() is None:
+        return False
+    await db.execute(_CREATE_PREFERENCES, {"user_id": user_id})
+    return True
+
+
+async def mark_email_verified(db: AsyncSession, user_id: UUID, *, now: datetime) -> None:
+    await db.execute(_MARK_EMAIL_VERIFIED, {"id": user_id, "now": now})
