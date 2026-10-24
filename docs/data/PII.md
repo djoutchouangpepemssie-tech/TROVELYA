@@ -48,6 +48,7 @@ P0 ne contenait que des données techniques. Les comptes arrivent en P1 (module 
 | Sentry (API et web) | Erreurs et traces | Ni identité, ni IP, ni cookies, ni en-têtes (hors `x-request-id` et `content-type`), ni corps, ni paramètres d'URL, ni variables locales ; « Prevent Storing of IP Addresses » activé côté Sentry. La localisation affichée est celle du serveur qui envoie |
 | Cookie `NEXT_LOCALE` (web) | Langue choisie | Cookie fonctionnel, pas de consentement requis |
 | Cookie `trv_csrf` (API) | Jeton anti-CSRF signé | Cookie de sécurité strictement nécessaire |
+| Cookie `__Host-trv_anon` (API) | Identifiant aléatoire d'un navigateur non connecté, posé seulement quand la personne fait un choix de consentement | Prouver ce choix (RGPD art. 7) ; 13 mois au plus (CNIL) ; ses choix sont rattachés au compte à la connexion sur ce navigateur |
 
 ## Règles pour les phases suivantes
 

@@ -22,6 +22,7 @@ from trovelya.modules.identity.schemas import (
 from trovelya.modules.identity.service import (
     CurrentUser,
     SessionPolicy,
+    consents,
     get_clock,
     get_session_policy,
     set_session_cookie,
@@ -105,6 +106,9 @@ async def login_verify(
         rp=_rp(request),
         policy=policy,
         clock=clock,
+    )
+    await consents.attach_on_sign_in(
+        db, cookie=request.cookies.get(consents.ANON_COOKIE), user_id=sign_in.user_id
     )
     set_session_cookie(response, sign_in.session, clock=clock)
     return SignInResult(

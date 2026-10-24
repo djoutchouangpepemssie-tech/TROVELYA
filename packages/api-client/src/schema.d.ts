@@ -451,6 +451,31 @@ export interface paths {
         patch?: never;
         trace?: never;
     };
+    "/v1/me/consents": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        /**
+         * Get Consents
+         * @description Signed in or not: an anonymous browser is recognised by `__Host-trv_anon`.
+         */
+        get: operations["me_consents_get"];
+        put?: never;
+        /**
+         * Post Consent
+         * @description Records a choice (granting or withdrawing) and answers the new state. An anonymous
+         *     browser without a valid `__Host-trv_anon` receives one (13 months).
+         */
+        post: operations["me_consents_record"];
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
     "/v1/me/email": {
         parameters: {
             query?: never;
@@ -757,6 +782,45 @@ export interface components {
             terms_version: string;
             /** Username */
             username: string;
+        };
+        /** ConsentIn */
+        ConsentIn: {
+            /** Granted */
+            granted: boolean;
+            /** Policy Version */
+            policy_version: string;
+            /**
+             * Purpose
+             * @enum {string}
+             */
+            purpose: "analytics" | "marketing_email" | "personalised_ads" | "location";
+        };
+        /** ConsentOut */
+        ConsentOut: {
+            /**
+             * Created At
+             * Format: date-time
+             */
+            created_at: string;
+            /** Granted */
+            granted: boolean;
+            /** Policy Version */
+            policy_version: string;
+            /**
+             * Purpose
+             * @enum {string}
+             */
+            purpose: "analytics" | "marketing_email" | "personalised_ads" | "location";
+        };
+        /**
+         * ConsentState
+         * @description Latest choice per purpose; the banner shows only if `active_purposes` is not empty.
+         */
+        ConsentState: {
+            /** Active Purposes */
+            active_purposes: ("analytics" | "marketing_email" | "personalised_ads" | "location")[];
+            /** Consents */
+            consents: components["schemas"]["ConsentOut"][];
         };
         /** Counters */
         Counters: {
@@ -1897,6 +1961,59 @@ export interface operations {
                     [name: string]: unknown;
                 };
                 content?: never;
+            };
+            /** @description Validation Error */
+            422: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["HTTPValidationError"];
+                };
+            };
+        };
+    };
+    me_consents_get: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description Successful Response */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ConsentState"];
+                };
+            };
+        };
+    };
+    me_consents_record: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        requestBody: {
+            content: {
+                "application/json": components["schemas"]["ConsentIn"];
+            };
+        };
+        responses: {
+            /** @description Successful Response */
+            201: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ConsentState"];
+                };
             };
             /** @description Validation Error */
             422: {

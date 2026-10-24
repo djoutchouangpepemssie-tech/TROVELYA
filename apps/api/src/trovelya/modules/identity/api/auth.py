@@ -17,6 +17,7 @@ from trovelya.modules.identity.service import (
     CurrentUser,
     SessionPolicy,
     clear_session_cookie,
+    consents,
     current_user,
     get_clock,
     get_session_policy,
@@ -82,6 +83,9 @@ async def post_magic_link_verify(
         country=client_country(request.scope, proxy_secret=secret),
         policy=policy,
         clock=clock,
+    )
+    await consents.attach_on_sign_in(
+        db, cookie=request.cookies.get(consents.ANON_COOKIE), user_id=sign_in.user_id
     )
     set_session_cookie(response, sign_in.session, clock=clock)
     return SignInResult(

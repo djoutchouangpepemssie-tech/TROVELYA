@@ -16,6 +16,7 @@ from trovelya.core.errors import AppError, ErrorCode
 from trovelya.modules.identity.adapters.oidc import OidcProvider
 from trovelya.modules.identity.service import (
     SessionPolicy,
+    consents,
     get_clock,
     get_session_policy,
     set_session_cookie,
@@ -122,6 +123,9 @@ async def _complete(
     else:
         target = "/fr" if sign_in.profile_completed else "/fr/bienvenue"
         response = RedirectResponse(_web(request, target), status_code=302)
+        await consents.attach_on_sign_in(
+            db, cookie=request.cookies.get(consents.ANON_COOKIE), user_id=sign_in.user_id
+        )
         set_session_cookie(response, sign_in.session, clock=clock)
     response.delete_cookie(OAUTH_COOKIE, path="/", secure=True, httponly=True, samesite="lax")
     return response

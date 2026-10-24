@@ -368,3 +368,28 @@ class Preferences(BaseModel):
             if any(not _NOTIFICATION_TYPE.fullmatch(kind) for kind in types):
                 raise ValueError("notification_settings: type keys ^[a-z_]{2,40}$")
         return self
+
+
+ConsentPurpose = Literal["analytics", "marketing_email", "personalised_ads", "location"]
+
+
+class ConsentIn(BaseModel):
+    model_config = ConfigDict(extra="forbid")
+
+    purpose: ConsentPurpose
+    granted: bool
+    policy_version: str = Field(min_length=1, max_length=64)
+
+
+class ConsentOut(BaseModel):
+    purpose: ConsentPurpose
+    granted: bool
+    policy_version: str
+    created_at: datetime
+
+
+class ConsentState(BaseModel):
+    """Latest choice per purpose; the banner shows only if `active_purposes` is not empty."""
+
+    active_purposes: list[ConsentPurpose]
+    consents: list[ConsentOut]

@@ -174,6 +174,11 @@ _MARK_EMAIL_VERIFIED = text(
 )
 
 
+async def setting_json(db: AsyncSession, key: str) -> Any:
+    """The JSON value of a platform setting, None when it is not set."""
+    return await db.scalar(_SETTING_INT, {"key": key})
+
+
 async def setting_int(db: AsyncSession, key: str, *, default: int) -> int:
     value = await db.scalar(_SETTING_INT, {"key": key})
     return int(value) if value is not None else default
@@ -414,8 +419,23 @@ _COMPLETE_PROFILE = text(
 )
 
 _INSERT_CONSENT = text(
-    "INSERT INTO consents (id, user_id, purpose, granted, policy_version, source, created_at)"
-    " VALUES (:id, :user_id, :purpose, :granted, :policy_version, :source, :now)"
+    "INSERT INTO consents"
+    " (id, user_id, anonymous_id, purpose, granted, policy_version, source, created_at)"
+    " VALUES (:id, :user_id, :anonymous_id, :purpose, :granted, :policy_version, :source, :now)"
+)
+
+# Latest choice per purpose of a member, or of an anonymous browser (`terms` is not a cookie
+# choice and stays out). Ties on the timestamp are broken by the time-ordered id.
+_LATEST_CONSENTS = text(
+    "SELECT DISTINCT ON (purpose) purpose, granted, policy_version, created_at FROM consents"
+    " WHERE purpose <> 'terms'"
+    " AND (user_id = :user_id OR (CAST(:user_id AS uuid) IS NULL AND anonymous_id = :anonymous_id"
+    " AND user_id IS NULL))"
+    " ORDER BY purpose, created_at DESC, id DESC"
+)
+
+_ATTACH_ANONYMOUS_CONSENTS = text(
+    "UPDATE consents SET user_id = :user_id WHERE anonymous_id = :anonymous_id AND user_id IS NULL"
 )
 
 # Everything a not-yet-completed account can own (every other route needs a completed profile).
@@ -461,7 +481,8 @@ async def complete_profile(
 async def insert_consent(
     db: AsyncSession,
     *,
-    user_id: UUID,
+    user_id: UUID | None,
+    anonymous_id: str | None = None,
     purpose: str,
     granted: bool,
     policy_version: str,
@@ -473,6 +494,7 @@ async def insert_consent(
         {
             "id": new_id(),
             "user_id": user_id,
+            "anonymous_id": anonymous_id,
             "purpose": purpose,
             "granted": granted,
             "policy_version": policy_version,
@@ -480,6 +502,17 @@ async def insert_consent(
             "now": now,
         },
     )
+
+
+async def latest_consents(
+    db: AsyncSession, *, user_id: UUID | None, anonymous_id: str | None
+) -> list[Row[Any]]:
+    result = await db.execute(_LATEST_CONSENTS, {"user_id": user_id, "anonymous_id": anonymous_id})
+    return list(result.all())
+
+
+async def attach_anonymous_consents(db: AsyncSession, *, anonymous_id: str, user_id: UUID) -> None:
+    await db.execute(_ATTACH_ANONYMOUS_CONSENTS, {"anonymous_id": anonymous_id, "user_id": user_id})
 
 
 async def erase_incomplete_account(db: AsyncSession, user_id: UUID) -> None:

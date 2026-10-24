@@ -3,13 +3,17 @@
 from typing import Annotated
 from uuid import UUID
 
-from fastapi import APIRouter, Depends, Request, status
+from fastapi import APIRouter, Depends, Request, Response, status
 from fastapi.responses import JSONResponse
 
 from trovelya.core.client_ip import client_ip
+from trovelya.core.csrf import require_csrf
 from trovelya.core.errors import AppError, ErrorCode, problem_response
 from trovelya.modules.identity.schemas import (
     CompleteProfile,
+    ConsentIn,
+    ConsentOut,
+    ConsentState,
     EmailChangeRequest,
     MeOut,
     ProfilePatch,
@@ -21,11 +25,13 @@ from trovelya.modules.identity.service import (
     CurrentUser,
     SessionPolicy,
     clear_session_cookie,
+    consents,
     current_user,
     get_clock,
     get_session_policy,
     limit_magic_link_requests,
     list_sessions,
+    optional_user,
     profile,
     revoke_other_sessions,
     revoke_session,
@@ -37,6 +43,7 @@ from trovelya.shared.clock import Clock
 router = APIRouter(prefix="/v1/me", tags=["me"])
 
 Me = Annotated[CurrentUser, Depends(current_user)]
+MaybeMe = Annotated[CurrentUser | None, Depends(optional_user)]
 ClockDep = Annotated[Clock, Depends(get_clock)]
 
 
@@ -161,3 +168,52 @@ async def post_email_change(
         clock=clock,
     )
     return {}
+
+
+async def _consent_state(
+    db: Uow, *, user: CurrentUser | None, anonymous_id: str | None
+) -> ConsentState:
+    rows = await consents.latest(db, user_id=user.id if user else None, anonymous_id=anonymous_id)
+    return ConsentState(
+        active_purposes=await consents.active_purposes(db),
+        consents=[ConsentOut.model_validate(row, from_attributes=True) for row in rows],
+    )
+
+
+@router.get("/consents", operation_id="me_consents_get")
+async def get_consents(request: Request, db: Uow, user: MaybeMe) -> ConsentState:
+    """Signed in or not: an anonymous browser is recognised by `__Host-trv_anon`."""
+    anonymous_id = consents.valid_anonymous_id(request.cookies.get(consents.ANON_COOKIE))
+    return await _consent_state(db, user=user, anonymous_id=anonymous_id)
+
+
+@router.post(
+    "/consents",
+    operation_id="me_consents_record",
+    status_code=status.HTTP_201_CREATED,
+    dependencies=[Depends(require_csrf)],
+)
+async def post_consent(
+    body: ConsentIn,
+    request: Request,
+    response: Response,
+    db: Uow,
+    user: MaybeMe,
+    clock: ClockDep,
+) -> ConsentState:
+    """Records a choice (granting or withdrawing) and answers the new state. An anonymous
+    browser without a valid `__Host-trv_anon` receives one (13 months)."""
+    anonymous_id = consents.valid_anonymous_id(request.cookies.get(consents.ANON_COOKIE))
+    if user is None and anonymous_id is None:
+        anonymous_id = consents.new_anonymous_id()
+        consents.set_anonymous_cookie(response, anonymous_id)
+    await consents.record(
+        db,
+        user_id=user.id if user else None,
+        anonymous_id=anonymous_id,
+        purpose=body.purpose,
+        granted=body.granted,
+        policy_version=body.policy_version,
+        clock=clock,
+    )
+    return await _consent_state(db, user=user, anonymous_id=anonymous_id)

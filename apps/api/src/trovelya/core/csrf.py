@@ -13,7 +13,7 @@ import secrets
 from fastapi import APIRouter, Request, Response
 from starlette.types import ASGIApp, Receive, Scope, Send
 
-from trovelya.core.errors import ErrorCode, problem_response
+from trovelya.core.errors import AppError, ErrorCode, problem_response
 
 CSRF_COOKIE = "__Host-trv_csrf"
 CSRF_HEADER = "x-csrf-token"
@@ -58,6 +58,16 @@ class CsrfMiddleware:
             await self.app(scope, receive, send)
             return
         await problem_response(request, ErrorCode.CSRF_FAILED, 403)(scope, receive, send)
+
+
+def require_csrf(request: Request) -> None:
+    """Dependency for unsafe routes open to anonymous visitors (consents): the double submit
+    is checked even without a session, so another site cannot act in the visitor's browser."""
+    cookie = request.cookies.get(CSRF_COOKIE, "")
+    header = request.headers.get(CSRF_HEADER, "")
+    secret = request.app.state.settings.secret_key.get_secret_value()
+    if not (cookie and hmac.compare_digest(cookie, header) and is_valid_csrf_token(secret, cookie)):
+        raise AppError(ErrorCode.CSRF_FAILED, 403)
 
 
 router = APIRouter(tags=["security"])
