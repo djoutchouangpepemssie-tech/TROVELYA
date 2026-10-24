@@ -12,7 +12,8 @@
     "typecheck": "turbo run typecheck",
     "test": "turbo run test",
     "format": "prettier --write .",
-    "format:check": "prettier --check ."
+    "format:check": "prettier --check .",
+    "api:generate": "cd apps/api && uv run python -m trovelya.scripts.export_openapi ../../docs/api/openapi.json && cd ../.. && pnpm --filter @trovelya/api-client generate"
   },
   "devDependencies": {
     "prettier": "3.9.10",

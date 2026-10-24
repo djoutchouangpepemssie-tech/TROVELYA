@@ -10,3 +10,4 @@ pnpm-lock.yaml
 **/test-results/
 **/next-env.d.ts
 apps/web/public/
+packages/api-client/src/schema.d.ts
