@@ -36,6 +36,8 @@ class ErrorCode(StrEnum):
     CAPTCHA_FAILED = "captcha_failed"
     OAUTH_FAILED = "oauth_failed"
     OAUTH_EMAIL_UNVERIFIED = "oauth_email_unverified"
+    PASSKEY_INVALID = "passkey_invalid"
+    STEP_UP_REQUIRED = "step_up_required"
 
 
 # French titles by default (section 2); translation by Accept-Language arrives with P1.
@@ -59,6 +61,8 @@ _TITLES: dict[ErrorCode, str] = {
     ErrorCode.CAPTCHA_FAILED: "Vérification anti-robots échouée",
     ErrorCode.OAUTH_FAILED: "Connexion avec ce compte impossible",
     ErrorCode.OAUTH_EMAIL_UNVERIFIED: "Adresse e-mail non vérifiée chez le fournisseur",
+    ErrorCode.PASSKEY_INVALID: "Clé d'accès refusée",
+    ErrorCode.STEP_UP_REQUIRED: "Confirmez votre identité pour continuer",
 }
 
 _STATUS_CODES: dict[int, ErrorCode] = {

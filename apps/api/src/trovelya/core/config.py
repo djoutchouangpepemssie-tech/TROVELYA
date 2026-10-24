@@ -52,6 +52,10 @@ class Settings(BaseSettings):
     oauth_apple_private_key: SecretStr | None = None
     web_origin: str
     admin_origin: str
+    # Passkeys (P1-T04): relying party; defaults to the web origin's host and the web origin.
+    webauthn_rp_id: str | None = None
+    webauthn_rp_name: str = "TROVÉLYA"
+    webauthn_origins: list[str] = Field(default_factory=list[str])
     sentry_dsn: str | None = None
     otel_exporter_otlp_endpoint: str | None = None
     feature_flags_default: dict[str, bool] = Field(default_factory=dict[str, bool])

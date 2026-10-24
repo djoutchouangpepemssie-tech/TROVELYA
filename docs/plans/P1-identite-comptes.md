@@ -266,6 +266,13 @@ Parallélisables : T03 et T04 après T02c ; T06, T09a et T10 après T05 ; T08 d�
 - [ ] Tests d'abord (authentificateur simulé avec `cryptography`, comme les tests de py_webauthn) : `test_register_and_login` ; `test_challenge_single_use` ; `test_challenge_expires` ; `test_wrong_origin_rejected` ; `test_wrong_rp_id_rejected` ; `test_sign_count_regression_rejected` ; `test_multiple_passkeys_per_user` ; `test_delete_requires_step_up` ; `test_delete_other_users_passkey_404` ; `test_step_up_rotates_session` ; `test_step_up_via_magic_link` ; `test_require_recent_mfa_12h` ; `test_staff_login_gets_admin_session_12h` ; `test_flag_off_404`.
 - [ ] ÉCHEC → implémenter → vert. Commit `feat(identity): passkeys with webauthn and step-up authentication`.
 
+**Réalisation (24/10/2026) :** découpée en T04a (enregistrement, connexion, gestion des passkeys, `recent_mfa_user`), T04b (`POST /v1/auth/step-up` par passkey ou lien magique) et T04c (web `lib/passkeys.ts`).
+- Bibliothèque `webauthn==3.0.1` (py_webauthn), qui ajoute `cbor2`, `pyOpenSSL`, `pyasn1` et `pyasn1-modules`.
+- Vérification de l'utilisateur **obligatoire** (`user_verification=required`) : une passkey seule vaut connexion forte. Identifiants découvrables obligatoires.
+- Le challenge est à usage unique (`GETDEL`), avec une expiration de 5 min vérifiée aussi avec l'horloge de l'application. Toute erreur répond `passkey_invalid`, sans dire quelle vérification a échoué.
+- Un compteur de signatures qui recule (authentificateur peut-être cloné) est refusé ; la mise à jour du compteur est conditionnelle (deux connexions simultanées ne l'avancent qu'une fois).
+- Valeurs par défaut : `WEBAUTHN_RP_ID` = hôte de `WEB_ORIGIN` ; `WEBAUTHN_ORIGINS` = `[WEB_ORIGIN]`. Comme pour Google, le flag `auth.passkeys` reste éteint sur staging tant que les écrans n'existent pas.
+
 ### P1-T05 — Profil privé et public, changement d'e-mail
 
 **Fichiers :** `service/profile.py`, `policies.py`, `api/me.py`, `api/users.py`, `schemas.py`, tests.
