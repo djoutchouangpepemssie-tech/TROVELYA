@@ -5,3 +5,8 @@ pnpm-lock.yaml
 **/.next/
 **/coverage/
 *.md
+**/.next/
+**/playwright-report/
+**/test-results/
+**/next-env.d.ts
+apps/web/public/
