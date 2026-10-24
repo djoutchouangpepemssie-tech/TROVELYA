@@ -9,10 +9,9 @@ from typing import Annotated
 
 import structlog
 from fastapi import Depends, Request, Response
-from sqlalchemy.ext.asyncio import AsyncSession
 
 from trovelya.core.csrf import SESSION_COOKIE
-from trovelya.core.db import get_uow
+from trovelya.core.db import Uow as Uow  # re-exported for the identity routes
 from trovelya.core.errors import AppError, ErrorCode
 from trovelya.core.ratelimit import hit
 from trovelya.modules.identity import repository
@@ -25,8 +24,6 @@ from trovelya.modules.identity.service.sessions import (
 from trovelya.shared.clock import Clock
 
 logger = structlog.get_logger(__name__)
-
-Uow = Annotated[AsyncSession, Depends(get_uow)]
 
 
 def get_clock(request: Request) -> Clock:
