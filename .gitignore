@@ -11,6 +11,7 @@ build/
 .expo/
 .DS_Store
 coverage/
+.coverage
 .import_linter_cache/
 test-results/
 playwright-report/
