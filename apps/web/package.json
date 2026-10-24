@@ -13,6 +13,7 @@
     "test:e2e": "playwright test"
   },
   "dependencies": {
+    "@sentry/nextjs": "11.9.0",
     "@trovelya/core": "workspace:*",
     "@trovelya/design-tokens": "workspace:*",
     "@trovelya/ui": "workspace:*",

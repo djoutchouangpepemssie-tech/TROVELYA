@@ -3,6 +3,7 @@
 from typing import Any, ClassVar
 from zoneinfo import ZoneInfo
 
+import structlog
 from arq import cron
 from arq.connections import RedisSettings
 from arq.cron import CronJob
@@ -11,13 +12,17 @@ from trovelya.core.config import get_settings
 from trovelya.core.db import make_engine, make_sessionmaker
 from trovelya.core.idempotency import purge_idempotency_keys
 from trovelya.core.logging import configure_logging
+from trovelya.core.observability import configure_observability, outbox_oldest_unpublished_seconds
 from trovelya.core.redis import make_redis
 from trovelya.shared.clock import SystemClock
 from trovelya.workers.outbox_relay import (
     RedisStreamPublisher,
+    oldest_unpublished_age_seconds,
     relay_outbox_batch,
     verify_audit_chain,
 )
+
+logger = structlog.get_logger(__name__)
 
 Context = dict[str, Any]
 EVERY_SECOND = set(range(60))
@@ -26,6 +31,7 @@ EVERY_SECOND = set(range(60))
 async def startup(ctx: Context) -> None:
     settings = get_settings()
     configure_logging()
+    configure_observability(None, settings, service_name="trovelya-worker")
     engine = make_engine(settings.database_url)
     ctx["engine"] = engine
     ctx["sessionmaker"] = make_sessionmaker(engine)
@@ -45,6 +51,11 @@ async def relay_outbox(ctx: Context) -> int:
         published := await relay_outbox_batch(ctx["sessionmaker"], publisher, clock=ctx["clock"])
     ) > 0:
         total += published
+    outbox_oldest_unpublished_seconds.set(
+        await oldest_unpublished_age_seconds(ctx["sessionmaker"], clock=ctx["clock"])
+    )
+    if total:
+        logger.info("outbox_relayed", published=total)
     return total
 
 

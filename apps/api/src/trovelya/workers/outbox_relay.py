@@ -21,6 +21,7 @@ _CLAIM = text(
     " WHERE published_at IS NULL ORDER BY id LIMIT :limit FOR UPDATE SKIP LOCKED"
 )
 _MARK = text("UPDATE outbox_events SET published_at = :now WHERE id = ANY(:ids)")
+_OLDEST_UNPUBLISHED = text("SELECT min(occurred_at) FROM outbox_events WHERE published_at IS NULL")
 
 
 class RedisStreamPublisher:
@@ -71,6 +72,18 @@ async def relay_outbox_batch(
         if events:
             await session.execute(_MARK, {"now": clock.now(), "ids": [e.id for e in events]})
     return len(events)
+
+
+async def oldest_unpublished_age_seconds(
+    session_factory: async_sessionmaker[AsyncSession], *, clock: Clock
+) -> float:
+    """Age of the oldest event still waiting to be published, 0 when the outbox is empty.
+    Exported as trovelya_outbox_oldest_unpublished_seconds (alert: the relay is stuck)."""
+    async with session_factory() as session:
+        oldest = (await session.execute(_OLDEST_UNPUBLISHED)).scalar_one_or_none()
+    if oldest is None:
+        return 0.0
+    return max((clock.now() - oldest).total_seconds(), 0.0)
 
 
 async def verify_audit_chain(session_factory: async_sessionmaker[AsyncSession]) -> list[int]:

@@ -5,7 +5,7 @@ from contextlib import asynccontextmanager
 
 from fastapi import FastAPI
 
-from trovelya.core import db, redis, testing_routes
+from trovelya.core import db, debug_routes, redis, testing_routes
 from trovelya.core.config import Settings, get_settings
 from trovelya.core.csrf import CsrfMiddleware
 from trovelya.core.csrf import router as csrf_router
@@ -15,6 +15,7 @@ from trovelya.core.health import router as health_router
 from trovelya.core.idempotency import IdempotencyMiddleware
 from trovelya.core.logging import configure_logging
 from trovelya.core.middleware import RequestIdMiddleware
+from trovelya.core.observability import configure_observability
 from trovelya.core.ratelimit import AnonymousRateLimitMiddleware
 
 
@@ -58,6 +59,7 @@ def create_app(
         redoc_url=None,
     )
     app.state.settings = settings
+    configure_observability(app, settings)
     app.state.readiness_checks = readiness_checks or {}
     install_error_handlers(app)
     # Starlette runs the last added middleware first: request id → rate limit → CSRF →
@@ -70,6 +72,8 @@ def create_app(
     app.add_middleware(RequestIdMiddleware)
     app.include_router(health_router)
     app.include_router(csrf_router)
+    if settings.env != "production":
+        app.include_router(debug_routes.router)
     if settings.env in {"local", "test"}:
         app.include_router(testing_routes.router)
     return app

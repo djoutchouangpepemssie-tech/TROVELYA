@@ -1,5 +1,5 @@
 import asyncio
-from datetime import UTC, datetime
+from datetime import UTC, datetime, timedelta
 from uuid import UUID
 
 import pytest
@@ -13,6 +13,7 @@ from trovelya.shared.events import InMemoryPublisher, OutboxEvent, consume_once,
 from trovelya.shared.ids import new_id
 from trovelya.workers.outbox_relay import (
     RedisStreamPublisher,
+    oldest_unpublished_age_seconds,
     relay_outbox_batch,
     verify_audit_chain,
 )
@@ -180,3 +181,21 @@ async def test_verify_audit_chain_reports_broken_rows(
     sessionmaker: async_sessionmaker[AsyncSession],
 ) -> None:
     assert await verify_audit_chain(sessionmaker) == []
+
+
+async def test_oldest_unpublished_age(sessionmaker: async_sessionmaker[AsyncSession]) -> None:
+    await _drain(sessionmaker, InMemoryPublisher())
+    assert await oldest_unpublished_age_seconds(sessionmaker, clock=CLOCK) == 0.0
+
+    [event_id] = await _emit(sessionmaker, new_id())
+    async with sessionmaker() as session:
+        occurred_at = (
+            await session.execute(
+                text("SELECT occurred_at FROM outbox_events WHERE id = :id"), {"id": event_id}
+            )
+        ).scalar_one()
+    later = FixedClock(occurred_at + timedelta(seconds=30))
+    assert await oldest_unpublished_age_seconds(sessionmaker, clock=later) == 30.0
+
+    await _drain(sessionmaker, InMemoryPublisher())
+    assert await oldest_unpublished_age_seconds(sessionmaker, clock=later) == 0.0
