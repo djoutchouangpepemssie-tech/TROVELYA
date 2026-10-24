@@ -1,11 +1,11 @@
 """Request and response bodies of the identity routes (snake_case, section 11.1)."""
 
 import re
-from datetime import datetime
+from datetime import date, datetime
 from typing import Any, Literal
 from uuid import UUID
 
-from pydantic import BaseModel, Field, model_validator
+from pydantic import BaseModel, ConfigDict, Field, model_validator
 
 
 class SessionOut(BaseModel):
@@ -123,3 +123,46 @@ class CompleteProfile(BaseModel):
 
 class UsernameSuggestion(BaseModel):
     username: str
+
+
+class ProfilePatch(BaseModel):
+    """Only the fields sent are changed; `bio` set to blank clears it."""
+
+    model_config = ConfigDict(extra="forbid")
+
+    username: str | None = Field(default=None, min_length=3, max_length=30)
+    display_name: str | None = Field(default=None, min_length=1, max_length=60)
+    bio: str | None = Field(default=None, max_length=500)
+    locale: Literal["fr-FR"] | None = None  # French only for now (web i18n/routing.ts)
+
+    @model_validator(mode="after")
+    def _normalise(self) -> "ProfilePatch":
+        for required in ("username", "display_name", "locale"):
+            if required in self.model_fields_set and getattr(self, required) is None:
+                raise ValueError(f"{required} cannot be null")
+        if self.username is not None:
+            self.username = self.username.strip().lower()
+            if not re.fullmatch(USERNAME_PATTERN, self.username):
+                raise ValueError("invalid username")
+        if self.display_name is not None:
+            self.display_name = self.display_name.strip()
+            if not self.display_name:
+                raise ValueError("display name cannot be blank")
+        return self
+
+    def changes(self) -> dict[str, str | None]:
+        sent = self.model_dump(exclude_unset=True)
+        if "bio" in sent:
+            sent["bio"] = (sent["bio"] or "").strip() or None
+        return sent
+
+
+class PublicProfile(BaseModel):
+    """What anybody can see. Never the e-mail, location, age or account status."""
+
+    username: str
+    display_name: str
+    bio: str | None
+    member_since: date
+    followers_count: int
+    following_count: int

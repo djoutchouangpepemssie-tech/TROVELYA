@@ -29,6 +29,7 @@ class ErrorCode(StrEnum):
     RATE_LIMITED = "rate_limited"
     CSRF_FAILED = "csrf_failed"
     PRECONDITION_FAILED = "precondition_failed"
+    PRECONDITION_REQUIRED = "precondition_required"
     SERVICE_UNAVAILABLE = "service_unavailable"
     UNAUTHENTICATED = "unauthenticated"
     FORBIDDEN = "forbidden"
@@ -58,6 +59,7 @@ _TITLES: dict[ErrorCode, str] = {
     ErrorCode.RATE_LIMITED: "Trop de requêtes",
     ErrorCode.CSRF_FAILED: "Jeton CSRF invalide",
     ErrorCode.PRECONDITION_FAILED: "Version obsolète",
+    ErrorCode.PRECONDITION_REQUIRED: "En-tête If-Match obligatoire",
     ErrorCode.SERVICE_UNAVAILABLE: "Service indisponible",
     ErrorCode.UNAUTHENTICATED: "Connexion requise",
     ErrorCode.FORBIDDEN: "Action non autorisée",

@@ -56,7 +56,7 @@ class Account:
         }
 
 
-async def _account(
+async def make_account(
     sessionmaker: async_sessionmaker[AsyncSession],
     *,
     email: str | None = None,
@@ -98,7 +98,7 @@ async def _account(
     return Account(user_id, email, issued.token)
 
 
-def _form(**overrides: Any) -> dict[str, Any]:
+def profile_form(**overrides: Any) -> dict[str, Any]:
     form: dict[str, Any] = {
         "username": f"user_{new_id().hex[-8:]}",
         "display_name": "Arcel D.",
@@ -118,7 +118,7 @@ async def _scalar(sessionmaker: async_sessionmaker[AsyncSession], sql: str, **pa
 async def test_me_before_completion(
     sessionmaker: async_sessionmaker[AsyncSession], client: AsyncClient
 ) -> None:
-    account = await _account(sessionmaker)
+    account = await make_account(sessionmaker)
     me = (await client.get("/v1/me", headers=account.headers)).json()
     assert me["id"] == str(account.id) and me["email"] == account.email
     assert me["profile_completed"] is False and me["is_minor"] is None
@@ -130,8 +130,8 @@ async def test_me_before_completion(
 async def test_complete_profile_ok(
     sessionmaker: async_sessionmaker[AsyncSession], client: AsyncClient
 ) -> None:
-    account = await _account(sessionmaker)
-    form = _form()
+    account = await make_account(sessionmaker)
+    form = profile_form()
     response = await client.post("/v1/me/complete-profile", headers=account.headers, json=form)
     assert response.status_code == 200, response.text
     me = response.json()
@@ -144,16 +144,18 @@ async def test_complete_profile_ok(
         id=account.id,
     )
     assert consent == "2026-10:true:signup"
-    again = await client.post("/v1/me/complete-profile", headers=account.headers, json=_form())
+    again = await client.post(
+        "/v1/me/complete-profile", headers=account.headers, json=profile_form()
+    )
     assert again.status_code == 409 and again.json()["code"] == "profile_already_completed"
 
 
 async def test_terms_must_be_accepted(
     sessionmaker: async_sessionmaker[AsyncSession], client: AsyncClient
 ) -> None:
-    account = await _account(sessionmaker)
+    account = await make_account(sessionmaker)
     response = await client.post(
-        "/v1/me/complete-profile", headers=account.headers, json=_form(accept_terms=False)
+        "/v1/me/complete-profile", headers=account.headers, json=profile_form(accept_terms=False)
     )
     assert response.status_code == 422
 
@@ -161,7 +163,7 @@ async def test_terms_must_be_accepted(
 async def test_too_young_rejected_and_nothing_kept(
     sessionmaker: async_sessionmaker[AsyncSession], client: AsyncClient
 ) -> None:
-    account = await _account(sessionmaker)
+    account = await make_account(sessionmaker)
     async with sessionmaker() as db:
         await db.execute(
             text(
@@ -172,7 +174,7 @@ async def test_too_young_rejected_and_nothing_kept(
         )
         await db.commit()
     response = await client.post(
-        "/v1/me/complete-profile", headers=account.headers, json=_form(birth_year=2012)
+        "/v1/me/complete-profile", headers=account.headers, json=profile_form(birth_year=2012)
     )
     assert response.status_code == 400 and response.json()["code"] == "too_young"
     assert any(
@@ -207,9 +209,9 @@ async def test_age_rule_b(
     minor: bool | None,
 ) -> None:
     """In 2026: age = 2026 - year - 1. Sign-up from 15, adult from 18 (E14, rule B)."""
-    account = await _account(sessionmaker)
+    account = await make_account(sessionmaker)
     response = await client.post(
-        "/v1/me/complete-profile", headers=account.headers, json=_form(birth_year=birth_year)
+        "/v1/me/complete-profile", headers=account.headers, json=profile_form(birth_year=birth_year)
     )
     assert (response.status_code == 200) is accepted
     if accepted:
@@ -219,10 +221,10 @@ async def test_age_rule_b(
 async def test_birth_year_bounds(
     sessionmaker: async_sessionmaker[AsyncSession], client: AsyncClient
 ) -> None:
-    account = await _account(sessionmaker)
+    account = await make_account(sessionmaker)
     for year in (1899, 2027):
         response = await client.post(
-            "/v1/me/complete-profile", headers=account.headers, json=_form(birth_year=year)
+            "/v1/me/complete-profile", headers=account.headers, json=profile_form(birth_year=year)
         )
         assert response.status_code == 422
 
@@ -231,10 +233,12 @@ async def test_username_case_insensitive(
     sessionmaker: async_sessionmaker[AsyncSession], client: AsyncClient
 ) -> None:
     taken = f"alice_{new_id().hex[-6:]}"
-    await _account(sessionmaker, username=taken, completed=True)
-    account = await _account(sessionmaker)
+    await make_account(sessionmaker, username=taken, completed=True)
+    account = await make_account(sessionmaker)
     response = await client.post(
-        "/v1/me/complete-profile", headers=account.headers, json=_form(username=taken.upper())
+        "/v1/me/complete-profile",
+        headers=account.headers,
+        json=profile_form(username=taken.upper()),
     )
     assert response.status_code == 409 and response.json()["code"] == "username_taken"
 
@@ -242,11 +246,13 @@ async def test_username_case_insensitive(
 async def test_complete_profile_username_race(
     sessionmaker: async_sessionmaker[AsyncSession], client: AsyncClient
 ) -> None:
-    first, second = await _account(sessionmaker), await _account(sessionmaker)
+    first, second = await make_account(sessionmaker), await make_account(sessionmaker)
     wanted = f"race_{new_id().hex[-8:]}"
     responses = await asyncio.gather(
         *(
-            client.post("/v1/me/complete-profile", headers=a.headers, json=_form(username=wanted))
+            client.post(
+                "/v1/me/complete-profile", headers=a.headers, json=profile_form(username=wanted)
+            )
             for a in (first, second)
         )
     )
@@ -257,11 +263,11 @@ async def test_username_suggestion(
     sessionmaker: async_sessionmaker[AsyncSession], client: AsyncClient
 ) -> None:
     local = f"Jean.Dupont+{new_id().hex[-6:]}"
-    account = await _account(sessionmaker, email=f"{local}@example.org")
+    account = await make_account(sessionmaker, email=f"{local}@example.org")
     expected = local.lower().replace("+", "_")
     suggestion = (await client.get("/v1/me/username-suggestion", headers=account.headers)).json()
     assert suggestion == {"username": expected}
-    await _account(sessionmaker, username=expected, completed=True)
+    await make_account(sessionmaker, username=expected, completed=True)
     suggestion = (await client.get("/v1/me/username-suggestion", headers=account.headers)).json()
     assert suggestion == {"username": f"{expected}1"}
 
@@ -269,7 +275,7 @@ async def test_username_suggestion(
 async def test_incomplete_profile_blocks_private_routes(
     sessionmaker: async_sessionmaker[AsyncSession], client: AsyncClient
 ) -> None:
-    account = await _account(sessionmaker)
+    account = await make_account(sessionmaker)
     blocked = await client.get("/v1/me/passkeys", headers=account.headers)
     assert blocked.status_code == 403 and blocked.json()["code"] == "profile_incomplete"
     assert (
@@ -288,11 +294,11 @@ async def test_birth_year_not_in_logs(
     client: AsyncClient,
     capsys: pytest.CaptureFixture[str],
 ) -> None:
-    account = await _account(sessionmaker)
+    account = await make_account(sessionmaker)
     await client.post(
-        "/v1/me/complete-profile", headers=account.headers, json=_form(birth_year=1977)
+        "/v1/me/complete-profile", headers=account.headers, json=profile_form(birth_year=1977)
     )
     await client.post(
-        "/v1/me/complete-profile", headers=account.headers, json=_form(birth_year=2013)
+        "/v1/me/complete-profile", headers=account.headers, json=profile_form(birth_year=2013)
     )
     assert "1977" not in capsys.readouterr().out

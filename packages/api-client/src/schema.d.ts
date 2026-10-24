@@ -327,7 +327,11 @@ export interface paths {
         delete?: never;
         options?: never;
         head?: never;
-        patch?: never;
+        /**
+         * Patch Me
+         * @description Change the username, display name, bio or language. `If-Match: <version>` required.
+         */
+        patch: operations["me_update"];
         trace?: never;
     };
     "/v1/me/complete-profile": {
@@ -433,6 +437,27 @@ export interface paths {
         };
         /** Get Username Suggestion */
         get: operations["me_username_suggestion"];
+        put?: never;
+        post?: never;
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/v1/users/{username}": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        /**
+         * Get Public Profile
+         * @description 404 for an unknown name, an account not active or restricted, a profile not yet
+         *     completed, or an account whose erasure was requested.
+         */
+        get: operations["users_get_public"];
         put?: never;
         post?: never;
         delete?: never;
@@ -568,6 +593,41 @@ export interface components {
         PasskeyRename: {
             /** Name */
             name: string;
+        };
+        /**
+         * ProfilePatch
+         * @description Only the fields sent are changed; `bio` set to blank clears it.
+         */
+        ProfilePatch: {
+            /** Bio */
+            bio?: string | null;
+            /** Display Name */
+            display_name?: string | null;
+            /** Locale */
+            locale?: "fr-FR" | null;
+            /** Username */
+            username?: string | null;
+        };
+        /**
+         * PublicProfile
+         * @description What anybody can see. Never the e-mail, location, age or account status.
+         */
+        PublicProfile: {
+            /** Bio */
+            bio: string | null;
+            /** Display Name */
+            display_name: string;
+            /** Followers Count */
+            followers_count: number;
+            /** Following Count */
+            following_count: number;
+            /**
+             * Member Since
+             * Format: date
+             */
+            member_since: string;
+            /** Username */
+            username: string;
         };
         /** SessionList */
         SessionList: {
@@ -1157,6 +1217,39 @@ export interface operations {
             };
         };
     };
+    me_update: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        requestBody: {
+            content: {
+                "application/json": components["schemas"]["ProfilePatch"];
+            };
+        };
+        responses: {
+            /** @description Successful Response */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["MeOut"];
+                };
+            };
+            /** @description Validation Error */
+            422: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["HTTPValidationError"];
+                };
+            };
+        };
+    };
     me_complete_profile: {
         parameters: {
             query?: never;
@@ -1364,6 +1457,37 @@ export interface operations {
                 };
                 content: {
                     "application/json": components["schemas"]["UsernameSuggestion"];
+                };
+            };
+        };
+    };
+    users_get_public: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                username: string;
+            };
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description Successful Response */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["PublicProfile"];
+                };
+            };
+            /** @description Validation Error */
+            422: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["HTTPValidationError"];
                 };
             };
         };

@@ -333,6 +333,111 @@
         "title": "PasskeyRename",
         "type": "object"
       },
+      "ProfilePatch": {
+        "additionalProperties": false,
+        "description": "Only the fields sent are changed; `bio` set to blank clears it.",
+        "properties": {
+          "bio": {
+            "anyOf": [
+              {
+                "maxLength": 500,
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Bio"
+          },
+          "display_name": {
+            "anyOf": [
+              {
+                "maxLength": 60,
+                "minLength": 1,
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Display Name"
+          },
+          "locale": {
+            "anyOf": [
+              {
+                "const": "fr-FR",
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Locale"
+          },
+          "username": {
+            "anyOf": [
+              {
+                "maxLength": 30,
+                "minLength": 3,
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Username"
+          }
+        },
+        "title": "ProfilePatch",
+        "type": "object"
+      },
+      "PublicProfile": {
+        "description": "What anybody can see. Never the e-mail, location, age or account status.",
+        "properties": {
+          "bio": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Bio"
+          },
+          "display_name": {
+            "title": "Display Name",
+            "type": "string"
+          },
+          "followers_count": {
+            "title": "Followers Count",
+            "type": "integer"
+          },
+          "following_count": {
+            "title": "Following Count",
+            "type": "integer"
+          },
+          "member_since": {
+            "format": "date",
+            "title": "Member Since",
+            "type": "string"
+          },
+          "username": {
+            "title": "Username",
+            "type": "string"
+          }
+        },
+        "required": [
+          "username",
+          "display_name",
+          "bio",
+          "member_since",
+          "followers_count",
+          "following_count"
+        ],
+        "title": "PublicProfile",
+        "type": "object"
+      },
       "SessionList": {
         "properties": {
           "data": {
@@ -1156,6 +1261,46 @@
         "tags": [
           "me"
         ]
+      },
+      "patch": {
+        "description": "Change the username, display name, bio or language. `If-Match: <version>` required.",
+        "operationId": "me_update",
+        "requestBody": {
+          "content": {
+            "application/json": {
+              "schema": {
+                "$ref": "#/components/schemas/ProfilePatch"
+              }
+            }
+          },
+          "required": true
+        },
+        "responses": {
+          "200": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/MeOut"
+                }
+              }
+            },
+            "description": "Successful Response"
+          },
+          "422": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/HTTPValidationError"
+                }
+              }
+            },
+            "description": "Validation Error"
+          }
+        },
+        "summary": "Patch Me",
+        "tags": [
+          "me"
+        ]
       }
     },
     "/v1/me/complete-profile": {
@@ -1399,6 +1544,49 @@
         "summary": "Get Username Suggestion",
         "tags": [
           "me"
+        ]
+      }
+    },
+    "/v1/users/{username}": {
+      "get": {
+        "description": "404 for an unknown name, an account not active or restricted, a profile not yet\ncompleted, or an account whose erasure was requested.",
+        "operationId": "users_get_public",
+        "parameters": [
+          {
+            "in": "path",
+            "name": "username",
+            "required": true,
+            "schema": {
+              "title": "Username",
+              "type": "string"
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/PublicProfile"
+                }
+              }
+            },
+            "description": "Successful Response"
+          },
+          "422": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/HTTPValidationError"
+                }
+              }
+            },
+            "description": "Validation Error"
+          }
+        },
+        "summary": "Get Public Profile",
+        "tags": [
+          "users"
         ]
       }
     }

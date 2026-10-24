@@ -12,6 +12,7 @@ from dataclasses import dataclass
 from typing import Any
 from zoneinfo import ZoneInfo
 
+from sqlalchemy import Row
 from sqlalchemy.exc import IntegrityError
 from sqlalchemy.ext.asyncio import AsyncSession
 
@@ -134,3 +135,45 @@ async def complete_profile(
         now=now,
     )
     return Completion(accepted=True)
+
+
+async def update_profile(
+    db: AsyncSession,
+    *,
+    user: CurrentUser,
+    if_match: str | None,
+    changes: dict[str, str | None],
+) -> None:
+    """`If-Match: <version>` is mandatory (428 without it, 412 when stale, section 11.1)."""
+    if if_match is None:
+        raise AppError(ErrorCode.PRECONDITION_REQUIRED, 428)
+    try:
+        version = int(if_match.strip().strip('"').removeprefix("W/").strip('"'))
+    except ValueError as exc:
+        raise AppError(ErrorCode.PRECONDITION_FAILED, 412) from exc
+    if not changes:
+        current = await repository.me(db, user.id)
+        if current.version != version:
+            raise AppError(ErrorCode.PRECONDITION_FAILED, 412)
+        return
+    try:
+        async with db.begin_nested():
+            updated = await repository.update_profile(
+                db, user_id=user.id, version=version, changes=changes
+            )
+    except IntegrityError as exc:
+        raise AppError(ErrorCode.USERNAME_TAKEN, 409) from exc
+    if not updated:
+        raise AppError(ErrorCode.PRECONDITION_FAILED, 412)
+
+
+async def public_profile(db: AsyncSession, username: str) -> Row[Any]:
+    normalised = username.strip().lower()
+    row = (
+        await repository.public_profile(db, normalised)
+        if re.fullmatch(r"[a-z0-9_.]{3,30}", normalised)
+        else None
+    )
+    if row is None:
+        raise AppError(ErrorCode.NOT_FOUND, 404)
+    return row

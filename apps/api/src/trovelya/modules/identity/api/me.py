@@ -10,6 +10,7 @@ from trovelya.core.errors import AppError, ErrorCode, problem_response
 from trovelya.modules.identity.schemas import (
     CompleteProfile,
     MeOut,
+    ProfilePatch,
     SessionList,
     SessionOut,
     UsernameSuggestion,
@@ -26,7 +27,7 @@ from trovelya.modules.identity.service import (
     revoke_other_sessions,
     revoke_session,
 )
-from trovelya.modules.identity.service.auth import Uow
+from trovelya.modules.identity.service.auth import Uow, completed_user
 from trovelya.shared.clock import Clock
 
 router = APIRouter(prefix="/v1/me", tags=["me"])
@@ -109,4 +110,20 @@ async def post_complete_profile(
         profile_completed=True,
     )
     data = await profile.me(db, user=completed, flags=request.app.state.flags, clock=clock)
+    return MeOut.model_validate(data)
+
+
+@router.patch("", operation_id="me_update")
+async def patch_me(
+    body: ProfilePatch,
+    request: Request,
+    db: Uow,
+    user: Annotated[CurrentUser, Depends(completed_user)],
+    clock: ClockDep,
+) -> MeOut:
+    """Change the username, display name, bio or language. `If-Match: <version>` required."""
+    await profile.update_profile(
+        db, user=user, if_match=request.headers.get("if-match"), changes=body.changes()
+    )
+    data = await profile.me(db, user=user, flags=request.app.state.flags, clock=clock)
     return MeOut.model_validate(data)
