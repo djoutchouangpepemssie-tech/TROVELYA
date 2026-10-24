@@ -14,6 +14,7 @@
   },
   "dependencies": {
     "@sentry/nextjs": "11.9.0",
+    "@simplewebauthn/browser": "14.0.0",
     "@trovelya/core": "workspace:*",
     "@trovelya/design-tokens": "workspace:*",
     "@trovelya/ui": "workspace:*",
