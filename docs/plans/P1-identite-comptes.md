@@ -326,6 +326,9 @@ Parallélisables : T03 et T04 après T02c ; T06, T09a et T10 après T05 ; T08 d�
 
 **Contenu :** 4 étapes (Q12) fidèles à la maquette `Onboard` (barre de progression, tuiles d'univers avec état `aria-pressed`, carte « Lyon 7e · rayon 5 km — Modifier », bouton « Continuer · N choisis » et « Passer »). Étape 3 : recherche de lieu (géocodage) ou position du navigateur après demande explicite. Étape 4 : préférences e-mail ; l'autorisation de notifications push du navigateur est reportée à P3.
 
+**Réalisation (24/10/2026) :** découpée en T07a (pile complète pour les tests de bout en bout) et T07b (écrans).
+- T07a : `POST /v1/_test/session {completed?}` (module identité, monté seulement si `ENV` vaut `local` ou `test`) crée un membre et pose le cookie de session. Playwright démarre l'API réelle (`tests/e2e/start-api.sh` : migrations puis uvicorn, `ENV=test`, e-mails et géocodeur factices) et le site compilé ; PostgreSQL (image maison) et Redis viennent de `tests/e2e/stack.sh` (Docker, ports 5433 et 6380). La tâche CI `e2e-web` tourne aussi quand l'API change. En local : `bash apps/web/tests/e2e/stack.sh`, puis `pnpm --filter @trovelya/web test:e2e`.
+
 - [ ] Tests e2e d'abord (session créée par la route de test) : `onboarding complete` (4 étapes, zone 5 km enregistrée via l'API) ; `onboarding skip optional steps` ; `profile step required` ; `too young message` ; axe : 0 violation à chaque étape ; navigation clavier complète ; erreurs annoncées (`aria-live`).
 - [ ] ÉCHEC → implémenter → `pnpm --filter @trovelya/web test:e2e` vert. Commit `feat(web): onboarding with profile, interests, 5 km zone and notifications`.
 

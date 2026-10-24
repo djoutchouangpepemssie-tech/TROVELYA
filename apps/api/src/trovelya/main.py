@@ -33,6 +33,7 @@ from trovelya.modules.identity.adapters.oidc import (
 )
 from trovelya.modules.identity.adapters.turnstile import AlwaysPass, TurnstileVerifier
 from trovelya.modules.identity.api import router as identity_router
+from trovelya.modules.identity.api.testing import router as identity_testing_router
 from trovelya.shared.clock import SystemClock
 
 
@@ -147,4 +148,5 @@ def create_app(
         app.include_router(debug_routes.router)
     if settings.env in {"local", "test"}:
         app.include_router(testing_routes.router)
+        app.include_router(identity_testing_router)
     return app
