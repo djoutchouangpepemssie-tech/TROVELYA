@@ -1,6 +1,7 @@
 @import "tailwindcss";
 @import "@trovelya/design-tokens/tokens.css";
 @import "@trovelya/design-tokens/theme.css";
+@import "@trovelya/ui/styles.css";
 
 body {
   background: var(--trv-color-surface);

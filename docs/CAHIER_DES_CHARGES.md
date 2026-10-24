@@ -4,8 +4,8 @@
 
 | Champ | Valeur |
 |---|---|
-| Version | 1.1 — catalogue généraliste, verticales immobilier, véhicules, services (phase P9) |
-| Date | 23 octobre 2026 |
+| Version | 1.2 — token `color.ink.3` (clair) foncé pour l'accessibilité ; 1.1 — catalogue généraliste, verticales immobilier, véhicules, services (phase P9) |
+| Date | 24 octobre 2026 |
 | Propriétaire produit | Arcel (fondateur) |
 | Statut | Référence de développement — fait foi pour Claude Code |
 | Dépôt | `djoutchouangpepemssie-tech/trovelya` |
@@ -535,7 +535,7 @@ Fichier source unique : `packages/design-tokens/tokens.json`, compilé en variab
 | `color.brand.soft` | `#D9DDFF` | `#1A1F4D` | Fonds d'accent |
 | `color.ink` | `#0B0B0F` | `#F5F5F7` | Texte principal |
 | `color.ink.2` | `#3A3A44` | `#C7C7CF` | Texte secondaire |
-| `color.ink.3` | `#86868F` | `#8E8E96` | Texte tertiaire, légendes |
+| `color.ink.3` | `#6E6E77` | `#8E8E96` | Texte tertiaire, légendes (v1.2 : `#86868F` → `#6E6E77` en clair, contraste ≥ 4,5:1 sur `surface` et `surface.2`, WCAG 2.2 AA) |
 | `color.surface` | `#FFFFFF` | `#0B0B0F` | Fond de page |
 | `color.surface.2` | `#F2F2F7` | `#16161C` | Fonds de blocs |
 | `color.line` | `#E5E5EA` | `#2A2A33` | Bordures |
