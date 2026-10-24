@@ -25,7 +25,18 @@ SOCLE_TABLES = {
     "idempotency_keys",
     "audit_log",
 }
-IDENTITY_TABLES = {"users", "auth_identities", "passkeys", "magic_links", "sessions"}
+IDENTITY_TABLES = {
+    "users",
+    "auth_identities",
+    "passkeys",
+    "magic_links",
+    "sessions",
+    "roles",
+    "permissions",
+    "role_permissions",
+    "user_roles",
+    "approval_requests",
+}
 
 
 async def _tables(engine: AsyncEngine) -> set[str]:
