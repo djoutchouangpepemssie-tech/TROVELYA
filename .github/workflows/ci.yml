@@ -67,6 +67,27 @@ jobs:
       - name: Money must stay fully covered (P0 gate G7)
         run: uv run pytest -q tests/unit/test_money.py --cov=trovelya.shared.money --cov-fail-under=100
 
+  contract:
+    name: contract
+    runs-on: ubuntu-latest
+    timeout-minutes: 10
+    steps:
+      - uses: actions/checkout@v5
+      - uses: pnpm/action-setup@v4
+      - uses: actions/setup-node@v4
+        with:
+          node-version-file: .nvmrc
+          cache: pnpm
+      - uses: astral-sh/setup-uv@v6
+        with:
+          enable-cache: true
+      - run: pnpm install --frozen-lockfile
+      - run: uv sync --locked --project apps/api
+      - name: Regenerate the OpenAPI contract and the TypeScript client
+        run: pnpm api:generate
+      - name: Fail if the committed contract or client is out of date
+        run: git diff --exit-code docs/api packages/api-client/src/schema.d.ts
+
   postgres-image:
     name: postgres-image
     runs-on: ubuntu-latest
