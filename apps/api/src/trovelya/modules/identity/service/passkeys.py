@@ -177,30 +177,42 @@ async def register_passkey(
     return row
 
 
-async def login_options(redis: Redis, *, rp: RelyingParty, clock: Clock) -> dict[str, Any]:
-    options = webauthn.generate_authentication_options(
-        rp_id=rp.id,
-        challenge=secrets.token_bytes(32),
-        user_verification=UserVerificationRequirement.REQUIRED,
-    )
-    await _store_challenge(redis, options.challenge, purpose="login", user_id=None, now=clock.now())
-    return json.loads(webauthn.options_to_json(options))
-
-
-async def login_with_passkey(
+async def _assertion_options(
     db: AsyncSession,
     redis: Redis,
     *,
-    credential: dict[str, Any],
-    ip: str | None,
-    user_agent: str | None,
-    country: str | None,
+    purpose: str,
+    user_id: UUID | None,
     rp: RelyingParty,
-    policy: SessionPolicy,
     clock: Clock,
-) -> SignIn:
+) -> dict[str, Any]:
+    allowed = await repository.credential_ids(db, user_id) if user_id else []
+    options = webauthn.generate_authentication_options(
+        rp_id=rp.id,
+        challenge=secrets.token_bytes(32),
+        allow_credentials=[PublicKeyCredentialDescriptor(id=c) for c in allowed],
+        user_verification=UserVerificationRequirement.REQUIRED,
+    )
+    await _store_challenge(
+        redis, options.challenge, purpose=purpose, user_id=user_id, now=clock.now()
+    )
+    return json.loads(webauthn.options_to_json(options))
+
+
+async def _verify_assertion(
+    db: AsyncSession,
+    redis: Redis,
+    credential: dict[str, Any],
+    *,
+    purpose: str,
+    user_id: UUID | None,
+    rp: RelyingParty,
+    clock: Clock,
+) -> Row[Any]:
+    """The passkey that signed this assertion, its counter moved forward. For a step-up
+    (`user_id` given) it must belong to that user."""
     now = clock.now()
-    challenge = await _take_challenge(redis, credential, purpose="login", user_id=None, now=now)
+    challenge = await _take_challenge(redis, credential, purpose=purpose, user_id=user_id, now=now)
     try:
         credential_id = base64url_to_bytes(credential["rawId"])
         user_handle = credential["response"].get("userHandle")
@@ -208,6 +220,8 @@ async def login_with_passkey(
         raise _invalid() from exc
     passkey = await repository.find_passkey(db, credential_id)
     if passkey is None or passkey.status in _BLOCKED:
+        raise _invalid()
+    if user_id is not None and passkey.user_id != user_id:
         raise _invalid()
     if user_handle is not None and base64url_to_bytes(user_handle) != passkey.user_id.bytes:
         raise _invalid()
@@ -233,7 +247,31 @@ async def login_with_passkey(
         now=now,
     ):
         raise _invalid()
+    return passkey
 
+
+async def login_options(
+    db: AsyncSession, redis: Redis, *, rp: RelyingParty, clock: Clock
+) -> dict[str, Any]:
+    """Any passkey of this site (discoverable credentials): no account is named."""
+    return await _assertion_options(db, redis, purpose="login", user_id=None, rp=rp, clock=clock)
+
+
+async def login_with_passkey(
+    db: AsyncSession,
+    redis: Redis,
+    *,
+    credential: dict[str, Any],
+    ip: str | None,
+    user_agent: str | None,
+    country: str | None,
+    rp: RelyingParty,
+    policy: SessionPolicy,
+    clock: Clock,
+) -> SignIn:
+    passkey = await _verify_assertion(
+        db, redis, credential, purpose="login", user_id=None, rp=rp, clock=clock
+    )
     issued = await create_session(
         db,
         user_id=passkey.user_id,
@@ -257,6 +295,29 @@ async def login_with_passkey(
         is_new=False,
         profile_completed=passkey.profile_completed,
         session=issued,
+    )
+
+
+async def step_up_options(
+    db: AsyncSession, redis: Redis, *, user: CurrentUser, rp: RelyingParty, clock: Clock
+) -> dict[str, Any]:
+    """Only this user's passkeys, for a challenge bound to this user."""
+    return await _assertion_options(
+        db, redis, purpose="step_up", user_id=user.id, rp=rp, clock=clock
+    )
+
+
+async def verify_step_up_assertion(
+    db: AsyncSession,
+    redis: Redis,
+    *,
+    user: CurrentUser,
+    credential: dict[str, Any],
+    rp: RelyingParty,
+    clock: Clock,
+) -> None:
+    await _verify_assertion(
+        db, redis, credential, purpose="step_up", user_id=user.id, rp=rp, clock=clock
     )
 
 

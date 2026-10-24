@@ -36,7 +36,7 @@ def clock() -> FixedClock:
     return FixedClock(T0)
 
 
-def _app(
+def passkey_app(
     sessionmaker: async_sessionmaker[AsyncSession],
     redis_client: Redis,
     clock: FixedClock,
@@ -55,7 +55,7 @@ def _app(
 async def client(
     sessionmaker: async_sessionmaker[AsyncSession], redis_client: Redis, clock: FixedClock
 ) -> AsyncIterator[AsyncClient]:
-    app = _app(sessionmaker, redis_client, clock)
+    app = passkey_app(sessionmaker, redis_client, clock)
     async with AsyncClient(
         transport=ASGITransport(app=app, raise_app_exceptions=False), base_url="https://test"
     ) as c:
@@ -78,7 +78,7 @@ class Member:
         return SoftAuthenticator(rp_id=RP_ID, origin=origin, user_handle=self.id.bytes)
 
 
-async def _member(
+async def make_member(
     sessionmaker: async_sessionmaker[AsyncSession],
     clock: FixedClock,
     *,
@@ -117,7 +117,7 @@ async def _member(
     return Member(user_id, issued.token)
 
 
-async def _register(
+async def register_passkey(
     client: AsyncClient, member: Member, authenticator: SoftAuthenticator, **kwargs: Any
 ) -> Response:
     options = await client.post("/v1/auth/passkeys/register/options", headers=member.headers)
@@ -158,9 +158,9 @@ def _session_cookie(response: Response) -> str | None:
 async def test_register_and_login(
     sessionmaker: async_sessionmaker[AsyncSession], client: AsyncClient, clock: FixedClock
 ) -> None:
-    member = await _member(sessionmaker, clock)
+    member = await make_member(sessionmaker, clock)
     authenticator = member.authenticator()
-    registered = await _register(client, member, authenticator)
+    registered = await register_passkey(client, member, authenticator)
     assert registered.status_code == 201, registered.text
     assert registered.json()["name"] == "Mon téléphone"
 
@@ -186,9 +186,9 @@ async def test_register_and_login(
 async def test_challenge_single_use(
     sessionmaker: async_sessionmaker[AsyncSession], client: AsyncClient, clock: FixedClock
 ) -> None:
-    member = await _member(sessionmaker, clock)
+    member = await make_member(sessionmaker, clock)
     authenticator = member.authenticator()
-    await _register(client, member, authenticator)
+    await register_passkey(client, member, authenticator)
     client.cookies.clear()
     options = (await client.post("/v1/auth/passkeys/login/options")).json()
     # Two valid assertions (the counter moves forward) answering the same challenge.
@@ -204,7 +204,7 @@ async def test_challenge_single_use(
 async def test_challenge_expires(
     sessionmaker: async_sessionmaker[AsyncSession], client: AsyncClient, clock: FixedClock
 ) -> None:
-    member = await _member(sessionmaker, clock)
+    member = await make_member(sessionmaker, clock)
     authenticator = member.authenticator()
     options = await client.post("/v1/auth/passkeys/register/options", headers=member.headers)
     clock.advance(timedelta(minutes=5, seconds=1))
@@ -219,8 +219,8 @@ async def test_challenge_expires(
 async def test_wrong_origin_rejected(
     sessionmaker: async_sessionmaker[AsyncSession], client: AsyncClient, clock: FixedClock
 ) -> None:
-    member = await _member(sessionmaker, clock)
-    response = await _register(
+    member = await make_member(sessionmaker, clock)
+    response = await register_passkey(
         client, member, member.authenticator(), origin="https://evil.example.test"
     )
     assert response.status_code == 400 and response.json()["code"] == "passkey_invalid"
@@ -229,17 +229,19 @@ async def test_wrong_origin_rejected(
 async def test_wrong_rp_id_rejected(
     sessionmaker: async_sessionmaker[AsyncSession], client: AsyncClient, clock: FixedClock
 ) -> None:
-    member = await _member(sessionmaker, clock)
-    response = await _register(client, member, member.authenticator(), rp_id="evil.example.test")
+    member = await make_member(sessionmaker, clock)
+    response = await register_passkey(
+        client, member, member.authenticator(), rp_id="evil.example.test"
+    )
     assert response.status_code == 400 and response.json()["code"] == "passkey_invalid"
 
 
 async def test_sign_count_regression_rejected(
     sessionmaker: async_sessionmaker[AsyncSession], client: AsyncClient, clock: FixedClock
 ) -> None:
-    member = await _member(sessionmaker, clock)
+    member = await make_member(sessionmaker, clock)
     authenticator = member.authenticator()
-    await _register(client, member, authenticator)
+    await register_passkey(client, member, authenticator)
     assert (await _login(client, authenticator, sign_count=5)).status_code == 200
     cloned = await _login(client, authenticator, sign_count=3)
     assert cloned.status_code == 400 and cloned.json()["code"] == "passkey_invalid"
@@ -248,11 +250,11 @@ async def test_sign_count_regression_rejected(
 async def test_unknown_credential_or_blocked_user_rejected(
     sessionmaker: async_sessionmaker[AsyncSession], client: AsyncClient, clock: FixedClock
 ) -> None:
-    member = await _member(sessionmaker, clock)
+    member = await make_member(sessionmaker, clock)
     assert (await _login(client, member.authenticator())).status_code == 400
 
     authenticator = member.authenticator()
-    await _register(client, member, authenticator)
+    await register_passkey(client, member, authenticator)
     async with sessionmaker() as db:
         await db.execute(
             text("UPDATE users SET status = 'suspended' WHERE id = :id"), {"id": member.id}
@@ -265,9 +267,9 @@ async def test_unknown_credential_or_blocked_user_rejected(
 async def test_user_handle_must_match(
     sessionmaker: async_sessionmaker[AsyncSession], client: AsyncClient, clock: FixedClock
 ) -> None:
-    member = await _member(sessionmaker, clock)
+    member = await make_member(sessionmaker, clock)
     authenticator = member.authenticator()
-    await _register(client, member, authenticator)
+    await register_passkey(client, member, authenticator)
     authenticator.user_handle = new_id().bytes
     assert (await _login(client, authenticator)).status_code == 400
 
@@ -275,9 +277,9 @@ async def test_user_handle_must_match(
 async def test_staff_login_gets_admin_session_12h(
     sessionmaker: async_sessionmaker[AsyncSession], client: AsyncClient, clock: FixedClock
 ) -> None:
-    staff = await _member(sessionmaker, clock, staff=True)
+    staff = await make_member(sessionmaker, clock, staff=True)
     authenticator = staff.authenticator()
-    assert (await _register(client, staff, authenticator)).status_code == 201
+    assert (await register_passkey(client, staff, authenticator)).status_code == 201
     response = await _login(client, authenticator)
     assert response.status_code == 200
     row = await _scalar(
@@ -295,9 +297,9 @@ async def test_staff_login_gets_admin_session_12h(
 async def test_multiple_passkeys_list_and_rename(
     sessionmaker: async_sessionmaker[AsyncSession], client: AsyncClient, clock: FixedClock
 ) -> None:
-    member = await _member(sessionmaker, clock)
+    member = await make_member(sessionmaker, clock)
     for _ in range(2):
-        assert (await _register(client, member, member.authenticator())).status_code == 201
+        assert (await register_passkey(client, member, member.authenticator())).status_code == 201
     listed = (await client.get("/v1/me/passkeys", headers=member.headers)).json()["data"]
     assert len(listed) == 2
     renamed = await client.patch(
@@ -309,8 +311,8 @@ async def test_multiple_passkeys_list_and_rename(
 async def test_delete_requires_step_up(
     sessionmaker: async_sessionmaker[AsyncSession], client: AsyncClient, clock: FixedClock
 ) -> None:
-    member = await _member(sessionmaker, clock)
-    await _register(client, member, member.authenticator())
+    member = await make_member(sessionmaker, clock)
+    await register_passkey(client, member, member.authenticator())
     [passkey] = (await client.get("/v1/me/passkeys", headers=member.headers)).json()["data"]
 
     clock.advance(timedelta(hours=12, seconds=1))  # auth.step_up_max_age_h
@@ -323,8 +325,8 @@ async def test_delete_requires_step_up(
 async def test_require_recent_mfa_12h(
     sessionmaker: async_sessionmaker[AsyncSession], client: AsyncClient, clock: FixedClock
 ) -> None:
-    member = await _member(sessionmaker, clock)
-    await _register(client, member, member.authenticator())
+    member = await make_member(sessionmaker, clock)
+    await register_passkey(client, member, member.authenticator())
     [passkey] = (await client.get("/v1/me/passkeys", headers=member.headers)).json()["data"]
     clock.advance(timedelta(hours=11, minutes=59))
     deleted = await client.delete(f"/v1/me/passkeys/{passkey['id']}", headers=member.headers)
@@ -335,10 +337,10 @@ async def test_require_recent_mfa_12h(
 async def test_delete_other_users_passkey_404(
     sessionmaker: async_sessionmaker[AsyncSession], client: AsyncClient, clock: FixedClock
 ) -> None:
-    owner = await _member(sessionmaker, clock)
-    await _register(client, owner, owner.authenticator())
+    owner = await make_member(sessionmaker, clock)
+    await register_passkey(client, owner, owner.authenticator())
     [passkey] = (await client.get("/v1/me/passkeys", headers=owner.headers)).json()["data"]
-    intruder = await _member(sessionmaker, clock)
+    intruder = await make_member(sessionmaker, clock)
     path = f"/v1/me/passkeys/{passkey['id']}"
     assert (await client.delete(path, headers=intruder.headers)).status_code == 404
     assert (
@@ -349,8 +351,8 @@ async def test_delete_other_users_passkey_404(
 async def test_flag_off_404(
     sessionmaker: async_sessionmaker[AsyncSession], redis_client: Redis, clock: FixedClock
 ) -> None:
-    member = await _member(sessionmaker, clock)
-    app = _app(sessionmaker, redis_client, clock, enabled=False)
+    member = await make_member(sessionmaker, clock)
+    app = passkey_app(sessionmaker, redis_client, clock, enabled=False)
     async with AsyncClient(transport=ASGITransport(app=app), base_url="https://test") as c:
         assert (await c.post("/v1/auth/passkeys/login/options")).status_code == 404
         assert (
