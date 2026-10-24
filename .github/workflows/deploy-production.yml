@@ -1,9 +1,12 @@
 name: Deploy production
 
 # Production (Railway environment "production", Vercel production) follows the
-# `release` branch (E5). This workflow is the only way to move it: it fast-forwards
-# `release` to a commit of `main` whose CI run is green.
+# `release` branch (E5, ADR-0013). This workflow is the only way to move it: it
+# fast-forwards `release` to a commit of `main` whose CI run is green. Trigger: push a
+# tag `vX.Y.Z` on a commit of main, or run it by hand (Actions → Deploy production).
 on:
+  push:
+    tags: ["v*"]
   workflow_dispatch:
     inputs:
       sha:
@@ -26,13 +29,13 @@ jobs:
     timeout-minutes: 10
     environment: production
     steps:
-      - uses: actions/checkout@v5
+      - uses: actions/checkout@v7
         with:
           fetch-depth: 0
       - name: Resolve the commit to release
         id: target
         env:
-          INPUT_SHA: ${{ inputs.sha }}
+          INPUT_SHA: ${{ github.event_name == 'push' && github.sha || inputs.sha }}
         run: |
           git fetch origin main release
           sha="${INPUT_SHA:-$(git rev-parse origin/main)}"
