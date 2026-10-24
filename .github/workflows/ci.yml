@@ -65,9 +65,10 @@ jobs:
   e2e-web:
     name: e2e-web
     needs: changes
-    if: needs.changes.outputs.web == 'true'
+    # The end-to-end tests run the real API too (P1-T07a): API changes can break them.
+    if: needs.changes.outputs.web == 'true' || needs.changes.outputs.api == 'true'
     runs-on: ubuntu-24.04
-    timeout-minutes: 20
+    timeout-minutes: 25
     steps:
       - uses: actions/checkout@v7
       - uses: pnpm/action-setup@v6
@@ -75,7 +76,13 @@ jobs:
         with:
           node-version-file: .nvmrc
           cache: pnpm
+      - uses: astral-sh/setup-uv@v7
+        with:
+          enable-cache: true
       - run: pnpm install --frozen-lockfile
+      - run: uv sync --locked --project apps/api
+      - name: Database and cache for the end-to-end tests (our PostgreSQL image, Redis)
+        run: bash apps/web/tests/e2e/stack.sh
       - run: pnpm turbo run build --filter=@trovelya/web
       - id: playwright
         run: echo "version=$(pnpm --filter @trovelya/web exec playwright --version)" >> "$GITHUB_OUTPUT"
