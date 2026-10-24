@@ -69,7 +69,9 @@ pnpm turbo run lint typecheck test build                     # comme la CI (côt
 
 ## Actions qui reviennent à Arcel
 
-1. Valider la porte P0 (ce document).
+Porte P0 validée par Arcel le 24 octobre 2026. Décision d'Arcel : les actions 2 à 6 sont faites à la fin complète du projet.
+
+1. ~~Valider la porte P0 (ce document).~~ Fait.
 2. Acheter `trovelya.com` ; ensuite : domaines `api.` et `www.`, moniteur Sentry de l'API, HSTS preload.
 3. Activer la double authentification sur GitHub, Railway, Vercel et Sentry si ce n'est pas fait.
 4. Planifier les sauvegardes du volume `pg-data` en production dans Railway.
