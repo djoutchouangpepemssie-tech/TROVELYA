@@ -140,7 +140,7 @@ async def _staff_user(conn: AsyncConnection) -> object:
             "INSERT INTO users (id, email, username, display_name, is_staff)"
             " VALUES (:id, :email, :username, 'Staff', true)"
         ),
-        {"id": user_id, "email": f"{user_id.hex}@example.org", "username": f"s_{user_id.hex[:8]}"},
+        {"id": user_id, "email": f"{user_id.hex}@example.org", "username": f"s_{user_id.hex[-8:]}"},
     )
     return user_id
 
