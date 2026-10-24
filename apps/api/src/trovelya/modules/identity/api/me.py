@@ -10,6 +10,8 @@ from trovelya.core.client_ip import client_ip
 from trovelya.core.csrf import require_csrf
 from trovelya.core.errors import AppError, ErrorCode, problem_response
 from trovelya.modules.identity.schemas import (
+    BlockedMember,
+    BlockList,
     CompleteProfile,
     ConsentIn,
     ConsentOut,
@@ -40,6 +42,7 @@ from trovelya.modules.identity.service import (
     profile,
     revoke_other_sessions,
     revoke_session,
+    social,
 )
 from trovelya.modules.identity.service.auth import Uow, completed_user, recent_mfa_user
 from trovelya.modules.identity.service.email_change import request_email_change
@@ -340,3 +343,9 @@ async def post_erasure(
 async def post_erasure_cancel(request: Request, db: Uow, user: Me, clock: ClockDep) -> None:
     ip, user_agent = _audit_context(request)
     await gdpr.cancel_erasure(db, user_id=user.id, clock=clock, ip=ip, user_agent=user_agent)
+
+
+@router.get("/blocks", operation_id="me_blocks_list")
+async def get_blocks(db: Uow, user: Annotated[CurrentUser, Depends(completed_user)]) -> BlockList:
+    rows = await social.blocks(db, user.id)
+    return BlockList(data=[BlockedMember.model_validate(r, from_attributes=True) for r in rows])

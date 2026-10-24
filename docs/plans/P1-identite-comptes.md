@@ -386,6 +386,8 @@ Parallélisables : T03 et T04 après T02c ; T06, T09a et T10 après T05 ; T08 d�
 - [ ] Tests d'abord : `test_follow_unfollow_idempotent` ; `test_cannot_follow_self` ; `test_block_removes_follows_both_ways` ; `test_follow_blocked_returns_404` ; `test_unknown_user_404` ; `test_counters`.
 - [ ] ÉCHEC → implémenter → vert. Commit `feat(identity): follow and block users`.
 
+**Réalisation (24/10/2026) :** routes `POST/DELETE /v1/users/{id}/follow` et `/block` (profil complété exigé ; suivre et bloquer sont idempotents, ne plus suivre et débloquer aussi) ; cibles possibles = comptes dont le profil public est visible, sinon 404 ; soi-même → 422 ; un blocage, dans un sens ou dans l'autre, répond 404 comme un compte inconnu. Débloquer ne rétablit pas les abonnements. `GET /v1/me/blocks` → `{data: [{user_id, username, display_name, blocked_at}]}`. Le profil public expose désormais `id` (nécessaire pour suivre) et `viewer` (`{following, blocking}` pour la personne connectée, `null` sinon), qui ne dit jamais si elle est bloquée.
+
 ### P1-T11 — Permissions, double validation, comptes staff (ADR-0018)
 
 **Fichiers :** `core/auth.py` (`require_permission`), `service/access.py`, `api/staff.py`, `scripts/create_staff.py`, `docs/adr/0018-comptes-staff.md`, tests.

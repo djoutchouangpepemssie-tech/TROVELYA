@@ -430,6 +430,23 @@ export interface paths {
         patch: operations["me_addresses_update"];
         trace?: never;
     };
+    "/v1/me/blocks": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        /** Get Blocks */
+        get: operations["me_blocks_list"];
+        put?: never;
+        post?: never;
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
     "/v1/me/complete-profile": {
         parameters: {
             query?: never;
@@ -737,6 +754,45 @@ export interface paths {
         patch: operations["me_zones_update"];
         trace?: never;
     };
+    "/v1/users/{user_id}/block": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        get?: never;
+        put?: never;
+        /**
+         * Post Block
+         * @description Also removes the follows in both directions; unblocking does not bring them back.
+         */
+        post: operations["users_block"];
+        /** Delete Block */
+        delete: operations["users_unblock"];
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/v1/users/{user_id}/follow": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        get?: never;
+        put?: never;
+        /** Post Follow */
+        post: operations["users_follow"];
+        /** Delete Follow */
+        delete: operations["users_unfollow"];
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
     "/v1/users/{username}": {
         parameters: {
             query?: never;
@@ -747,7 +803,7 @@ export interface paths {
         /**
          * Get Public Profile
          * @description 404 for an unknown name, an account not active or restricted, a profile not yet
-         *     completed, or an account whose erasure was requested.
+         *     completed, or an account whose erasure was requested. Visible to the people it blocks.
          */
         get: operations["users_get_public"];
         put?: never;
@@ -860,6 +916,28 @@ export interface components {
             phone_e164?: string | null;
             /** Postal Code */
             postal_code?: string | null;
+        };
+        /** BlockList */
+        BlockList: {
+            /** Data */
+            data: components["schemas"]["BlockedMember"][];
+        };
+        /** BlockedMember */
+        BlockedMember: {
+            /**
+             * Blocked At
+             * Format: date-time
+             */
+            blocked_at: string;
+            /** Display Name */
+            display_name: string;
+            /**
+             * User Id
+             * Format: uuid
+             */
+            user_id: string;
+            /** Username */
+            username: string;
         };
         /** CompleteProfile */
         CompleteProfile: {
@@ -1170,12 +1248,28 @@ export interface components {
             /** Following Count */
             following_count: number;
             /**
+             * Id
+             * Format: uuid
+             */
+            id: string;
+            /**
              * Member Since
              * Format: date
              */
             member_since: string;
             /** Username */
             username: string;
+            viewer?: components["schemas"]["Relationship"] | null;
+        };
+        /**
+         * Relationship
+         * @description The signed-in viewer's own actions towards a member (never whether they are blocked).
+         */
+        Relationship: {
+            /** Blocking */
+            blocking: boolean;
+            /** Following */
+            following: boolean;
         };
         /** SessionList */
         SessionList: {
@@ -2075,6 +2169,26 @@ export interface operations {
             };
         };
     };
+    me_blocks_list: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description Successful Response */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["BlockList"];
+                };
+            };
+        };
+    };
     me_complete_profile: {
         parameters: {
             query?: never;
@@ -2676,6 +2790,132 @@ export interface operations {
                 content: {
                     "application/json": components["schemas"]["ZoneOut"];
                 };
+            };
+            /** @description Validation Error */
+            422: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["HTTPValidationError"];
+                };
+            };
+        };
+    };
+    users_block: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                user_id: string;
+            };
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description Successful Response */
+            204: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content?: never;
+            };
+            /** @description Unknown or hidden member, or a block in either direction */
+            404: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content?: never;
+            };
+            /** @description Oneself */
+            422: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content?: never;
+            };
+        };
+    };
+    users_unblock: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                user_id: string;
+            };
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description Successful Response */
+            204: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content?: never;
+            };
+            /** @description Validation Error */
+            422: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["HTTPValidationError"];
+                };
+            };
+        };
+    };
+    users_follow: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                user_id: string;
+            };
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description Successful Response */
+            204: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content?: never;
+            };
+            /** @description Unknown or hidden member, or a block in either direction */
+            404: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content?: never;
+            };
+            /** @description Oneself */
+            422: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content?: never;
+            };
+        };
+    };
+    users_unfollow: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                user_id: string;
+            };
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description Successful Response */
+            204: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content?: never;
             };
             /** @description Validation Error */
             422: {

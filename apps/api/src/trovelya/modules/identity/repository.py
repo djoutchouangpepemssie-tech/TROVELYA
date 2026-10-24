@@ -532,7 +532,7 @@ _UPDATE_PROFILE = text(
 _EDITABLE = ("username", "display_name", "bio", "locale")
 
 _PUBLIC_PROFILE = text(
-    "SELECT u.username::text AS username, u.display_name, u.bio,"
+    "SELECT u.id, u.username::text AS username, u.display_name, u.bio,"
     " (u.created_at AT TIME ZONE 'Europe/Paris')::date AS member_since,"
     " (SELECT count(*) FROM follows f WHERE f.followee_user_id = u.id) AS followers_count,"
     " (SELECT count(*) FROM follows f WHERE f.follower_id = u.id) AS following_count"
@@ -1075,3 +1075,74 @@ async def anonymise_user(db: AsyncSession, *, user_id: UUID, now: datetime) -> N
         _CLOSE_ERASURE_REQUEST,
         {"u": user_id, "status": "completed", "reason": None, "now": now},
     )
+
+
+# --- Following and blocking (P1-T10, Q14) ------------------------------------------------
+
+# Who can be followed or blocked: the same accounts whose public profile is visible.
+_SOCIAL_TARGET = text(
+    "SELECT EXISTS (SELECT 1 FROM users WHERE id = :t AND status IN ('active', 'restricted')"
+    " AND erasure_requested_at IS NULL AND profile_completed_at IS NOT NULL)"
+)
+_BLOCKED_EITHER_WAY = text(
+    "SELECT EXISTS (SELECT 1 FROM blocks WHERE (blocker_id = :a AND blocked_id = :b)"
+    " OR (blocker_id = :b AND blocked_id = :a))"
+)
+_FOLLOW = text(
+    "INSERT INTO follows (follower_id, followee_user_id, created_at) VALUES (:a, :b, :now)"
+    " ON CONFLICT DO NOTHING"
+)
+_UNFOLLOW = text("DELETE FROM follows WHERE follower_id = :a AND followee_user_id = :b")
+_BLOCK = text(
+    "INSERT INTO blocks (blocker_id, blocked_id, created_at) VALUES (:a, :b, :now)"
+    " ON CONFLICT DO NOTHING"
+)
+_DROP_FOLLOWS_BOTH_WAYS = text(
+    "DELETE FROM follows WHERE (follower_id = :a AND followee_user_id = :b)"
+    " OR (follower_id = :b AND followee_user_id = :a)"
+)
+_UNBLOCK = text("DELETE FROM blocks WHERE blocker_id = :a AND blocked_id = :b")
+_LIST_BLOCKS = text(
+    "SELECT u.id AS user_id, u.username::text AS username, u.display_name,"
+    " b.created_at AS blocked_at FROM blocks b JOIN users u ON u.id = b.blocked_id"
+    " WHERE b.blocker_id = :a ORDER BY b.created_at DESC"
+)
+# Only the viewer's own actions: whether they are blocked is never revealed.
+_RELATIONSHIP = text(
+    "SELECT EXISTS (SELECT 1 FROM follows WHERE follower_id = :a AND followee_user_id = :b)"
+    " AS following,"
+    " EXISTS (SELECT 1 FROM blocks WHERE blocker_id = :a AND blocked_id = :b) AS blocking"
+)
+
+
+async def social_target_exists(db: AsyncSession, user_id: UUID) -> bool:
+    return bool(await db.scalar(_SOCIAL_TARGET, {"t": user_id}))
+
+
+async def blocked_either_way(db: AsyncSession, a: UUID, b: UUID) -> bool:
+    return bool(await db.scalar(_BLOCKED_EITHER_WAY, {"a": a, "b": b}))
+
+
+async def follow(db: AsyncSession, *, follower: UUID, followee: UUID, now: datetime) -> None:
+    await db.execute(_FOLLOW, {"a": follower, "b": followee, "now": now})
+
+
+async def unfollow(db: AsyncSession, *, follower: UUID, followee: UUID) -> None:
+    await db.execute(_UNFOLLOW, {"a": follower, "b": followee})
+
+
+async def block(db: AsyncSession, *, blocker: UUID, blocked: UUID, now: datetime) -> None:
+    await db.execute(_BLOCK, {"a": blocker, "b": blocked, "now": now})
+    await db.execute(_DROP_FOLLOWS_BOTH_WAYS, {"a": blocker, "b": blocked})
+
+
+async def unblock(db: AsyncSession, *, blocker: UUID, blocked: UUID) -> None:
+    await db.execute(_UNBLOCK, {"a": blocker, "b": blocked})
+
+
+async def list_blocks(db: AsyncSession, user_id: UUID) -> list[Row[Any]]:
+    return list((await db.execute(_LIST_BLOCKS, {"a": user_id})).all())
+
+
+async def relationship(db: AsyncSession, *, viewer: UUID, target: UUID) -> Row[Any]:
+    return (await db.execute(_RELATIONSHIP, {"a": viewer, "b": target})).one()

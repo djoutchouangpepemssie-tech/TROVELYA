@@ -1,17 +1,72 @@
-"""Public member profiles (`/v1/users/*`), visible without signing in."""
+"""Member profiles (`/v1/users/*`): public profiles, following and blocking."""
 
-from fastapi import APIRouter
+from typing import Annotated
+from uuid import UUID
 
-from trovelya.modules.identity.schemas import PublicProfile
-from trovelya.modules.identity.service import profile
-from trovelya.modules.identity.service.auth import Uow
+from fastapi import APIRouter, Depends, status
+
+from trovelya.modules.identity.schemas import PublicProfile, Relationship
+from trovelya.modules.identity.service import CurrentUser, get_clock, optional_user, profile
+from trovelya.modules.identity.service import social as social_service
+from trovelya.modules.identity.service.auth import Uow, completed_user
+from trovelya.shared.clock import Clock
 
 router = APIRouter(prefix="/v1/users", tags=["users"])
 
+Member = Annotated[CurrentUser, Depends(completed_user)]
+ClockDep = Annotated[Clock, Depends(get_clock)]
+_TARGET_RESPONSES: dict[int | str, dict[str, str]] = {
+    404: {"description": "Unknown or hidden member, or a block in either direction"},
+    422: {"description": "Oneself"},
+}
+
 
 @router.get("/{username}", operation_id="users_get_public")
-async def get_public_profile(username: str, db: Uow) -> PublicProfile:
+async def get_public_profile(
+    username: str,
+    db: Uow,
+    viewer: Annotated[CurrentUser | None, Depends(optional_user)],
+) -> PublicProfile:
     """404 for an unknown name, an account not active or restricted, a profile not yet
-    completed, or an account whose erasure was requested."""
+    completed, or an account whose erasure was requested. Visible to the people it blocks."""
     row = await profile.public_profile(db, username)
-    return PublicProfile.model_validate(row, from_attributes=True)
+    result = PublicProfile.model_validate(row, from_attributes=True)
+    if viewer is not None:
+        relation = await social_service.relationship(db, viewer=viewer.id, target=row.id)
+        result.viewer = Relationship(**relation)
+    return result
+
+
+@router.post(
+    "/{user_id}/follow",
+    operation_id="users_follow",
+    status_code=status.HTTP_204_NO_CONTENT,
+    responses=_TARGET_RESPONSES,
+)
+async def post_follow(user_id: UUID, db: Uow, me: Member, clock: ClockDep) -> None:
+    await social_service.follow(db, me=me.id, target=user_id, clock=clock)
+
+
+@router.delete(
+    "/{user_id}/follow", operation_id="users_unfollow", status_code=status.HTTP_204_NO_CONTENT
+)
+async def delete_follow(user_id: UUID, db: Uow, me: Member) -> None:
+    await social_service.unfollow(db, me=me.id, target=user_id)
+
+
+@router.post(
+    "/{user_id}/block",
+    operation_id="users_block",
+    status_code=status.HTTP_204_NO_CONTENT,
+    responses=_TARGET_RESPONSES,
+)
+async def post_block(user_id: UUID, db: Uow, me: Member, clock: ClockDep) -> None:
+    """Also removes the follows in both directions; unblocking does not bring them back."""
+    await social_service.block(db, me=me.id, target=user_id, clock=clock)
+
+
+@router.delete(
+    "/{user_id}/block", operation_id="users_unblock", status_code=status.HTTP_204_NO_CONTENT
+)
+async def delete_block(user_id: UUID, db: Uow, me: Member) -> None:
+    await social_service.unblock(db, me=me.id, target=user_id)
