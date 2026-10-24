@@ -34,6 +34,8 @@ class ErrorCode(StrEnum):
     FORBIDDEN = "forbidden"
     MAGIC_LINK_INVALID = "magic_link_invalid"
     CAPTCHA_FAILED = "captcha_failed"
+    OAUTH_FAILED = "oauth_failed"
+    OAUTH_EMAIL_UNVERIFIED = "oauth_email_unverified"
 
 
 # French titles by default (section 2); translation by Accept-Language arrives with P1.
@@ -55,6 +57,8 @@ _TITLES: dict[ErrorCode, str] = {
     ErrorCode.FORBIDDEN: "Action non autorisée",
     ErrorCode.MAGIC_LINK_INVALID: "Lien de connexion invalide ou expiré",
     ErrorCode.CAPTCHA_FAILED: "Vérification anti-robots échouée",
+    ErrorCode.OAUTH_FAILED: "Connexion avec ce compte impossible",
+    ErrorCode.OAUTH_EMAIL_UNVERIFIED: "Adresse e-mail non vérifiée chez le fournisseur",
 }
 
 _STATUS_CODES: dict[int, ErrorCode] = {

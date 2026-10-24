@@ -100,7 +100,7 @@ async def request_magic_link(
     )
 
 
-def _provisional_username() -> str:
+def provisional_username() -> str:
     return "membre_" + "".join(secrets.choice(_USERNAME_ALPHABET) for _ in range(8))
 
 
@@ -130,7 +130,7 @@ async def verify_magic_link(
         db,
         user_id=new_id(),
         email=email,
-        username=_provisional_username(),
+        username=provisional_username(),
         display_name="Membre",
         now=now,
     )

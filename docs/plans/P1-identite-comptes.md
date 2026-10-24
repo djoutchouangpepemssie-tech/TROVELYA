@@ -245,6 +245,12 @@ Parallélisables : T03 et T04 après T02c ; T06, T09a et T10 après T05 ; T08 d�
 - [ ] Arcel crée le client OAuth Google (mode Test, URI de rappel `https://<web staging>/api/v1/auth/oauth/google/callback`) avec guidage ; flag `auth.oauth_google` activé sur staging après un essai réel.
 - [ ] Commit `feat(identity): google and apple sign-in with pkce, state, nonce and id token validation`.
 
+**Réalisation (24/10/2026) :** découpée en T03a (Google, PR dédiée) puis T03b (Apple, `form_post` et `finish`, flag éteint faute de compte Apple Developer, décision Q4).
+- Écart de sécurité, à valider par Arcel : un compte n'est **créé** que si le fournisseur certifie l'adresse (`email_verified`), sinon `oauth_email_unverified`. Sans cela, un compte Google à adresse non vérifiée pourrait réserver l'adresse d'un tiers.
+- Les erreurs du rappel redirigent vers `/fr/connexion?erreur=<code>` (navigation du navigateur, pas un appel d'API) ; après succès : `/fr/bienvenue` tant que le profil n'est pas complété, sinon `/fr`.
+- Les comptes staff sont refusés comme toute autre erreur (`oauth_failed`), comme pour le lien magique (ADR-0018).
+- Activation sur staging : `OAUTH_GOOGLE_CLIENT_ID`, `OAUTH_GOOGLE_CLIENT_SECRET` et `FEATURE_FLAGS_DEFAULT={"auth.oauth_google": true}`.
+
 ### P1-T04 — Passkeys et step-up
 
 **Fichiers :** `service/passkeys.py`, `api/auth.py`, `core/auth.py` (`require_recent_mfa`), web `lib/passkeys.ts` (`@simplewebauthn/browser`), tests.

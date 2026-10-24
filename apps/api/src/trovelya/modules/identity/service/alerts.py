@@ -20,6 +20,10 @@ KNOWN_CONTEXT_WINDOW = timedelta(days=90)
 PARIS = ZoneInfo("Europe/Paris")
 
 
+def security_link(settings: Settings) -> str:
+    return f"{settings.web_origin.rstrip('/')}/fr/compte/parametres/securite"
+
+
 def identity_subscriptions(queue: JobQueue, settings: Settings) -> list[Subscription]:
     async def notify_new_login(db: AsyncSession, event: OutboxEvent) -> None:
         context = await repository.find_session_context(
@@ -32,7 +36,7 @@ def identity_subscriptions(queue: JobQueue, settings: Settings) -> list[Subscrip
             when=context.created_at.astimezone(PARIS).strftime("%d/%m/%Y à %H:%M"),
             device=context.device_label or "appareil inconnu",
             country=context.country_code or "inconnu",
-            security_link=f"{settings.web_origin.rstrip('/')}/fr/compte/parametres/securite",
+            security_link=security_link(settings),
         )
         await enqueue_email(db, queue, message, settings=settings)
 

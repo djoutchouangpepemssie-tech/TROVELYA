@@ -42,6 +42,9 @@ class Settings(BaseSettings):
     smtp_url: str = "smtp://localhost:1025"
     # Cloudflare Turnstile on sign-in requests (section 13.1); off while unset.
     turnstile_secret_key: SecretStr | None = None
+    # Sign-in with Google (P1-T03): OAuth client of the Google Cloud project; off while unset.
+    oauth_google_client_id: str | None = None
+    oauth_google_client_secret: SecretStr | None = None
     web_origin: str
     admin_origin: str
     sentry_dsn: str | None = None
@@ -58,6 +61,12 @@ class Settings(BaseSettings):
     def _resend_needs_a_key(self) -> "Settings":
         if self.email_provider == "resend" and self.email_api_key is None:
             raise ValueError("EMAIL_API_KEY is required when EMAIL_PROVIDER=resend")
+        return self
+
+    @model_validator(mode="after")
+    def _google_needs_both(self) -> "Settings":
+        if (self.oauth_google_client_id is None) != (self.oauth_google_client_secret is None):
+            raise ValueError("OAUTH_GOOGLE_CLIENT_ID and OAUTH_GOOGLE_CLIENT_SECRET go together")
         return self
 
     @field_validator("database_url")
