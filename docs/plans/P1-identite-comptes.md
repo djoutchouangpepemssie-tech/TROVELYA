@@ -361,6 +361,8 @@ Parallélisables : T03 et T04 après T02c ; T06, T09a et T10 après T05 ; T08 d�
 - [ ] Tests d'abord : `test_every_identity_table_exported` (introspection : toute table du module ayant une colonne `user_id` ou `id` utilisateur apparaît dans l'export) ; `test_export_excludes_secrets` (pas de `token_hash`, `public_key`, `credential_id`) ; `test_second_export_while_pending_returns_existing` ; `test_download_requires_step_up` ; `test_download_other_user_404` ; `test_export_expires_7_days` ; `test_export_audited`.
 - [ ] ÉCHEC → implémenter → vert. Commit `feat(identity): self-service gdpr data export with extensible exporter registry (ADR-0016)`.
 
+**Réalisation (24/10/2026) :** ADR-0016 écrit. Routes `POST /v1/me/data-export` (step-up, 202, demande en cours renvoyée), `GET /v1/me/data-requests` (avec `expires_at` de l'archive), `GET /v1/me/data-export/{id}/download` (step-up, ZIP, `Cache-Control: no-store`). Tâche worker `build_data_export` (3 essais) et purge quotidienne à 05 h 00. Archive scellée avec une clé dérivée pour ce seul usage et des données associées liées à la demande. Données d'autres personnes exclues : seulement les blocages faits par la personne (jamais qui la bloque), abonnés comptés et non nommés, `payload` des demandes d'approbation non exporté. Audit : `gdpr.export_requested`, `gdpr.export_built`, `gdpr.export_downloaded`. E-mail « Votre export de données est prêt » avec lien vers `/fr/compte/donnees` (écran en T12b).
+
 ### P1-T09b — Effacement RGPD
 
 **Fichiers :** `core/gdpr.py` (registre des effaceurs), `service/gdpr.py`, `tasks.py`, `api/me.py`, tests.

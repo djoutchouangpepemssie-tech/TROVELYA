@@ -157,3 +157,29 @@ def email_changed_notice(*, to: str, security_link: str) -> EmailMessage:
     return EmailMessage(
         to=to, subject="L'adresse de votre compte TROVÉLYA a changé", text=text, html=html
     )
+
+
+def export_ready_message(*, to: str, link: str, days: int) -> EmailMessage:
+    """The GDPR export can be downloaded (ADR-0016). The archive is never attached."""
+    text = (
+        "Bonjour,\n\n"
+        "L'export de vos données TROVÉLYA est prêt. Téléchargez-le depuis votre compte :\n"
+        f"{link}\n\n"
+        f"Il reste disponible {days} jours. Par sécurité, une connexion récente vous sera "
+        "demandée.\n"
+        "Si vous n'êtes pas à l'origine de cette demande, sécurisez votre compte depuis la "
+        "même page.\n\n"
+        "TROVÉLYA — La belle trouvaille"
+    )
+    safe = escape(link, quote=True)
+    html = (
+        "<p>Bonjour,</p>"
+        "<p>L'export de vos données TROVÉLYA est prêt. Téléchargez-le depuis votre compte :</p>"
+        f'<p><a href="{safe}">Mes données</a></p>'
+        f"<p>Il reste disponible {days} jours. Par sécurité, une connexion récente vous sera "
+        "demandée.</p>"
+        "<p>Si vous n'êtes pas à l'origine de cette demande, sécurisez votre compte depuis la "
+        "même page.</p>"
+        "<p>TROVÉLYA — La belle trouvaille</p>"
+    )
+    return EmailMessage(to=to, subject="Votre export de données est prêt", text=text, html=html)

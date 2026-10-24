@@ -393,3 +393,20 @@ class ConsentState(BaseModel):
 
     active_purposes: list[ConsentPurpose]
     consents: list[ConsentOut]
+
+
+class DataExportAccepted(BaseModel):
+    request_id: UUID
+
+
+class DataRequestOut(BaseModel):
+    id: UUID
+    kind: Literal["export", "erasure"]
+    status: Literal["received", "processing", "completed", "refused"]
+    created_at: datetime
+    completed_at: datetime | None
+    expires_at: datetime | None  # export archive still downloadable until then
+
+
+class DataRequestList(BaseModel):
+    data: list[DataRequestOut]

@@ -539,6 +539,102 @@
         "title": "Counters",
         "type": "object"
       },
+      "DataExportAccepted": {
+        "properties": {
+          "request_id": {
+            "format": "uuid",
+            "title": "Request Id",
+            "type": "string"
+          }
+        },
+        "required": [
+          "request_id"
+        ],
+        "title": "DataExportAccepted",
+        "type": "object"
+      },
+      "DataRequestList": {
+        "properties": {
+          "data": {
+            "items": {
+              "$ref": "#/components/schemas/DataRequestOut"
+            },
+            "title": "Data",
+            "type": "array"
+          }
+        },
+        "required": [
+          "data"
+        ],
+        "title": "DataRequestList",
+        "type": "object"
+      },
+      "DataRequestOut": {
+        "properties": {
+          "completed_at": {
+            "anyOf": [
+              {
+                "format": "date-time",
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Completed At"
+          },
+          "created_at": {
+            "format": "date-time",
+            "title": "Created At",
+            "type": "string"
+          },
+          "expires_at": {
+            "anyOf": [
+              {
+                "format": "date-time",
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Expires At"
+          },
+          "id": {
+            "format": "uuid",
+            "title": "Id",
+            "type": "string"
+          },
+          "kind": {
+            "enum": [
+              "export",
+              "erasure"
+            ],
+            "title": "Kind",
+            "type": "string"
+          },
+          "status": {
+            "enum": [
+              "received",
+              "processing",
+              "completed",
+              "refused"
+            ],
+            "title": "Status",
+            "type": "string"
+          }
+        },
+        "required": [
+          "id",
+          "kind",
+          "status",
+          "created_at",
+          "completed_at",
+          "expires_at"
+        ],
+        "title": "DataRequestOut",
+        "type": "object"
+      },
       "EmailChangeRequest": {
         "properties": {
           "new_email": {
@@ -2560,6 +2656,97 @@
           }
         },
         "summary": "Post Consent",
+        "tags": [
+          "me"
+        ]
+      }
+    },
+    "/v1/me/data-export": {
+      "post": {
+        "description": "GDPR export (ADR-0016): built by the worker, announced by e-mail. A request still in\nprogress is answered again instead of starting a second one.",
+        "operationId": "me_data_export_request",
+        "responses": {
+          "202": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/DataExportAccepted"
+                }
+              }
+            },
+            "description": "Successful Response"
+          },
+          "403": {
+            "description": "step_up_required"
+          }
+        },
+        "summary": "Post Data Export",
+        "tags": [
+          "me"
+        ]
+      }
+    },
+    "/v1/me/data-export/{request_id}/download": {
+      "get": {
+        "operationId": "me_data_export_download",
+        "parameters": [
+          {
+            "in": "path",
+            "name": "request_id",
+            "required": true,
+            "schema": {
+              "format": "uuid",
+              "title": "Request Id",
+              "type": "string"
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "content": {
+              "application/zip": {}
+            },
+            "description": "The export archive"
+          },
+          "403": {
+            "description": "step_up_required"
+          },
+          "404": {
+            "description": "Unknown, someone else's, not ready or expired"
+          },
+          "422": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/HTTPValidationError"
+                }
+              }
+            },
+            "description": "Validation Error"
+          }
+        },
+        "summary": "Get Data Export",
+        "tags": [
+          "me"
+        ]
+      }
+    },
+    "/v1/me/data-requests": {
+      "get": {
+        "operationId": "me_data_requests_list",
+        "responses": {
+          "200": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/DataRequestList"
+                }
+              }
+            },
+            "description": "Successful Response"
+          }
+        },
+        "summary": "Get Data Requests",
         "tags": [
           "me"
         ]
