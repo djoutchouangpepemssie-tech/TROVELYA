@@ -1,6 +1,9 @@
-"""Passkeys: `/v1/auth/passkeys/*` (registration, sign-in) and `/v1/me/passkeys` (management).
+"""Passkeys: `/v1/auth/passkeys/*` (registration, sign-in, staff enrolment) and
+`/v1/me/passkeys` (management).
 
-Everything answers 404 while the `auth.passkeys` flag is off.
+While the `auth.passkeys` flag is off, members can neither add nor manage passkeys (404). Signing
+in with a passkey and the staff enrolment stay open: staff accounts sign in by passkey only
+(ADR-0018), and a member cannot hold a passkey while the flag is off.
 """
 
 from typing import Annotated, Any
@@ -18,6 +21,8 @@ from trovelya.modules.identity.schemas import (
     PasskeyRegisterVerify,
     PasskeyRename,
     SignInResult,
+    StaffEnrolmentOptions,
+    StaffEnrolmentVerify,
 )
 from trovelya.modules.identity.service import (
     CurrentUser,
@@ -26,6 +31,7 @@ from trovelya.modules.identity.service import (
     get_clock,
     get_session_policy,
     set_session_cookie,
+    staff_accounts,
 )
 from trovelya.modules.identity.service import passkeys as service
 from trovelya.modules.identity.service.auth import Uow, completed_user, recent_mfa_user
@@ -38,6 +44,7 @@ async def _enabled(request: Request) -> None:
 
 
 auth_router = APIRouter(prefix="/v1/auth/passkeys", tags=["auth"], dependencies=[Depends(_enabled)])
+sign_in_router = APIRouter(prefix="/v1/auth/passkeys", tags=["auth"])
 me_router = APIRouter(prefix="/v1/me/passkeys", tags=["me"], dependencies=[Depends(_enabled)])
 
 ClockDep = Annotated[Clock, Depends(get_clock)]
@@ -56,7 +63,7 @@ async def register_options(
 ) -> dict[str, Any]:
     """WebAuthn creation options for `navigator.credentials.create()`."""
     return await service.registration_options(
-        db, request.app.state.redis, user=user, rp=_rp(request), clock=clock
+        db, request.app.state.redis, user_id=user.id, rp=_rp(request), clock=clock
     )
 
 
@@ -80,13 +87,13 @@ async def register_verify(
     return PasskeyOut.model_validate(row, from_attributes=True)
 
 
-@auth_router.post("/login/options", operation_id="auth_passkeys_login_options")
+@sign_in_router.post("/login/options", operation_id="auth_passkeys_login_options")
 async def login_options(request: Request, db: Uow, clock: ClockDep) -> dict[str, Any]:
     """WebAuthn request options for `navigator.credentials.get()` (any passkey of this site)."""
     return await service.login_options(db, request.app.state.redis, rp=_rp(request), clock=clock)
 
 
-@auth_router.post("/login/verify", operation_id="auth_passkeys_login_verify")
+@sign_in_router.post("/login/verify", operation_id="auth_passkeys_login_verify")
 async def login_verify(
     body: PasskeyLoginVerify,
     request: Request,
@@ -133,3 +140,50 @@ async def patch_passkey(passkey_id: UUID, body: PasskeyRename, db: Uow, user: Me
 )
 async def delete_passkey(passkey_id: UUID, db: Uow, user: StepUp) -> None:
     await service.delete_passkey(db, user=user, passkey_id=passkey_id)
+
+
+@sign_in_router.post(
+    "/enrol/options",
+    operation_id="auth_passkeys_enrol_options",
+    responses={400: {"description": "enrolment_invalid"}},
+)
+async def enrol_options(
+    body: StaffEnrolmentOptions, request: Request, db: Uow, clock: ClockDep
+) -> dict[str, Any]:
+    """Staff enrolment (ADR-0018): creation options for the account of the link."""
+    return await staff_accounts.enrolment_options(
+        db, request.app.state.redis, token=body.enrolment_token, rp=_rp(request), clock=clock
+    )
+
+
+@sign_in_router.post(
+    "/enrol/verify",
+    operation_id="auth_passkeys_enrol_verify",
+    responses={400: {"description": "enrolment_invalid or passkey_invalid"}},
+)
+async def enrol_verify(
+    body: StaffEnrolmentVerify,
+    request: Request,
+    response: Response,
+    db: Uow,
+    clock: ClockDep,
+    policy: Annotated[SessionPolicy, Depends(get_session_policy)],
+) -> SignInResult:
+    """Registers the staff account's first passkey (single-use link) and opens an admin
+    session (cookie `__Host-trv_session`)."""
+    secret = request.app.state.settings.proxy_shared_secret.get_secret_value()
+    sign_in = await staff_accounts.enrol(
+        db,
+        request.app.state.redis,
+        token=body.enrolment_token,
+        credential=body.credential,
+        name=body.name,
+        ip=client_ip(request.scope, proxy_secret=secret),
+        user_agent=request.headers.get("user-agent"),
+        country=client_country(request.scope, proxy_secret=secret),
+        rp=_rp(request),
+        policy=policy,
+        clock=clock,
+    )
+    set_session_cookie(response, sign_in.session, clock=clock)
+    return SignInResult(user_id=sign_in.user_id, is_new=False, profile_completed=True)

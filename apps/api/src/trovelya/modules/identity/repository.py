@@ -1247,10 +1247,34 @@ async def is_staff_account(db: AsyncSession, user_id: UUID) -> bool:
     return bool(await db.scalar(_IS_STAFF_ACCOUNT, {"u": user_id}))
 
 
-async def grant_role(db: AsyncSession, *, user_id: UUID, role: str, granted_by: UUID) -> bool:
+async def grant_role(
+    db: AsyncSession, *, user_id: UUID, role: str, granted_by: UUID | None
+) -> bool:
     result = await db.execute(_GRANT_ROLE, {"u": user_id, "r": role, "by": granted_by})
     return result.one_or_none() is not None
 
 
 async def revoke_role(db: AsyncSession, *, user_id: UUID, role: str) -> bool:
     return (await db.execute(_REVOKE_ROLE, {"u": user_id, "r": role})).one_or_none() is not None
+
+
+# --- Staff accounts (P1-T11b, ADR-0018) ------------------------------------------------------
+
+_CREATE_STAFF_USER = text(
+    "INSERT INTO users (id, email, username, display_name, is_staff, email_verified_at,"
+    " profile_completed_at, created_at)"
+    " VALUES (:id, :email, :username, 'Équipe TROVÉLYA', true, :now, :now, :now)"
+)
+_ROLE_EXISTS = text("SELECT EXISTS (SELECT 1 FROM roles WHERE key = :r)")
+
+
+async def create_staff_user(db: AsyncSession, *, user_id: UUID, email: str, now: datetime) -> None:
+    await db.execute(
+        _CREATE_STAFF_USER,
+        {"id": user_id, "email": email, "username": f"staff_{user_id.hex[-8:]}", "now": now},
+    )
+    await db.execute(_CREATE_PREFERENCES, {"user_id": user_id})
+
+
+async def role_exists(db: AsyncSession, role: str) -> bool:
+    return bool(await db.scalar(_ROLE_EXISTS, {"r": role}))

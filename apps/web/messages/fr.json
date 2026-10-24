@@ -184,5 +184,22 @@
     },
     "close": "Fermer",
     "error": "Votre choix n'a pas pu être enregistré. Réessayez dans un instant."
+  },
+  "StaffEnrolment": {
+    "metaTitle": "Enrôlement staff · TROVÉLYA",
+    "title": "Créer votre passkey staff",
+    "loading": "Chargement…",
+    "intro": "Ce lien sert une seule fois. Votre appareil va vous demander votre empreinte, votre visage ou le code de l'appareil : la passkey sera ensuite votre seul moyen de connexion au compte staff.",
+    "create": "Créer ma passkey",
+    "done": "Votre passkey staff est enregistrée et vous êtes connecté au compte staff. Gardez cet appareil en sécurité.",
+    "errors": {
+      "link_invalid": "Ce lien d'enrôlement n'est plus valable (déjà utilisé ou expiré au bout de 15 minutes). Relancez le script de création pour en obtenir un nouveau.",
+      "unsupported": "Ce navigateur ne gère pas les passkeys. Ouvrez le lien dans un navigateur récent.",
+      "cancelled": "La création a été annulée. Vous pouvez réessayer : le lien reste valable.",
+      "refused": "Cette passkey a été refusée. Vérifiez que vous êtes bien sur le site TROVÉLYA, puis réessayez.",
+      "step_up_required": "Une confirmation est nécessaire. Réessayez.",
+      "rate_limited": "Trop de tentatives. Patientez une minute.",
+      "unavailable": "Le service est momentanément indisponible. Réessayez dans un instant."
+    }
   }
 }

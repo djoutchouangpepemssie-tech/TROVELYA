@@ -107,16 +107,17 @@ async def registration_options(
     db: AsyncSession,
     redis: Redis,
     *,
-    user: CurrentUser,
+    user_id: UUID,
     rp: RelyingParty,
     clock: Clock,
+    purpose: str = "register",
 ) -> dict[str, Any]:
-    existing = await repository.credential_ids(db, user.id)
-    user_name = await repository.user_email(db, user.id)
+    existing = await repository.credential_ids(db, user_id)
+    user_name = await repository.user_email(db, user_id)
     options = webauthn.generate_registration_options(
         rp_id=rp.id,
         rp_name=rp.name,
-        user_id=user.id.bytes,
+        user_id=user_id.bytes,
         user_name=user_name,
         user_display_name=user_name,
         challenge=secrets.token_bytes(32),
@@ -127,9 +128,65 @@ async def registration_options(
         exclude_credentials=[PublicKeyCredentialDescriptor(id=c) for c in existing],
     )
     await _store_challenge(
-        redis, options.challenge, purpose="register", user_id=user.id, now=clock.now()
+        redis, options.challenge, purpose=purpose, user_id=user_id, now=clock.now()
     )
     return json.loads(webauthn.options_to_json(options))
+
+
+async def verify_registration(
+    redis: Redis,
+    *,
+    user_id: UUID,
+    credential: dict[str, Any],
+    rp: RelyingParty,
+    clock: Clock,
+    purpose: str,
+) -> Any:
+    """Checks a `navigator.credentials.create()` answer to one of our challenges; nothing is
+    stored yet (the caller may still refuse, e.g. an enrolment link already used)."""
+    challenge = await _take_challenge(
+        redis, credential, purpose=purpose, user_id=user_id, now=clock.now()
+    )
+    try:
+        return webauthn.verify_registration_response(
+            credential=credential,
+            expected_challenge=challenge,
+            expected_rp_id=rp.id,
+            expected_origin=list(rp.origins),
+            require_user_verification=True,
+        )
+    except (WebAuthnException, KeyError, TypeError, ValueError) as exc:
+        logger.info("passkey.registration_rejected", error=type(exc).__name__)
+        raise _invalid() from exc
+
+
+async def store_passkey(
+    db: AsyncSession,
+    *,
+    user_id: UUID,
+    verified: Any,
+    credential: dict[str, Any],
+    name: str,
+    clock: Clock,
+) -> Row[Any]:
+    known = {member.value for member in AuthenticatorTransport}
+    declared: Any = credential.get("response", {}).get("transports") or []
+    items: list[object] = list(declared) if isinstance(declared, list) else []  # pyright: ignore[reportUnknownArgumentType]
+    transports = [str(t) for t in items if t in known]
+    row = await repository.insert_passkey(
+        db,
+        passkey_id=new_id(),
+        user_id=user_id,
+        credential_id=verified.credential_id,
+        public_key=verified.credential_public_key,
+        sign_count=verified.sign_count,
+        transports=transports or None,
+        name=name,
+        now=clock.now(),
+    )
+    if row is None:
+        raise _invalid()
+    return row
 
 
 async def register_passkey(
@@ -142,39 +199,12 @@ async def register_passkey(
     rp: RelyingParty,
     clock: Clock,
 ) -> Row[Any]:
-    now = clock.now()
-    challenge = await _take_challenge(
-        redis, credential, purpose="register", user_id=user.id, now=now
+    verified = await verify_registration(
+        redis, user_id=user.id, credential=credential, rp=rp, clock=clock, purpose="register"
     )
-    try:
-        verified = webauthn.verify_registration_response(
-            credential=credential,
-            expected_challenge=challenge,
-            expected_rp_id=rp.id,
-            expected_origin=list(rp.origins),
-            require_user_verification=True,
-        )
-    except (WebAuthnException, KeyError, TypeError, ValueError) as exc:
-        logger.info("passkey.registration_rejected", error=type(exc).__name__)
-        raise _invalid() from exc
-    known = {member.value for member in AuthenticatorTransport}
-    declared: Any = credential.get("response", {}).get("transports") or []
-    items: list[object] = list(declared) if isinstance(declared, list) else []  # pyright: ignore[reportUnknownArgumentType]
-    transports = [str(t) for t in items if t in known]
-    row = await repository.insert_passkey(
-        db,
-        passkey_id=new_id(),
-        user_id=user.id,
-        credential_id=verified.credential_id,
-        public_key=verified.credential_public_key,
-        sign_count=verified.sign_count,
-        transports=transports or None,
-        name=name,
-        now=now,
+    return await store_passkey(
+        db, user_id=user.id, verified=verified, credential=credential, name=name, clock=clock
     )
-    if row is None:
-        raise _invalid()
-    return row
 
 
 async def _assertion_options(

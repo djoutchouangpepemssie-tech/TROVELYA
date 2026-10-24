@@ -182,6 +182,47 @@ export interface paths {
         patch?: never;
         trace?: never;
     };
+    "/v1/auth/passkeys/enrol/options": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        get?: never;
+        put?: never;
+        /**
+         * Enrol Options
+         * @description Staff enrolment (ADR-0018): creation options for the account of the link.
+         */
+        post: operations["auth_passkeys_enrol_options"];
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/v1/auth/passkeys/enrol/verify": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        get?: never;
+        put?: never;
+        /**
+         * Enrol Verify
+         * @description Registers the staff account's first passkey (single-use link) and opens an admin
+         *     session (cookie `__Host-trv_session`).
+         */
+        post: operations["auth_passkeys_enrol_verify"];
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
     "/v1/auth/passkeys/login/options": {
         parameters: {
             query?: never;
@@ -1436,6 +1477,25 @@ export interface components {
              */
             user_id: string;
         };
+        /** StaffEnrolmentOptions */
+        StaffEnrolmentOptions: {
+            /** Enrolment Token */
+            enrolment_token: string;
+        };
+        /** StaffEnrolmentVerify */
+        StaffEnrolmentVerify: {
+            /** Credential */
+            credential: {
+                [key: string]: unknown;
+            };
+            /** Enrolment Token */
+            enrolment_token: string;
+            /**
+             * Name
+             * @default Passkey staff
+             */
+            name: string;
+        };
         /** StaffRoleRequest */
         StaffRoleRequest: {
             /** Grant */
@@ -1839,6 +1899,88 @@ export interface operations {
                 content: {
                     "application/json": unknown;
                 };
+            };
+            /** @description Validation Error */
+            422: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["HTTPValidationError"];
+                };
+            };
+        };
+    };
+    auth_passkeys_enrol_options: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        requestBody: {
+            content: {
+                "application/json": components["schemas"]["StaffEnrolmentOptions"];
+            };
+        };
+        responses: {
+            /** @description Successful Response */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": {
+                        [key: string]: unknown;
+                    };
+                };
+            };
+            /** @description enrolment_invalid */
+            400: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content?: never;
+            };
+            /** @description Validation Error */
+            422: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["HTTPValidationError"];
+                };
+            };
+        };
+    };
+    auth_passkeys_enrol_verify: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        requestBody: {
+            content: {
+                "application/json": components["schemas"]["StaffEnrolmentVerify"];
+            };
+        };
+        responses: {
+            /** @description Successful Response */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["SignInResult"];
+                };
+            };
+            /** @description enrolment_invalid or passkey_invalid */
+            400: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content?: never;
             };
             /** @description Validation Error */
             422: {

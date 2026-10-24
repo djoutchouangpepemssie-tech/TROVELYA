@@ -52,3 +52,5 @@ async def test_session_route_absent_outside_test_and_local(
     for env in ("staging", "production", "preview"):
         async with _client(sessionmaker, redis_client, env) as client:
             assert (await client.post("/v1/_test/session", json={})).status_code == 404, env
+            staff = await client.post("/v1/_test/staff-enrolment", json={})
+            assert staff.status_code == 404, env

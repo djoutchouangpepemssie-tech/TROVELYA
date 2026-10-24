@@ -479,3 +479,13 @@ class ApprovalOut(BaseModel):
 
 class ApprovalList(BaseModel):
     data: list[ApprovalOut]
+
+
+class StaffEnrolmentOptions(BaseModel):
+    enrolment_token: str = Field(min_length=20, max_length=100)
+
+
+class StaffEnrolmentVerify(BaseModel):
+    enrolment_token: str = Field(min_length=20, max_length=100)
+    credential: dict[str, Any]  # navigator.credentials.create() answer, JSON-encoded
+    name: str = Field(default="Passkey staff", min_length=1, max_length=64)

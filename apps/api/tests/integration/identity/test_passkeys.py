@@ -354,7 +354,8 @@ async def test_flag_off_404(
     member = await make_member(sessionmaker, clock)
     app = passkey_app(sessionmaker, redis_client, clock, enabled=False)
     async with AsyncClient(transport=ASGITransport(app=app), base_url="https://test") as c:
-        assert (await c.post("/v1/auth/passkeys/login/options")).status_code == 404
+        # Signing in stays open for staff accounts (ADR-0018); members cannot add a passkey.
+        assert (await c.post("/v1/auth/passkeys/login/options")).status_code == 200
         assert (
             await c.post("/v1/auth/passkeys/register/options", headers=member.headers)
         ).status_code == 404
