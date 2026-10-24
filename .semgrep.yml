@@ -1,0 +1,47 @@
+# Règles propres à TROVÉLYA, en plus des jeux publics lancés par la CI
+# (p/python, p/typescript, p/secrets, p/owasp-top-ten). Bloquant à partir de ERROR.
+rules:
+  - id: trovelya-money-no-float
+    message: >-
+      Montants en centimes (entiers), jamais en nombres à virgule (règle non négociable, CLAUDE.md).
+      Utiliser trovelya.shared.money.
+    severity: ERROR
+    languages: [python]
+    paths:
+      include:
+        - apps/api/src/trovelya/shared/money.py
+        - apps/api/src/trovelya/modules/ledger/
+        - apps/api/src/trovelya/modules/orders/
+    pattern-either:
+      - pattern: float(...)
+      - pattern: "$X: float"
+      - pattern: "def $F(...) -> float: ..."
+
+  - id: trovelya-no-dangerously-set-inner-html
+    message: >-
+      dangerouslySetInnerHTML contourne l'échappement de React et affaiblit la CSP.
+      Rendre le contenu en JSX ou le nettoyer côté serveur.
+    severity: ERROR
+    languages: [typescript]
+    paths:
+      include:
+        - apps/web/
+        - packages/ui/
+    pattern: <$EL dangerouslySetInnerHTML={...} />
+
+  - id: trovelya-no-raw-sql-format
+    message: >-
+      SQL construit par concaténation ou f-string : utiliser des paramètres liés (text() + bindparams).
+    severity: ERROR
+    languages: [python]
+    paths:
+      include:
+        - apps/api/src/
+      exclude:
+        - apps/api/src/trovelya/core/migrations/
+        - apps/api/src/trovelya/modules/*/migrations/
+    pattern-either:
+      - pattern: sqlalchemy.text(f"...")
+      - pattern: text(f"...")
+      - pattern: $CONN.execute(f"...", ...)
+      - pattern: $CONN.exec_driver_sql(f"...", ...)
