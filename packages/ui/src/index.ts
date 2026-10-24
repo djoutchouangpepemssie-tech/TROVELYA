@@ -1,4 +1,5 @@
 export * from "./components/Button";
+export * from "./components/ChoiceTile";
 export * from "./components/Dialog";
 export * from "./components/Display";
 export * from "./components/Distance";

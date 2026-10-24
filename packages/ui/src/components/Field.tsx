@@ -3,7 +3,7 @@ import {
   Select as SelectPrimitive,
   Switch as SwitchPrimitive,
 } from "radix-ui";
-import { type InputHTMLAttributes, type ReactNode, useId } from "react";
+import { type InputHTMLAttributes, type ReactNode, type Ref, useId } from "react";
 
 import { CheckIcon, ChevronDownIcon } from "../icons";
 
@@ -43,6 +43,8 @@ function describedBy(id: string, hint?: string, error?: string): string | undefi
 }
 
 type InputProps = InputHTMLAttributes<HTMLInputElement> & {
+  /** React 19: `ref` is a plain prop, forwarded to the native input. */
+  ref?: Ref<HTMLInputElement>;
   label: string;
   hint?: string;
   error?: string;

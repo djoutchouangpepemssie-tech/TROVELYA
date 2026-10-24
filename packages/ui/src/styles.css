@@ -420,3 +420,44 @@
     animation: none;
   }
 }
+
+/* ChoiceTile: onboarding interests (maquette Onboard). */
+.trv-choice-tile {
+  position: relative;
+  display: flex;
+  align-items: flex-end;
+  min-height: 92px;
+  padding: var(--trv-space-3);
+  border: 0;
+  border-radius: var(--trv-radius-lg);
+  background: var(--trv-color-surface-2);
+  color: var(--trv-color-ink);
+  font: inherit;
+  font-size: 15px;
+  font-weight: 600;
+  letter-spacing: -0.01em;
+  text-align: left;
+  cursor: pointer;
+  transition: box-shadow var(--trv-motion-fast) var(--trv-easing-standard);
+}
+.trv-choice-tile[aria-pressed="true"] {
+  background: var(--trv-color-brand-soft);
+  box-shadow: 0 0 0 3px var(--trv-color-brand);
+}
+.trv-choice-tile-check {
+  position: absolute;
+  top: var(--trv-space-2);
+  right: var(--trv-space-2);
+  display: grid;
+  place-items: center;
+  width: 24px;
+  height: 24px;
+  border-radius: 50%;
+  background: var(--trv-color-brand);
+  color: #ffffff;
+  box-shadow: 0 0 0 2px var(--trv-color-surface);
+}
+.trv-choice-tile-check svg {
+  width: 13px;
+  height: 13px;
+}
