@@ -13,7 +13,10 @@ La production ne bouge que par le workflow **Deploy production** (décision E5).
 ## Mettre en production
 
 1. Vérifier staging : `/ready` répond 200, parcours principaux du web, aucune nouvelle erreur dans Sentry.
-2. GitHub → Actions → **Deploy production** → *Run workflow* (laisser `sha` vide pour la tête de `main`).
+2. Poser un tag de version sur le commit de `main` voulu, ce qui lance **Deploy production** :
+   `git tag v0.1.0 <commit> && git push origin v0.1.0`.
+   Variante sans tag : GitHub → Actions → **Deploy production** → *Run workflow* (laisser `sha`
+   vide pour la tête de `main`).
 3. Le workflow refuse si la CI de ce commit n'est pas verte ou si `release` n'est pas un ancêtre (pas d'avance rapide possible).
 4. Railway (production) reconstruit `pg`, `TROVELYA` et `worker` ; `alembic upgrade head` tourne avant le basculement, le healthcheck `/ready` conditionne la mise en service.
 5. Contrôler le déploiement dans Railway, puis Sentry pendant 15 minutes.
