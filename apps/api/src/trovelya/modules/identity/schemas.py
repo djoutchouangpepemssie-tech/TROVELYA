@@ -7,6 +7,8 @@ from uuid import UUID
 
 from pydantic import BaseModel, ConfigDict, Field, model_validator
 
+from trovelya.modules.identity.universes import UNIVERSE_KEYS
+
 
 class SessionOut(BaseModel):
     """A sign-in session as shown in the account settings. Never the IP or the user agent."""
@@ -317,3 +319,52 @@ class ZoneOut(BaseModel):
 
 class ZoneList(BaseModel):
     data: list[ZoneOut]
+
+
+NOTIFICATION_CHANNELS = ("email", "push")
+_SIZE_KEY = re.compile(r"^[a-z_]{2,20}$")
+_NOTIFICATION_TYPE = re.compile(r"^[a-z_]{2,40}$")
+MAX_SIZES = 10
+MAX_BLOCKED_BRANDS = 100
+MAX_NOTIFICATION_TYPES = 50
+
+
+def _universes(keys: list[str], field: str) -> None:
+    if len(set(keys)) != len(keys) or not set(keys) <= set(UNIVERSE_KEYS):
+        raise ValueError(f"{field}: unknown or repeated universe key")
+
+
+class Preferences(BaseModel):
+    """Section 7.3. PUT replaces everything: a field not sent goes back to its default."""
+
+    model_config = ConfigDict(extra="forbid")
+
+    interests: list[str] = Field(default_factory=list[str])  # universe keys (E11)
+    sizes: dict[str, str] = Field(default_factory=dict[str, str])  # {"top": "M"}
+    budget_max_minor: int | None = Field(default=None, ge=0, le=10**12)
+    blocked_brands: list[str] = Field(default_factory=list[str], max_length=MAX_BLOCKED_BRANDS)
+    feed_discovery_level: int = Field(default=50, ge=0, le=100)
+    paused_categories: list[str] = Field(default_factory=list[str])  # universe keys until P2
+    not_now_until: datetime | None = None
+    personalised_feed: bool = True  # DSA: a feed without profiling
+    notification_settings: dict[str, dict[str, bool]] = Field(
+        default_factory=dict[str, dict[str, bool]]
+    )
+
+    @model_validator(mode="after")
+    def _check(self) -> "Preferences":
+        _universes(self.interests, "interests")
+        _universes(self.paused_categories, "paused_categories")
+        if len(self.sizes) > MAX_SIZES or any(
+            not _SIZE_KEY.fullmatch(key) or not 1 <= len(value) <= 10
+            for key, value in self.sizes.items()
+        ):
+            raise ValueError("sizes: at most 10 keys ^[a-z_]{2,20}$, values of 1 to 10 chars")
+        if any(not 1 <= len(brand) <= 80 for brand in self.blocked_brands):
+            raise ValueError("blocked_brands: names of 1 to 80 characters")
+        for channel, types in self.notification_settings.items():
+            if channel not in NOTIFICATION_CHANNELS or len(types) > MAX_NOTIFICATION_TYPES:
+                raise ValueError("notification_settings: channels email and push only")
+            if any(not _NOTIFICATION_TYPE.fullmatch(kind) for kind in types):
+                raise ValueError("notification_settings: type keys ^[a-z_]{2,40}$")
+        return self

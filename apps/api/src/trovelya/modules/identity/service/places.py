@@ -94,3 +94,12 @@ async def delete_zone(db: AsyncSession, *, user: CurrentUser, zone_id: UUID) -> 
         raise _not_found()
     if was_default:
         await repository.promote_oldest_zone(db, user.id)
+
+
+async def get_preferences(db: AsyncSession, *, user: CurrentUser) -> dict[str, Any]:
+    """The saved preferences, or the defaults of section 7.3 when none were saved yet."""
+    return await repository.preferences(db, user.id) or {}
+
+
+async def save_preferences(db: AsyncSession, *, user: CurrentUser, values: dict[str, Any]) -> None:
+    await repository.save_preferences(db, user_id=user.id, values=values)

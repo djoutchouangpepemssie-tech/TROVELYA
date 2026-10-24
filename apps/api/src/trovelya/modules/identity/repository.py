@@ -4,7 +4,8 @@ from datetime import datetime, timedelta
 from typing import Any
 from uuid import UUID
 
-from sqlalchemy import Row, text
+from sqlalchemy import Row, bindparam, text
+from sqlalchemy.dialects.postgresql import JSONB
 from sqlalchemy.ext.asyncio import AsyncSession
 
 from trovelya.modules.identity.models import BLOCKED_STATUSES, SessionKind
@@ -757,3 +758,37 @@ async def delete_zone(db: AsyncSession, *, user_id: UUID, zone_id: UUID) -> bool
 
 async def promote_oldest_zone(db: AsyncSession, user_id: UUID) -> None:
     await db.execute(_PROMOTE_OLDEST_ZONE, {"user_id": user_id})
+
+
+# --- Preferences ----------------------------------------------------------------------------
+
+_PREFERENCES = text(
+    "SELECT interests, sizes, budget_max_minor, blocked_brands, feed_discovery_level,"
+    " paused_categories, not_now_until, personalised_feed, notification_settings"
+    " FROM user_preferences WHERE user_id = :user_id"
+)
+
+_SAVE_PREFERENCES = text(
+    "INSERT INTO user_preferences (user_id, interests, sizes, budget_max_minor,"
+    " blocked_brands, feed_discovery_level, paused_categories, not_now_until,"
+    " personalised_feed, notification_settings)"
+    " VALUES (:user_id, :interests, :sizes, :budget_max_minor, :blocked_brands,"
+    " :feed_discovery_level, :paused_categories, :not_now_until, :personalised_feed,"
+    " :notification_settings)"
+    " ON CONFLICT (user_id) DO UPDATE SET interests = EXCLUDED.interests,"
+    " sizes = EXCLUDED.sizes, budget_max_minor = EXCLUDED.budget_max_minor,"
+    " blocked_brands = EXCLUDED.blocked_brands,"
+    " feed_discovery_level = EXCLUDED.feed_discovery_level,"
+    " paused_categories = EXCLUDED.paused_categories, not_now_until = EXCLUDED.not_now_until,"
+    " personalised_feed = EXCLUDED.personalised_feed,"
+    " notification_settings = EXCLUDED.notification_settings"
+).bindparams(bindparam("sizes", type_=JSONB), bindparam("notification_settings", type_=JSONB))
+
+
+async def preferences(db: AsyncSession, user_id: UUID) -> dict[str, Any] | None:
+    row = (await db.execute(_PREFERENCES, {"user_id": user_id})).mappings().one_or_none()
+    return dict(row) if row is not None else None
+
+
+async def save_preferences(db: AsyncSession, *, user_id: UUID, values: dict[str, Any]) -> None:
+    await db.execute(_SAVE_PREFERENCES, {"user_id": user_id, **values})
