@@ -106,3 +106,54 @@ def step_up_message(*, to: str, link: str, ttl_minutes: int) -> EmailMessage:
     return EmailMessage(
         to=to, subject="Confirmez votre identité sur TROVÉLYA", text=text, html=html
     )
+
+
+def email_change_message(*, to: str, link: str, ttl_minutes: int) -> EmailMessage:
+    text = (
+        "Bonjour,\n\n"
+        "Pour utiliser cette adresse avec votre compte TROVÉLYA, ouvrez ce lien puis cliquez "
+        "sur « Confirmer » :\n"
+        f"{link}\n\n"
+        f"Ce lien ne sert qu'une fois et expire dans {ttl_minutes} minutes.\n"
+        "Si vous n'êtes pas à l'origine de cette demande, ignorez cet e-mail : "
+        "l'adresse ne sera pas modifiée.\n\n"
+        "TROVÉLYA — La belle trouvaille"
+    )
+    html = (
+        "<p>Bonjour,</p>"
+        "<p>Pour utiliser cette adresse avec votre compte TROVÉLYA, ouvrez ce lien puis "
+        "cliquez sur « Confirmer » :</p>"
+        f'<p><a href="{escape(link, quote=True)}">Confirmer ma nouvelle adresse</a></p>'
+        f"<p>Ce lien ne sert qu'une fois et expire dans {ttl_minutes} minutes.</p>"
+        "<p>Si vous n'êtes pas à l'origine de cette demande, ignorez cet e-mail : "
+        "l'adresse ne sera pas modifiée.</p>"
+        "<p>TROVÉLYA — La belle trouvaille</p>"
+    )
+    return EmailMessage(
+        to=to, subject="Confirmez votre nouvelle adresse TROVÉLYA", text=text, html=html
+    )
+
+
+def email_changed_notice(*, to: str, security_link: str) -> EmailMessage:
+    """Sent to the previous address. Names neither the new address nor any undo link."""
+    text = (
+        "Bonjour,\n\n"
+        "L'adresse e-mail de votre compte TROVÉLYA vient d'être modifiée ; cette adresse n'est "
+        "plus utilisée pour vous connecter.\n"
+        "Si vous n'êtes pas à l'origine de ce changement, sécurisez votre compte et contactez "
+        "le support :\n"
+        f"{security_link}\n\n"
+        "TROVÉLYA — La belle trouvaille"
+    )
+    html = (
+        "<p>Bonjour,</p>"
+        "<p>L'adresse e-mail de votre compte TROVÉLYA vient d'être modifiée ; cette adresse "
+        "n'est plus utilisée pour vous connecter.</p>"
+        "<p>Si vous n'êtes pas à l'origine de ce changement, sécurisez votre compte et "
+        "contactez le support :</p>"
+        f'<p><a href="{escape(security_link, quote=True)}">Sécurité de mon compte</a></p>'
+        "<p>TROVÉLYA — La belle trouvaille</p>"
+    )
+    return EmailMessage(
+        to=to, subject="L'adresse de votre compte TROVÉLYA a changé", text=text, html=html
+    )

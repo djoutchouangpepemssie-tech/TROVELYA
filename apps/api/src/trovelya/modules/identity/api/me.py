@@ -6,9 +6,11 @@ from uuid import UUID
 from fastapi import APIRouter, Depends, Request, status
 from fastapi.responses import JSONResponse
 
+from trovelya.core.client_ip import client_ip
 from trovelya.core.errors import AppError, ErrorCode, problem_response
 from trovelya.modules.identity.schemas import (
     CompleteProfile,
+    EmailChangeRequest,
     MeOut,
     ProfilePatch,
     SessionList,
@@ -22,12 +24,14 @@ from trovelya.modules.identity.service import (
     current_user,
     get_clock,
     get_session_policy,
+    limit_magic_link_requests,
     list_sessions,
     profile,
     revoke_other_sessions,
     revoke_session,
 )
-from trovelya.modules.identity.service.auth import Uow, completed_user
+from trovelya.modules.identity.service.auth import Uow, completed_user, recent_mfa_user
+from trovelya.modules.identity.service.email_change import request_email_change
 from trovelya.shared.clock import Clock
 
 router = APIRouter(prefix="/v1/me", tags=["me"])
@@ -127,3 +131,33 @@ async def patch_me(
     )
     data = await profile.me(db, user=user, flags=request.app.state.flags, clock=clock)
     return MeOut.model_validate(data)
+
+
+@router.post("/email", operation_id="me_email_change", status_code=status.HTTP_202_ACCEPTED)
+async def post_email_change(
+    body: EmailChangeRequest,
+    request: Request,
+    db: Uow,
+    user: Annotated[CurrentUser, Depends(recent_mfa_user)],
+    clock: ClockDep,
+) -> dict[str, str]:
+    """Send a confirmation link to the new address. Same answer whatever the address."""
+    settings = request.app.state.settings
+    ip = client_ip(request.scope, proxy_secret=settings.proxy_shared_secret.get_secret_value())
+    new_email = body.new_email.strip().lower()
+    await limit_magic_link_requests(
+        request.app.state.redis,
+        email=new_email,
+        ip=ip,
+        secret=settings.secret_key.get_secret_value(),
+    )
+    await request_email_change(
+        db,
+        request.app.state.queue,
+        user=user,
+        new_email=new_email,
+        ip=ip,
+        settings=settings,
+        clock=clock,
+    )
+    return {}
