@@ -152,7 +152,7 @@ jobs:
       - uses: actions/setup-node@v7
         with:
           node-version-file: .nvmrc
-          cache: pnpm
+          # No pnpm cache: this job never installs, and v7 fails when saving an empty cache.
       - name: Semgrep (public rulesets + .semgrep.yml, blocking on ERROR)
         env:
           SEMGREP_SEND_METRICS: "off"
@@ -161,7 +161,7 @@ jobs:
           --config p/python --config p/typescript --config p/secrets --config p/owasp-top-ten
           --config .semgrep.yml
           --exclude .claude
-      - name: Gitleaks (full git history)
+      - name: Gitleaks (full history of the tested commit)
         env:
           GITLEAKS_VERSION: 8.28.0
         run: |
@@ -170,7 +170,9 @@ jobs:
           curl -fsSLO "${base}/gitleaks_${GITLEAKS_VERSION}_checksums.txt"
           sha256sum --check --ignore-missing "gitleaks_${GITLEAKS_VERSION}_checksums.txt"
           tar xzf "gitleaks_${GITLEAKS_VERSION}_linux_x64.tar.gz" gitleaks
-          ./gitleaks git --config .gitleaks.toml --redact --no-banner .
+          # Full history of the commit under test (all its ancestors), not every branch of the
+          # repository: an abandoned branch must not turn every other pull request red.
+          ./gitleaks git --config .gitleaks.toml --redact --no-banner --log-opts="HEAD" .
       - name: pip-audit (Python dependencies, dev included)
         working-directory: apps/api
         run: |
