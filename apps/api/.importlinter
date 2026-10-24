@@ -25,6 +25,7 @@ type = forbidden
 source_modules =
     trovelya.modules.catalog
     trovelya.modules.orders
+    trovelya.modules.identity
 forbidden_modules =
     trovelya.modules.ledger.repository
     trovelya.modules.ledger.models
@@ -36,6 +37,7 @@ type = forbidden
 source_modules =
     trovelya.modules.ledger
     trovelya.modules.orders
+    trovelya.modules.identity
 forbidden_modules =
     trovelya.modules.catalog.repository
     trovelya.modules.catalog.models
@@ -47,7 +49,20 @@ type = forbidden
 source_modules =
     trovelya.modules.ledger
     trovelya.modules.catalog
+    trovelya.modules.identity
 forbidden_modules =
     trovelya.modules.orders.repository
     trovelya.modules.orders.models
     trovelya.modules.orders.migrations
+
+[importlinter:contract:module-identity]
+name = Other modules use identity only through identity.service
+type = forbidden
+source_modules =
+    trovelya.modules.ledger
+    trovelya.modules.catalog
+    trovelya.modules.orders
+forbidden_modules =
+    trovelya.modules.identity.repository
+    trovelya.modules.identity.models
+    trovelya.modules.identity.migrations
