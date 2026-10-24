@@ -815,6 +815,90 @@
         "title": "PlaceOut",
         "type": "object"
       },
+      "Preferences": {
+        "additionalProperties": false,
+        "description": "Section 7.3. PUT replaces everything: a field not sent goes back to its default.",
+        "properties": {
+          "blocked_brands": {
+            "items": {
+              "type": "string"
+            },
+            "maxItems": 100,
+            "title": "Blocked Brands",
+            "type": "array"
+          },
+          "budget_max_minor": {
+            "anyOf": [
+              {
+                "maximum": 1000000000000.0,
+                "minimum": 0.0,
+                "type": "integer"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Budget Max Minor"
+          },
+          "feed_discovery_level": {
+            "default": 50,
+            "maximum": 100.0,
+            "minimum": 0.0,
+            "title": "Feed Discovery Level",
+            "type": "integer"
+          },
+          "interests": {
+            "items": {
+              "type": "string"
+            },
+            "title": "Interests",
+            "type": "array"
+          },
+          "not_now_until": {
+            "anyOf": [
+              {
+                "format": "date-time",
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Not Now Until"
+          },
+          "notification_settings": {
+            "additionalProperties": {
+              "additionalProperties": {
+                "type": "boolean"
+              },
+              "type": "object"
+            },
+            "title": "Notification Settings",
+            "type": "object"
+          },
+          "paused_categories": {
+            "items": {
+              "type": "string"
+            },
+            "title": "Paused Categories",
+            "type": "array"
+          },
+          "personalised_feed": {
+            "default": true,
+            "title": "Personalised Feed",
+            "type": "boolean"
+          },
+          "sizes": {
+            "additionalProperties": {
+              "type": "string"
+            },
+            "title": "Sizes",
+            "type": "object"
+          }
+        },
+        "title": "Preferences",
+        "type": "object"
+      },
       "ProfilePatch": {
         "additionalProperties": false,
         "description": "Only the fields sent are changed; `bio` set to blank clears it.",
@@ -2470,6 +2554,67 @@
           }
         },
         "summary": "Patch Passkey",
+        "tags": [
+          "me"
+        ]
+      }
+    },
+    "/v1/me/preferences": {
+      "get": {
+        "operationId": "me_preferences_get",
+        "responses": {
+          "200": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/Preferences"
+                }
+              }
+            },
+            "description": "Successful Response"
+          }
+        },
+        "summary": "Get Preferences",
+        "tags": [
+          "me"
+        ]
+      },
+      "put": {
+        "description": "Replace all preferences; a field not sent goes back to its default.",
+        "operationId": "me_preferences_put",
+        "requestBody": {
+          "content": {
+            "application/json": {
+              "schema": {
+                "$ref": "#/components/schemas/Preferences"
+              }
+            }
+          },
+          "required": true
+        },
+        "responses": {
+          "200": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/Preferences"
+                }
+              }
+            },
+            "description": "Successful Response"
+          },
+          "422": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/HTTPValidationError"
+                }
+              }
+            },
+            "description": "Validation Error"
+          }
+        },
+        "summary": "Put Preferences",
         "tags": [
           "me"
         ]

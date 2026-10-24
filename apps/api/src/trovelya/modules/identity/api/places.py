@@ -1,4 +1,4 @@
-"""Shipping addresses and search zones: `/v1/me/addresses` and `/v1/me/zones` (P1-T06b)."""
+"""Addresses, search zones and preferences: `/v1/me/{addresses,zones,preferences}` (P1-T06)."""
 
 from typing import Annotated
 from uuid import UUID
@@ -10,6 +10,7 @@ from trovelya.modules.identity.schemas import (
     AddressList,
     AddressOut,
     AddressPatch,
+    Preferences,
     ZoneIn,
     ZoneList,
     ZoneOut,
@@ -83,3 +84,15 @@ async def update_zone(zone_id: UUID, body: ZonePatch, db: Uow, user: Member) -> 
 )
 async def delete_zone(zone_id: UUID, db: Uow, user: Member) -> None:
     await service.delete_zone(db, user=user, zone_id=zone_id)
+
+
+@router.get("/preferences", operation_id="me_preferences_get")
+async def get_preferences(db: Uow, user: Member) -> Preferences:
+    return Preferences.model_validate(await service.get_preferences(db, user=user))
+
+
+@router.put("/preferences", operation_id="me_preferences_put")
+async def put_preferences(body: Preferences, db: Uow, user: Member) -> Preferences:
+    """Replace all preferences; a field not sent goes back to its default."""
+    await service.save_preferences(db, user=user, values=body.model_dump())
+    return Preferences.model_validate(await service.get_preferences(db, user=user))

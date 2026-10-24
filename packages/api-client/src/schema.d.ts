@@ -506,6 +506,27 @@ export interface paths {
         patch: operations["me_passkeys_rename"];
         trace?: never;
     };
+    "/v1/me/preferences": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        /** Get Preferences */
+        get: operations["me_preferences_get"];
+        /**
+         * Put Preferences
+         * @description Replace all preferences; a field not sent goes back to its default.
+         */
+        put: operations["me_preferences_put"];
+        post?: never;
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
     "/v1/me/sessions": {
         parameters: {
             query?: never;
@@ -878,6 +899,42 @@ export interface components {
             place_name: string;
             /** Postal Code */
             postal_code: string;
+        };
+        /**
+         * Preferences
+         * @description Section 7.3. PUT replaces everything: a field not sent goes back to its default.
+         */
+        Preferences: {
+            /** Blocked Brands */
+            blocked_brands?: string[];
+            /** Budget Max Minor */
+            budget_max_minor?: number | null;
+            /**
+             * Feed Discovery Level
+             * @default 50
+             */
+            feed_discovery_level: number;
+            /** Interests */
+            interests?: string[];
+            /** Not Now Until */
+            not_now_until?: string | null;
+            /** Notification Settings */
+            notification_settings?: {
+                [key: string]: {
+                    [key: string]: boolean;
+                };
+            };
+            /** Paused Categories */
+            paused_categories?: string[];
+            /**
+             * Personalised Feed
+             * @default true
+             */
+            personalised_feed: boolean;
+            /** Sizes */
+            sizes?: {
+                [key: string]: string;
+            };
         };
         /**
          * ProfilePatch
@@ -1958,6 +2015,59 @@ export interface operations {
                 };
                 content: {
                     "application/json": components["schemas"]["PasskeyOut"];
+                };
+            };
+            /** @description Validation Error */
+            422: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["HTTPValidationError"];
+                };
+            };
+        };
+    };
+    me_preferences_get: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description Successful Response */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["Preferences"];
+                };
+            };
+        };
+    };
+    me_preferences_put: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        requestBody: {
+            content: {
+                "application/json": components["schemas"]["Preferences"];
+            };
+        };
+        responses: {
+            /** @description Successful Response */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["Preferences"];
                 };
             };
             /** @description Validation Error */
