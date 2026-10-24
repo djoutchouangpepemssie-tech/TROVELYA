@@ -1,0 +1,27 @@
+{
+  "name": "@trovelya/api-client",
+  "version": "0.0.0",
+  "private": true,
+  "type": "module",
+  "exports": {
+    ".": "./src/index.ts"
+  },
+  "scripts": {
+    "generate": "openapi-typescript ../../docs/api/openapi.json -o src/schema.d.ts",
+    "lint": "eslint .",
+    "typecheck": "tsc --noEmit",
+    "test": "vitest run"
+  },
+  "dependencies": {
+    "openapi-fetch": "0.17.0"
+  },
+  "devDependencies": {
+    "@trovelya/config-eslint": "workspace:*",
+    "@trovelya/config-typescript": "workspace:*",
+    "eslint": "10.13.0",
+    "jsdom": "30.1.3",
+    "openapi-typescript": "7.13.0",
+    "typescript": "6.0.3",
+    "vitest": "5.0.5"
+  }
+}

@@ -10,10 +10,11 @@
 root_package = trovelya
 
 [importlinter:contract:layers]
-name = Layers: entry points > modules > core > shared
+name = Layers: scripts > entry points > modules > core > shared
 type = layers
 layers =
-    trovelya.main | trovelya.workers | trovelya.scripts
+    trovelya.scripts
+    trovelya.main | trovelya.workers
     trovelya.modules
     trovelya.core
     trovelya.shared

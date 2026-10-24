@@ -1,0 +1,5 @@
+{
+  "extends": "@trovelya/config-typescript/library.json",
+  "compilerOptions": { "lib": ["ES2023", "DOM"], "noEmit": true },
+  "include": ["src", "vitest.config.ts"]
+}
