@@ -69,3 +69,15 @@ def test_google_client_id_and_secret_go_together() -> None:
         oauth_google_client_secret="gocspx-test-secret",
     )
     assert "gocspx-test-secret" not in repr(settings)
+
+
+def test_apple_settings_go_together() -> None:
+    with pytest.raises(ValidationError):
+        make_settings(oauth_apple_client_id="com.trovelya.web", oauth_apple_team_id="TEAM123456")
+    settings = make_settings(
+        oauth_apple_client_id="com.trovelya.web",
+        oauth_apple_team_id="TEAM123456",
+        oauth_apple_key_id="KEY1234567",
+        oauth_apple_private_key="-----BEGIN PRIVATE KEY-----apple-test-key",
+    )
+    assert "apple-test-key" not in repr(settings)

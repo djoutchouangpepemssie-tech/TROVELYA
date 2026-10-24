@@ -38,6 +38,8 @@ class OidcConfig:
     client_secret: str
     redirect_uri: str
     scope: str = "openid email profile"
+    # Apple returns to the site with a cross-site POST when scopes are requested.
+    response_mode: str | None = None
 
 
 def google_config(*, client_id: str, client_secret: str, redirect_uri: str) -> OidcConfig:
@@ -51,6 +53,24 @@ def google_config(*, client_id: str, client_secret: str, redirect_uri: str) -> O
         client_id=client_id,
         client_secret=client_secret,
         redirect_uri=redirect_uri,
+    )
+
+
+APPLE_ISSUER = "https://appleid.apple.com"
+
+
+def apple_config(*, client_id: str, redirect_uri: str) -> OidcConfig:
+    return OidcConfig(
+        name="apple",
+        issuers=(APPLE_ISSUER,),
+        authorization_endpoint=f"{APPLE_ISSUER}/auth/authorize",
+        token_endpoint=f"{APPLE_ISSUER}/auth/token",
+        jwks_uri=f"{APPLE_ISSUER}/auth/keys",
+        client_id=client_id,
+        client_secret="",  # signed for each exchange, see AppleProvider
+        redirect_uri=redirect_uri,
+        scope="name email",
+        response_mode="form_post",
     )
 
 
@@ -82,19 +102,22 @@ class OidcProvider:
         self._jwks_fetched_at: datetime | None = None
 
     def authorization_url(self, *, state: str, nonce: str, code_challenge: str) -> str:
-        query = urlencode(
-            {
-                "response_type": "code",
-                "client_id": self.config.client_id,
-                "redirect_uri": self.config.redirect_uri,
-                "scope": self.config.scope,
-                "state": state,
-                "nonce": nonce,
-                "code_challenge": code_challenge,
-                "code_challenge_method": "S256",
-            }
-        )
-        return f"{self.config.authorization_endpoint}?{query}"
+        params = {
+            "response_type": "code",
+            "client_id": self.config.client_id,
+            "redirect_uri": self.config.redirect_uri,
+            "scope": self.config.scope,
+            "state": state,
+            "nonce": nonce,
+            "code_challenge": code_challenge,
+            "code_challenge_method": "S256",
+        }
+        if self.config.response_mode is not None:
+            params["response_mode"] = self.config.response_mode
+        return f"{self.config.authorization_endpoint}?{urlencode(params)}"
+
+    def client_secret(self, *, now: datetime) -> str:
+        return self.config.client_secret
 
     async def exchange(
         self, code: str, *, code_verifier: str, nonce: str, now: datetime
@@ -108,7 +131,7 @@ class OidcProvider:
                     "code_verifier": code_verifier,
                     "redirect_uri": self.config.redirect_uri,
                     "client_id": self.config.client_id,
-                    "client_secret": self.config.client_secret,
+                    "client_secret": self.client_secret(now=now),
                 },
                 timeout=10,
             )
@@ -172,4 +195,37 @@ class OidcProvider:
             email=email.lower() if isinstance(email, str) else None,
             email_verified=_flag(claims.get("email_verified")),
             is_private_email=_flag(claims.get("is_private_email")),
+        )
+
+
+APPLE_SECRET_TTL = timedelta(minutes=5)
+
+
+class AppleProvider(OidcProvider):
+    """Apple's client secret is a short-lived ES256 JWT signed with the `.p8` key."""
+
+    def __init__(
+        self,
+        config: OidcConfig,
+        client: httpx.AsyncClient,
+        *,
+        team_id: str,
+        key_id: str,
+        private_key: str,
+    ) -> None:
+        super().__init__(config, client)
+        self._team_id = team_id
+        self._key_id = key_id
+        self._private_key = private_key
+
+    def client_secret(self, *, now: datetime) -> str:
+        claims = {
+            "iss": self._team_id,
+            "iat": int(now.timestamp()),
+            "exp": int((now + APPLE_SECRET_TTL).timestamp()),
+            "aud": APPLE_ISSUER,
+            "sub": self.config.client_id,
+        }
+        return jwt.encode(
+            claims, self._private_key, algorithm="ES256", headers={"kid": self._key_id}
         )

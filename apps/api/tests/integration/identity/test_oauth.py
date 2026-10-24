@@ -15,7 +15,7 @@ from sqlalchemy import text
 from sqlalchemy.ext.asyncio import AsyncSession, async_sessionmaker
 
 from tests.conftest import TEST_PROXY_SECRET, make_settings
-from tests.fake_oidc import FakeIdp, fake_config
+from tests.fake_oidc import FakeIdp, fake_apple_provider, fake_config
 from trovelya.core.csrf import SESSION_COOKIE
 from trovelya.core.email import open_email
 from trovelya.core.flags import FlagService
@@ -62,8 +62,12 @@ def _app(
     app.state.redis = redis_client
     app.state.clock = FixedClock(T0)
     app.state.queue = queue
-    app.state.flags = FlagService(sessionmaker, redis_client, {"auth.oauth_google": enabled})
-    app.state.oidc = {"google": OidcProvider(fake_config(), idp.client())}
+    flags = {"auth.oauth_google": enabled, "auth.oauth_apple": enabled}
+    app.state.flags = FlagService(sessionmaker, redis_client, flags)
+    app.state.oidc = {
+        "google": OidcProvider(fake_config(), idp.client()),
+        "apple": fake_apple_provider(idp.client()),
+    }
     return app
 
 
@@ -168,9 +172,15 @@ async def test_provider_disabled_404(
         assert (await c.get(CALLBACK, params={"code": "c", "state": "s"})).status_code == 404
 
 
-async def test_unknown_or_unconfigured_provider_404(client: AsyncClient) -> None:
-    assert (await client.get("/v1/auth/oauth/apple/start")).status_code == 404
+async def test_unknown_or_unconfigured_provider_404(
+    client: AsyncClient, sessionmaker: async_sessionmaker[AsyncSession], redis_client: Redis
+) -> None:
     assert (await client.get("/v1/auth/oauth/facebook/start")).status_code == 404
+    # Apple without credentials (the default until an Apple Developer account exists).
+    app = create_app(make_settings(web_origin=WEB))
+    app.state.flags = FlagService(sessionmaker, redis_client, {"auth.oauth_apple": True})
+    async with AsyncClient(transport=ASGITransport(app=app), base_url="https://test") as c:
+        assert (await c.get("/v1/auth/oauth/apple/start")).status_code == 404
 
 
 # --- Callback ------------------------------------------------------------------------------
@@ -334,3 +344,83 @@ async def test_consent_cancelled_or_missing_code(client: AsyncClient) -> None:
     )
     assert response.headers["location"] == f"{WEB}/fr/connexion?erreur=oauth_failed"
     assert any(c.startswith(f"{OAUTH_COOKIE}=") for c in response.headers.get_list("set-cookie"))
+
+
+# --- Apple (form_post) ---------------------------------------------------------------------
+
+APPLE_CALLBACK = "/v1/auth/oauth/apple/callback"
+
+
+async def _apple_post(client: AsyncClient, idp: FakeIdp, **claims: Any) -> Response:
+    """Start with Apple, then come back by a cross-site POST (no cookie sent)."""
+    response = await client.get("/v1/auth/oauth/apple/start")
+    params = {k: v[0] for k, v in parse_qs(urlsplit(response.headers["location"]).query).items()}
+    assert params["response_mode"] == "form_post"
+    idp.next_token = idp.id_token(nonce=params["nonce"], **claims)
+    cookie = client.cookies.get(OAUTH_COOKIE) or ""
+    client.cookies.clear()
+    posted = await client.post(
+        APPLE_CALLBACK, data={"code": "c", "state": params["state"], "user": "{}"}
+    )
+    client.cookies.set(OAUTH_COOKIE, cookie)
+    return posted
+
+
+def _finish_path(posted: Response) -> str:
+    assert posted.status_code == 303
+    location = posted.headers["location"]
+    assert location.startswith(f"{WEB}/api/v1/auth/oauth/apple/finish?ref=")
+    return location.removeprefix(f"{WEB}/api")
+
+
+async def test_apple_form_post_then_finish(
+    sessionmaker: async_sessionmaker[AsyncSession], client: AsyncClient, idp: FakeIdp
+) -> None:
+    email = _email()
+    posted = await _apple_post(client, idp, sub=f"apple-{email}", email=email)
+    finished = await client.get(_finish_path(posted))
+    assert finished.headers["location"] == f"{WEB}/fr/bienvenue"
+    assert any(c.startswith(f"{SESSION_COOKIE}=") for c in finished.headers.get_list("set-cookie"))
+    assert (
+        await _scalar(
+            sessionmaker,
+            "SELECT provider FROM auth_identities i JOIN users u ON u.id = i.user_id"
+            " WHERE u.email = :e",
+            e=email,
+        )
+        == "apple"
+    )
+
+
+async def test_apple_finish_ref_single_use_and_cookie_bound(
+    client: AsyncClient, idp: FakeIdp
+) -> None:
+    posted = await _apple_post(client, idp, sub="apple-ref", email=_email())
+    path = _finish_path(posted)
+    client.cookies.clear()  # someone else opening the finish link
+    assert _error(await client.get(path)) == "oauth_failed"
+    assert _error(await client.get(path)) == "oauth_failed"  # and the reference is spent
+    assert _error(await client.get("/v1/auth/oauth/apple/finish?ref=forged")) == "oauth_failed"
+
+
+async def test_apple_private_relay_creates_account(
+    sessionmaker: async_sessionmaker[AsyncSession], client: AsyncClient, idp: FakeIdp
+) -> None:
+    relay = f"{new_id().hex}@privaterelay.appleid.com"
+    posted = await _apple_post(
+        client,
+        idp,
+        sub=f"apple-{relay}",
+        email=relay,
+        email_verified="true",
+        is_private_email="true",
+    )
+    finished = await client.get(_finish_path(posted))
+    assert _error(finished) is None
+    assert await _scalar(sessionmaker, "SELECT count(*) FROM users WHERE email = :e", e=relay) == 1
+
+
+async def test_callback_method_must_match_provider(client: AsyncClient) -> None:
+    assert (await client.get(APPLE_CALLBACK, params={"code": "c", "state": "s"})).status_code == 404
+    assert (await client.post(CALLBACK, data={"code": "c", "state": "s"})).status_code == 404
+    assert (await client.get("/v1/auth/oauth/google/finish?ref=x")).status_code == 404

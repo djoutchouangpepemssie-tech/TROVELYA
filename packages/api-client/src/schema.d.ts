@@ -107,12 +107,33 @@ export interface paths {
         };
         /**
          * Oauth Callback
-         * @description Back from the provider: open a session, then go to onboarding or the home page.
-         *
-         *     Any failure (cancelled consent, replayed or foreign state, invalid token, refused
-         *     account) sends the browser to the sign-in page with an error code.
+         * @description Back from the provider (Google): query string `code` and `state`.
          */
         get: operations["auth_oauth_callback"];
+        put?: never;
+        /**
+         * Oauth Callback Form
+         * @description Back from Apple by a cross-site POST: park the answer, continue with a same-site GET.
+         */
+        post: operations["auth_oauth_callback_form"];
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/v1/auth/oauth/{provider}/finish": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        /**
+         * Oauth Finish
+         * @description Second half of the form_post return: the `Lax` cookie is sent on this same-site GET.
+         */
+        get: operations["auth_oauth_finish"];
         put?: never;
         post?: never;
         delete?: never;
@@ -416,6 +437,70 @@ export interface operations {
             query?: {
                 code?: string | null;
                 state?: string | null;
+            };
+            header?: never;
+            path: {
+                provider: string;
+            };
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description Successful Response */
+            302: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": unknown;
+                };
+            };
+            /** @description Validation Error */
+            422: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["HTTPValidationError"];
+                };
+            };
+        };
+    };
+    auth_oauth_callback_form: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                provider: string;
+            };
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description Successful Response */
+            303: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": unknown;
+                };
+            };
+            /** @description Validation Error */
+            422: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["HTTPValidationError"];
+                };
+            };
+        };
+    };
+    auth_oauth_finish: {
+        parameters: {
+            query?: {
+                ref?: string;
             };
             header?: never;
             path: {

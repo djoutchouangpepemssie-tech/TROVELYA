@@ -5,11 +5,28 @@ import hashlib
 from datetime import UTC, datetime, timedelta
 from urllib.parse import parse_qs, urlsplit
 
+import jwt
 import pytest
 from cryptography.hazmat.primitives.asymmetric import rsa
 
-from tests.fake_oidc import CLIENT_ID, CLIENT_SECRET, REDIRECT_URI, FakeIdp, fake_config
-from trovelya.modules.identity.adapters.oidc import OidcError, OidcProvider, new_pkce
+from tests.fake_oidc import (
+    APPLE_KEY,
+    APPLE_KEY_ID,
+    APPLE_TEAM_ID,
+    CLIENT_ID,
+    CLIENT_SECRET,
+    REDIRECT_URI,
+    FakeIdp,
+    fake_apple_provider,
+    fake_config,
+)
+from trovelya.modules.identity.adapters.oidc import (
+    APPLE_ISSUER,
+    OidcError,
+    OidcProvider,
+    apple_config,
+    new_pkce,
+)
 
 T0 = datetime(2026, 10, 24, 12, 0, tzinfo=UTC)
 
@@ -121,3 +138,33 @@ async def test_missing_id_token(idp: FakeIdp, provider: OidcProvider) -> None:
     idp.next_token = None
     with pytest.raises(OidcError):
         await _exchange(provider)
+
+
+def test_apple_authorization_url_uses_form_post() -> None:
+    config = apple_config(client_id="com.trovelya.web", redirect_uri=REDIRECT_URI)
+    provider = OidcProvider(config, FakeIdp(T0).client())
+    query = parse_qs(
+        urlsplit(provider.authorization_url(state="s", nonce="n", code_challenge="c")).query
+    )
+    assert query["response_mode"] == ["form_post"]
+    assert query["scope"] == ["name email"]
+    assert config.issuers == (APPLE_ISSUER,)
+
+
+async def test_apple_client_secret_is_signed_es256_jwt(idp: FakeIdp) -> None:
+    provider = fake_apple_provider(idp.client())
+    idp.next_token = idp.id_token(email="abc@privaterelay.appleid.com", is_private_email="true")
+    claims = await _exchange(provider)
+    assert claims.is_private_email is True
+    [form] = idp.token_requests
+    secret = form["client_secret"][0]
+    assert jwt.get_unverified_header(secret)["kid"] == APPLE_KEY_ID
+    decoded = jwt.decode(
+        secret,
+        APPLE_KEY.public_key(),
+        algorithms=["ES256"],
+        audience=APPLE_ISSUER,
+        options={"verify_exp": False, "verify_iat": False},
+    )
+    assert decoded["iss"] == APPLE_TEAM_ID and decoded["sub"] == CLIENT_ID
+    assert decoded["exp"] - decoded["iat"] == 300
