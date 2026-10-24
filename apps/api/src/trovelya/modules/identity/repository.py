@@ -539,3 +539,221 @@ async def change_email(db: AsyncSession, *, user_id: UUID, email: str, now: date
     """False for an unknown or blocked account. Raises IntegrityError if the address is taken."""
     params = {"id": user_id, "email": email, "now": now, "blocked": _BLOCKED}
     return (await db.execute(_CHANGE_EMAIL, params)).one_or_none() is not None
+
+
+# --- Addresses and search zones -------------------------------------------------------------
+
+
+_LIST_ADDRESSES = text(
+    "SELECT"
+    " id, label, full_name, line1, line2, postal_code, city, country_code, phone_e164,"
+    " ST_Y(location::geometry) AS lat, ST_X(location::geometry) AS lon,"
+    " is_default_shipping, created_at"
+    " FROM addresses WHERE user_id = :user_id AND deleted_at IS NULL ORDER BY created_at, id"
+)
+
+_COUNT_ADDRESSES = text(
+    "SELECT count(*) FROM addresses WHERE user_id = :user_id AND deleted_at IS NULL"
+)
+
+_CLEAR_DEFAULT_ADDRESS = text(
+    "UPDATE addresses SET is_default_shipping = false"
+    " WHERE user_id = :user_id AND is_default_shipping"
+)
+
+_INSERT_ADDRESS = text(
+    "INSERT INTO addresses (id, user_id, label, full_name, line1, line2, postal_code, city,"
+    " country_code, phone_e164, location, is_default_shipping)"
+    " VALUES (:id, :user_id, :label, :full_name, :line1, :line2, :postal_code, :city,"
+    " :country_code, :phone_e164,"
+    " CASE WHEN CAST(:lat AS double precision) IS NULL THEN NULL"
+    " ELSE ST_SetSRID(ST_MakePoint(CAST(:lon AS double precision),"
+    " CAST(:lat AS double precision)), 4326)::geography END, :is_default_shipping)"
+    " RETURNING"
+    " id, label, full_name, line1, line2, postal_code, city, country_code, phone_e164,"
+    " ST_Y(location::geometry) AS lat, ST_X(location::geometry) AS lon,"
+    " is_default_shipping, created_at"
+)
+
+# One static statement: a field changes only when its `set_*` flag is true.
+_UPDATE_ADDRESS = text(
+    "UPDATE addresses SET"
+    " label = CASE WHEN :set_label THEN CAST(:label AS text) ELSE label END,"
+    " full_name = CASE WHEN :set_full_name THEN CAST(:full_name AS text) ELSE full_name END,"
+    " line1 = CASE WHEN :set_line1 THEN CAST(:line1 AS text) ELSE line1 END,"
+    " line2 = CASE WHEN :set_line2 THEN CAST(:line2 AS text) ELSE line2 END,"
+    " postal_code = CASE WHEN :set_postal_code THEN CAST(:postal_code AS text)"
+    "   ELSE postal_code END,"
+    " city = CASE WHEN :set_city THEN CAST(:city AS text) ELSE city END,"
+    " country_code = CASE WHEN :set_country_code THEN CAST(:country_code AS char(2))"
+    "   ELSE country_code END,"
+    " phone_e164 = CASE WHEN :set_phone_e164 THEN CAST(:phone_e164 AS text)"
+    "   ELSE phone_e164 END,"
+    " location = CASE WHEN :set_location THEN"
+    "   CASE WHEN CAST(:lat AS double precision) IS NULL THEN NULL"
+    "   ELSE ST_SetSRID(ST_MakePoint(CAST(:lon AS double precision),"
+    "   CAST(:lat AS double precision)), 4326)::geography END ELSE location END,"
+    " is_default_shipping = CASE WHEN :set_is_default_shipping"
+    "   THEN CAST(:is_default_shipping AS boolean) ELSE is_default_shipping END"
+    " WHERE id = :id AND user_id = :user_id AND deleted_at IS NULL"
+    " RETURNING"
+    " id, label, full_name, line1, line2, postal_code, city, country_code, phone_e164,"
+    " ST_Y(location::geometry) AS lat, ST_X(location::geometry) AS lon,"
+    " is_default_shipping, created_at"
+)
+
+_DELETE_ADDRESS = text(
+    "UPDATE addresses SET deleted_at = :now, is_default_shipping = false"
+    " WHERE id = :id AND user_id = :user_id AND deleted_at IS NULL RETURNING id"
+)
+
+ADDRESS_FIELDS = (
+    "label",
+    "full_name",
+    "line1",
+    "line2",
+    "postal_code",
+    "city",
+    "country_code",
+    "phone_e164",
+    "is_default_shipping",
+)
+
+
+async def list_addresses(db: AsyncSession, user_id: UUID) -> list[Row[Any]]:
+    return list((await db.execute(_LIST_ADDRESSES, {"user_id": user_id})).all())
+
+
+async def count_addresses(db: AsyncSession, user_id: UUID) -> int:
+    return int(await db.scalar(_COUNT_ADDRESSES, {"user_id": user_id}) or 0)
+
+
+async def clear_default_address(db: AsyncSession, user_id: UUID) -> None:
+    await db.execute(_CLEAR_DEFAULT_ADDRESS, {"user_id": user_id})
+
+
+async def insert_address(db: AsyncSession, *, user_id: UUID, values: dict[str, Any]) -> Row[Any]:
+    params = {"id": new_id(), "user_id": user_id, **values}
+    return (await db.execute(_INSERT_ADDRESS, params)).one()
+
+
+async def update_address(
+    db: AsyncSession, *, user_id: UUID, address_id: UUID, changes: dict[str, Any]
+) -> Row[Any] | None:
+    params: dict[str, Any] = {"id": address_id, "user_id": user_id}
+    for field in ADDRESS_FIELDS:
+        params[f"set_{field}"] = field in changes
+        params[field] = changes.get(field)
+    params["set_location"] = "lat" in changes
+    params["lat"], params["lon"] = changes.get("lat"), changes.get("lon")
+    return (await db.execute(_UPDATE_ADDRESS, params)).one_or_none()
+
+
+async def delete_address(
+    db: AsyncSession, *, user_id: UUID, address_id: UUID, now: datetime
+) -> bool:
+    params = {"id": address_id, "user_id": user_id, "now": now}
+    return (await db.execute(_DELETE_ADDRESS, params)).one_or_none() is not None
+
+
+_LIST_ZONES = text(
+    "SELECT"
+    " id, label, place_name, ST_Y(center::geometry) AS lat,"
+    " ST_X(center::geometry) AS lon, radius_m / 1000 AS radius_km, is_default"
+    " FROM search_zones WHERE user_id = :user_id ORDER BY created_at, id"
+)
+
+_COUNT_ZONES = text("SELECT count(*) FROM search_zones WHERE user_id = :user_id")
+
+_CLEAR_DEFAULT_ZONE = text(
+    "UPDATE search_zones SET is_default = false WHERE user_id = :user_id AND is_default"
+)
+
+_INSERT_ZONE = text(
+    "INSERT INTO search_zones (id, user_id, label, place_name, center, radius_m, is_default)"
+    " VALUES (:id, :user_id, :label, :place_name,"
+    " CASE WHEN CAST(:lat AS double precision) IS NULL THEN NULL"
+    " ELSE ST_SetSRID(ST_MakePoint(CAST(:lon AS double precision),"
+    " CAST(:lat AS double precision)), 4326)::geography END, :radius_m, :is_default)"
+    " RETURNING"
+    " id, label, place_name, ST_Y(center::geometry) AS lat,"
+    " ST_X(center::geometry) AS lon, radius_m / 1000 AS radius_km, is_default"
+)
+
+_UPDATE_ZONE = text(
+    "UPDATE search_zones SET"
+    " label = CASE WHEN :set_label THEN CAST(:label AS text) ELSE label END,"
+    " place_name = CASE WHEN :set_place THEN CAST(:place_name AS text) ELSE place_name END,"
+    " center = CASE WHEN :set_place THEN"
+    " CASE WHEN CAST(:lat AS double precision) IS NULL THEN NULL"
+    " ELSE ST_SetSRID(ST_MakePoint(CAST(:lon AS double precision),"
+    " CAST(:lat AS double precision)), 4326)::geography END ELSE center END,"
+    " radius_m = CASE WHEN :set_radius THEN CAST(:radius_m AS integer) ELSE radius_m END,"
+    " is_default = CASE WHEN :set_default THEN true ELSE is_default END"
+    " WHERE id = :id AND user_id = :user_id RETURNING"
+    " id, label, place_name, ST_Y(center::geometry) AS lat,"
+    " ST_X(center::geometry) AS lon, radius_m / 1000 AS radius_km, is_default"
+)
+
+_ZONE_EXISTS = text(
+    "SELECT EXISTS (SELECT 1 FROM search_zones WHERE id = :id AND user_id = :user_id)"
+)
+
+_DELETE_ZONE = text(
+    "DELETE FROM search_zones WHERE id = :id AND user_id = :user_id RETURNING is_default"
+)
+
+_PROMOTE_OLDEST_ZONE = text(
+    "UPDATE search_zones SET is_default = true WHERE id = ("
+    " SELECT id FROM search_zones WHERE user_id = :user_id ORDER BY created_at, id LIMIT 1)"
+)
+
+
+async def list_zones(db: AsyncSession, user_id: UUID) -> list[Row[Any]]:
+    return list((await db.execute(_LIST_ZONES, {"user_id": user_id})).all())
+
+
+async def count_zones(db: AsyncSession, user_id: UUID) -> int:
+    return int(await db.scalar(_COUNT_ZONES, {"user_id": user_id}) or 0)
+
+
+async def zone_exists(db: AsyncSession, *, user_id: UUID, zone_id: UUID) -> bool:
+    return bool(await db.scalar(_ZONE_EXISTS, {"id": zone_id, "user_id": user_id}))
+
+
+async def clear_default_zone(db: AsyncSession, user_id: UUID) -> None:
+    await db.execute(_CLEAR_DEFAULT_ZONE, {"user_id": user_id})
+
+
+async def insert_zone(db: AsyncSession, *, user_id: UUID, values: dict[str, Any]) -> Row[Any]:
+    params = {"id": new_id(), "user_id": user_id, **values}
+    return (await db.execute(_INSERT_ZONE, params)).one()
+
+
+async def update_zone(
+    db: AsyncSession, *, user_id: UUID, zone_id: UUID, changes: dict[str, Any]
+) -> Row[Any] | None:
+    params: dict[str, Any] = {
+        "id": zone_id,
+        "user_id": user_id,
+        "set_label": "label" in changes,
+        "label": changes.get("label"),
+        "set_place": "place_name" in changes,
+        "place_name": changes.get("place_name"),
+        "lat": changes.get("lat"),
+        "lon": changes.get("lon"),
+        "set_radius": "radius_m" in changes,
+        "radius_m": changes.get("radius_m"),
+        "set_default": bool(changes.get("is_default")),
+    }
+    return (await db.execute(_UPDATE_ZONE, params)).one_or_none()
+
+
+async def delete_zone(db: AsyncSession, *, user_id: UUID, zone_id: UUID) -> bool | None:
+    """None when not found; otherwise whether the deleted zone was the default."""
+    params = {"id": zone_id, "user_id": user_id}
+    return (await db.execute(_DELETE_ZONE, params)).scalar_one_or_none()
+
+
+async def promote_oldest_zone(db: AsyncSession, user_id: UUID) -> None:
+    await db.execute(_PROMOTE_OLDEST_ZONE, {"user_id": user_id})

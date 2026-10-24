@@ -394,6 +394,42 @@ export interface paths {
         patch: operations["me_update"];
         trace?: never;
     };
+    "/v1/me/addresses": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        /** List Addresses */
+        get: operations["me_addresses_list"];
+        put?: never;
+        /** Create Address */
+        post: operations["me_addresses_create"];
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/v1/me/addresses/{address_id}": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        get?: never;
+        put?: never;
+        post?: never;
+        /** Delete Address */
+        delete: operations["me_addresses_delete"];
+        options?: never;
+        head?: never;
+        /** Update Address */
+        patch: operations["me_addresses_update"];
+        trace?: never;
+    };
     "/v1/me/complete-profile": {
         parameters: {
             query?: never;
@@ -525,6 +561,42 @@ export interface paths {
         patch?: never;
         trace?: never;
     };
+    "/v1/me/zones": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        /** List Zones */
+        get: operations["me_zones_list"];
+        put?: never;
+        /** Create Zone */
+        post: operations["me_zones_create"];
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/v1/me/zones/{zone_id}": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        get?: never;
+        put?: never;
+        post?: never;
+        /** Delete Zone */
+        delete: operations["me_zones_delete"];
+        options?: never;
+        head?: never;
+        /** Update Zone */
+        patch: operations["me_zones_update"];
+        trace?: never;
+    };
     "/v1/users/{username}": {
         parameters: {
             query?: never;
@@ -550,6 +622,105 @@ export interface paths {
 export type webhooks = Record<string, never>;
 export interface components {
     schemas: {
+        /** AddressIn */
+        AddressIn: {
+            /** City */
+            city: string;
+            /**
+             * Country Code
+             * @default FR
+             */
+            country_code: string;
+            /** Full Name */
+            full_name: string;
+            /**
+             * Is Default Shipping
+             * @default false
+             */
+            is_default_shipping: boolean;
+            /** Label */
+            label?: string | null;
+            /** Lat */
+            lat?: number | null;
+            /** Line1 */
+            line1: string;
+            /** Line2 */
+            line2?: string | null;
+            /** Lon */
+            lon?: number | null;
+            /** Phone E164 */
+            phone_e164?: string | null;
+            /** Postal Code */
+            postal_code: string;
+        };
+        /** AddressList */
+        AddressList: {
+            /** Data */
+            data: components["schemas"]["AddressOut"][];
+        };
+        /** AddressOut */
+        AddressOut: {
+            /** City */
+            city: string;
+            /** Country Code */
+            country_code: string;
+            /**
+             * Created At
+             * Format: date-time
+             */
+            created_at: string;
+            /** Full Name */
+            full_name: string;
+            /**
+             * Id
+             * Format: uuid
+             */
+            id: string;
+            /** Is Default Shipping */
+            is_default_shipping: boolean;
+            /** Label */
+            label: string | null;
+            /** Lat */
+            lat: number | null;
+            /** Line1 */
+            line1: string;
+            /** Line2 */
+            line2: string | null;
+            /** Lon */
+            lon: number | null;
+            /** Phone E164 */
+            phone_e164: string | null;
+            /** Postal Code */
+            postal_code: string;
+        };
+        /**
+         * AddressPatch
+         * @description Only the fields sent change; `lat` and `lon` go together.
+         */
+        AddressPatch: {
+            /** City */
+            city?: string | null;
+            /** Country Code */
+            country_code?: string | null;
+            /** Full Name */
+            full_name?: string | null;
+            /** Is Default Shipping */
+            is_default_shipping?: boolean | null;
+            /** Label */
+            label?: string | null;
+            /** Lat */
+            lat?: number | null;
+            /** Line1 */
+            line1?: string | null;
+            /** Line2 */
+            line2?: string | null;
+            /** Lon */
+            lon?: number | null;
+            /** Phone E164 */
+            phone_e164?: string | null;
+            /** Postal Code */
+            postal_code?: string | null;
+        };
         /** CompleteProfile */
         CompleteProfile: {
             /**
@@ -821,6 +992,72 @@ export interface components {
             msg: string;
             /** Error Type */
             type: string;
+        };
+        /** ZoneIn */
+        ZoneIn: {
+            /**
+             * Is Default
+             * @default false
+             */
+            is_default: boolean;
+            /** Label */
+            label: string;
+            /** Lat */
+            lat: number;
+            /** Lon */
+            lon: number;
+            /** Place Name */
+            place_name: string;
+            /**
+             * Radius Km
+             * @default 5
+             * @enum {integer}
+             */
+            radius_km: 1 | 2 | 5 | 10 | 25 | 50 | 100;
+        };
+        /** ZoneList */
+        ZoneList: {
+            /** Data */
+            data: components["schemas"]["ZoneOut"][];
+        };
+        /** ZoneOut */
+        ZoneOut: {
+            /**
+             * Id
+             * Format: uuid
+             */
+            id: string;
+            /** Is Default */
+            is_default: boolean;
+            /** Label */
+            label: string;
+            /** Lat */
+            lat: number;
+            /** Lon */
+            lon: number;
+            /** Place Name */
+            place_name: string;
+            /** Radius Km */
+            radius_km: number;
+        };
+        /**
+         * ZonePatch
+         * @description A new place needs `place_name`, `lat` and `lon` together. `is_default` can only be
+         *     set to true: another zone becomes the default by being chosen, never by unsetting.
+         */
+        ZonePatch: {
+            /** Is Default */
+            is_default?: true | null;
+            /** Label */
+            label?: string | null;
+            /** Lat */
+            lat?: number | null;
+            /** Lon */
+            lon?: number | null;
+            /** Place Name */
+            place_name?: string | null;
+            /** Radius Km */
+            radius_km?: (1 | 2 | 5 | 10 | 25 | 50 | 100) | null;
         };
     };
     responses: never;
@@ -1458,6 +1695,123 @@ export interface operations {
             };
         };
     };
+    me_addresses_list: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description Successful Response */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["AddressList"];
+                };
+            };
+        };
+    };
+    me_addresses_create: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        requestBody: {
+            content: {
+                "application/json": components["schemas"]["AddressIn"];
+            };
+        };
+        responses: {
+            /** @description Successful Response */
+            201: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["AddressOut"];
+                };
+            };
+            /** @description Validation Error */
+            422: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["HTTPValidationError"];
+                };
+            };
+        };
+    };
+    me_addresses_delete: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                address_id: string;
+            };
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description Successful Response */
+            204: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content?: never;
+            };
+            /** @description Validation Error */
+            422: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["HTTPValidationError"];
+                };
+            };
+        };
+    };
+    me_addresses_update: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                address_id: string;
+            };
+            cookie?: never;
+        };
+        requestBody: {
+            content: {
+                "application/json": components["schemas"]["AddressPatch"];
+            };
+        };
+        responses: {
+            /** @description Successful Response */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["AddressOut"];
+                };
+            };
+            /** @description Validation Error */
+            422: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["HTTPValidationError"];
+                };
+            };
+        };
+    };
     me_complete_profile: {
         parameters: {
             query?: never;
@@ -1700,6 +2054,123 @@ export interface operations {
                 };
                 content: {
                     "application/json": components["schemas"]["UsernameSuggestion"];
+                };
+            };
+        };
+    };
+    me_zones_list: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description Successful Response */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ZoneList"];
+                };
+            };
+        };
+    };
+    me_zones_create: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        requestBody: {
+            content: {
+                "application/json": components["schemas"]["ZoneIn"];
+            };
+        };
+        responses: {
+            /** @description Successful Response */
+            201: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ZoneOut"];
+                };
+            };
+            /** @description Validation Error */
+            422: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["HTTPValidationError"];
+                };
+            };
+        };
+    };
+    me_zones_delete: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                zone_id: string;
+            };
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description Successful Response */
+            204: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content?: never;
+            };
+            /** @description Validation Error */
+            422: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["HTTPValidationError"];
+                };
+            };
+        };
+    };
+    me_zones_update: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                zone_id: string;
+            };
+            cookie?: never;
+        };
+        requestBody: {
+            content: {
+                "application/json": components["schemas"]["ZonePatch"];
+            };
+        };
+        responses: {
+            /** @description Successful Response */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ZoneOut"];
+                };
+            };
+            /** @description Validation Error */
+            422: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["HTTPValidationError"];
                 };
             };
         };

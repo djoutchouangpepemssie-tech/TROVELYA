@@ -189,3 +189,131 @@ class PlaceOut(BaseModel):
 
 class PlaceList(BaseModel):
     data: list[PlaceOut]
+
+
+RADIUS_KM = (1, 2, 5, 10, 25, 50, 100)
+RadiusKm = Literal[1, 2, 5, 10, 25, 50, 100]
+
+
+def _check_point(model: BaseModel, lat: float | None, lon: float | None) -> None:
+    sent = model.model_fields_set
+    if ("lat" in sent) != ("lon" in sent) or (lat is None) != (lon is None):
+        raise ValueError("lat and lon go together")
+
+
+class AddressIn(BaseModel):
+    model_config = ConfigDict(extra="forbid")
+
+    label: str | None = Field(default=None, max_length=40)
+    full_name: str = Field(min_length=1, max_length=100)
+    line1: str = Field(min_length=1, max_length=200)
+    line2: str | None = Field(default=None, max_length=200)
+    postal_code: str = Field(min_length=1, max_length=20)
+    city: str = Field(min_length=1, max_length=100)
+    country_code: str = Field(default="FR", pattern=r"^[A-Z]{2}$")
+    phone_e164: str | None = Field(default=None, pattern=r"^\+[1-9][0-9]{6,14}$")
+    lat: float | None = Field(default=None, ge=-90, le=90)
+    lon: float | None = Field(default=None, ge=-180, le=180)
+    is_default_shipping: bool = False
+
+    @model_validator(mode="after")
+    def _point(self) -> "AddressIn":
+        _check_point(self, self.lat, self.lon)
+        return self
+
+
+class AddressPatch(BaseModel):
+    """Only the fields sent change; `lat` and `lon` go together."""
+
+    model_config = ConfigDict(extra="forbid")
+
+    label: str | None = Field(default=None, max_length=40)
+    full_name: str | None = Field(default=None, min_length=1, max_length=100)
+    line1: str | None = Field(default=None, min_length=1, max_length=200)
+    line2: str | None = Field(default=None, max_length=200)
+    postal_code: str | None = Field(default=None, min_length=1, max_length=20)
+    city: str | None = Field(default=None, min_length=1, max_length=100)
+    country_code: str | None = Field(default=None, pattern=r"^[A-Z]{2}$")
+    phone_e164: str | None = Field(default=None, pattern=r"^\+[1-9][0-9]{6,14}$")
+    lat: float | None = Field(default=None, ge=-90, le=90)
+    lon: float | None = Field(default=None, ge=-180, le=180)
+    is_default_shipping: bool | None = None
+
+    @model_validator(mode="after")
+    def _required(self) -> "AddressPatch":
+        for name in ("full_name", "line1", "postal_code", "city", "country_code"):
+            if name in self.model_fields_set and getattr(self, name) is None:
+                raise ValueError(f"{name} cannot be null")
+        _check_point(self, self.lat, self.lon)
+        return self
+
+
+class AddressOut(BaseModel):
+    id: UUID
+    label: str | None
+    full_name: str
+    line1: str
+    line2: str | None
+    postal_code: str
+    city: str
+    country_code: str
+    phone_e164: str | None
+    lat: float | None
+    lon: float | None
+    is_default_shipping: bool
+    created_at: datetime
+
+
+class AddressList(BaseModel):
+    data: list[AddressOut]
+
+
+class ZoneIn(BaseModel):
+    model_config = ConfigDict(extra="forbid")
+
+    label: str = Field(min_length=1, max_length=40)
+    place_name: str = Field(min_length=1, max_length=80)  # from /v1/geo: "Lyon 7e"
+    lat: float = Field(ge=-90, le=90)
+    lon: float = Field(ge=-180, le=180)
+    radius_km: RadiusKm = 5
+    is_default: bool = False
+
+
+class ZonePatch(BaseModel):
+    """A new place needs `place_name`, `lat` and `lon` together. `is_default` can only be
+    set to true: another zone becomes the default by being chosen, never by unsetting."""
+
+    model_config = ConfigDict(extra="forbid")
+
+    label: str | None = Field(default=None, min_length=1, max_length=40)
+    place_name: str | None = Field(default=None, min_length=1, max_length=80)
+    lat: float | None = Field(default=None, ge=-90, le=90)
+    lon: float | None = Field(default=None, ge=-180, le=180)
+    radius_km: RadiusKm | None = None
+    is_default: Literal[True] | None = None
+
+    @model_validator(mode="after")
+    def _place(self) -> "ZonePatch":
+        place = {"place_name", "lat", "lon"} & self.model_fields_set
+        if place and (
+            place != {"place_name", "lat", "lon"} or None in (self.place_name, self.lat, self.lon)
+        ):
+            raise ValueError("place_name, lat and lon go together")
+        for name in ("label", "radius_km", "is_default"):
+            if name in self.model_fields_set and getattr(self, name) is None:
+                raise ValueError(f"{name} cannot be null")
+        return self
+
+
+class ZoneOut(BaseModel):
+    id: UUID
+    label: str
+    place_name: str
+    lat: float
+    lon: float
+    radius_km: int
+    is_default: bool
+
+
+class ZoneList(BaseModel):
+    data: list[ZoneOut]
