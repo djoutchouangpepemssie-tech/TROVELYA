@@ -20,6 +20,7 @@ _PLACEHOLDER_SETTINGS = Settings(
     database_url="postgresql+asyncpg://contract:contract@localhost/contract",
     redis_url="redis://localhost:6379/0",
     secret_key=SecretStr("contract-export-only-" + "x" * 64),
+    proxy_shared_secret=SecretStr("contract-export-only-" + "y" * 32),
     web_origin="https://trovelya.com",
     admin_origin="https://admin.trovelya.com",
 )
