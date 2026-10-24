@@ -15,13 +15,12 @@ from trovelya.modules.identity.service import (
     CurrentUser,
     IssuedSession,
     SessionPolicy,
-    current_user,
     get_clock,
     get_session_policy,
     limit_magic_link_requests,
     set_session_cookie,
 )
-from trovelya.modules.identity.service.auth import Uow
+from trovelya.modules.identity.service.auth import Uow, completed_user
 from trovelya.modules.identity.service.passkeys import RelyingParty, step_up_options
 from trovelya.modules.identity.service.step_up import (
     request_step_up_link,
@@ -32,7 +31,7 @@ from trovelya.shared.clock import Clock
 
 router = APIRouter(prefix="/v1/auth/step-up", tags=["auth"])
 
-Me = Annotated[CurrentUser, Depends(current_user)]
+Me = Annotated[CurrentUser, Depends(completed_user)]
 ClockDep = Annotated[Clock, Depends(get_clock)]
 PolicyDep = Annotated[SessionPolicy, Depends(get_session_policy)]
 

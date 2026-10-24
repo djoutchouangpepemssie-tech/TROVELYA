@@ -74,10 +74,18 @@ async def current_user(
 DEFAULT_STEP_UP_MAX_AGE_H = 12
 
 
+async def completed_user(user: Annotated[CurrentUser, Depends(current_user)]) -> CurrentUser:
+    """Every signed-in route except the account itself, profile completion, sessions,
+    consents, erasure and sign-out: `403 profile_incomplete` until the profile is completed."""
+    if not user.profile_completed:
+        raise AppError(ErrorCode.PROFILE_INCOMPLETE, 403)
+    return user
+
+
 async def recent_mfa_user(
     request: Request,
     db: Uow,
-    user: Annotated[CurrentUser, Depends(current_user)],
+    user: Annotated[CurrentUser, Depends(completed_user)],
 ) -> CurrentUser:
     """For sensitive actions (13.2): a strong sign-in less than `auth.step_up_max_age_h` old.
 

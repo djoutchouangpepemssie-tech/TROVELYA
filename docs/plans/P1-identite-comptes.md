@@ -56,6 +56,8 @@
 | E12 | 3.2 « rôle au moins équivalent » | Hiérarchie non définie. | Q17. | — |
 | E13 | Avatar (7.3 `avatar_media_id`) | Pas de stockage d'images avant P2. | Avatar à initiales ; téléversement en P2 (colonne déjà présente, nulle). | — |
 | E14 | Âge (8.18) | Seule l'année est connue : quelqu'un né en 2011 a 14 ou 15 ans en 2026. | **Règle stricte (B), décidée par Arcel** : âge retenu = année courante − année de naissance − 1 (on suppose l'anniversaire pas encore passé). Inscription si âge ≥ 15, achat, vente et enchères si âge ≥ 18 ; peut refuser une personne qui a déjà l'âge depuis quelques mois. | — |
+| E15 | 11.1 verrou optimiste (`version`) | `users` n'a pas de colonne `version`. | Migration 0006 : `users.version` (incrémentée par un déclencheur à chaque mise à jour), valeur de `If-Match` de `PATCH /v1/me`. | — |
+| E16 | 14 « chaque version acceptée [des CGU] enregistrée (`consents.policy_version`) » | `consents.purpose` n'accepte pas les CGU. | Migration 0006 : `purpose` accepte aussi `terms` ; la finalisation du profil enregistre `terms` + `policy_version` + `source='signup'`. | — |
 
 ### 0.3 ADR produits par cette phase
 
@@ -290,6 +292,13 @@ Parallélisables : T03 et T04 après T02c ; T06, T09a et T10 après T05 ; T08 d�
 
 - [ ] Tests d'abord : `test_complete_profile_ok` ; `test_too_young_rejected_and_nothing_kept` ; `test_age_rule_b` (en 2026 : 2010 accepté, 2011 refusé ; 2007 majeur, 2008 mineur) ; `test_complete_profile_username_race` et `test_username_case_insensitive` (point de revue 2) ; `test_incomplete_profile_blocks_private_routes` ; `test_patch_requires_if_match` (412) ; `test_change_email_requires_step_up` ; `test_change_email_flow_emits_event` ; `test_public_profile_has_no_email_or_location` ; `test_public_profile_404_when_erasure_requested` ; `test_birth_year_not_in_logs`.
 - [ ] ÉCHEC → implémenter → vert. Commit `feat(identity): private and public profiles, profile completion and email change`.
+
+**Réalisation (24/10/2026) :** découpée en T05a (migration 0006, `GET /v1/me`, finalisation, suggestion de pseudo, `completed_user`), T05b (`PATCH /v1/me` avec `If-Match`, profil public) et T05c (changement d'e-mail).
+- Moins de 15 ans : le compte non finalisé est effacé (sessions, identités Google/Apple, préférences, consentements, liens magiques de l'adresse, ligne `users`) et la réponse `400 too_young` efface le cookie ; elle n'est pas levée en exception pour que l'effacement soit validé avec la requête. Les autres tables liées à un compte ne peuvent rien contenir avant la finalisation (routes réservées aux profils complétés).
+- Finaliser deux fois : `409 profile_already_completed` (l'année de naissance ne se change pas ainsi).
+- Le pseudo est mis en minuscules ; deux finalisations simultanées sur le même pseudo : l'une réussit, l'autre reçoit `409 username_taken`.
+- `terms_version` est enregistré tel quel (pas de version de CGU de référence avant les textes de l'avocat, D2).
+- Drapeaux exposés par `GET /v1/me` : `auth.passkeys`, `auth.oauth_google`, `auth.oauth_apple`.
 
 ### P1-T06 — Adresses, zones de recherche, géocodage, préférences
 

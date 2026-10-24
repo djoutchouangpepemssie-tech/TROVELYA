@@ -38,6 +38,10 @@ class ErrorCode(StrEnum):
     OAUTH_EMAIL_UNVERIFIED = "oauth_email_unverified"
     PASSKEY_INVALID = "passkey_invalid"
     STEP_UP_REQUIRED = "step_up_required"
+    TOO_YOUNG = "too_young"
+    USERNAME_TAKEN = "username_taken"
+    PROFILE_INCOMPLETE = "profile_incomplete"
+    PROFILE_ALREADY_COMPLETED = "profile_already_completed"
 
 
 # French titles by default (section 2); translation by Accept-Language arrives with P1.
@@ -63,6 +67,10 @@ _TITLES: dict[ErrorCode, str] = {
     ErrorCode.OAUTH_EMAIL_UNVERIFIED: "Adresse e-mail non vérifiée chez le fournisseur",
     ErrorCode.PASSKEY_INVALID: "Clé d'accès refusée",
     ErrorCode.STEP_UP_REQUIRED: "Confirmez votre identité pour continuer",
+    ErrorCode.TOO_YOUNG: "Âge minimal non atteint",
+    ErrorCode.USERNAME_TAKEN: "Pseudo déjà utilisé",
+    ErrorCode.PROFILE_INCOMPLETE: "Profil à compléter",
+    ErrorCode.PROFILE_ALREADY_COMPLETED: "Profil déjà complété",
 }
 
 _STATUS_CODES: dict[int, ErrorCode] = {
