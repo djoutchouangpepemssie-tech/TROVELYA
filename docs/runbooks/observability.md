@@ -10,7 +10,8 @@
 
 ## Données personnelles (RGPD)
 
-- Les journaux passent tous par `redact_pii` : e-mails, téléphones, IBAN, jetons `Bearer` sont
+- Les journaux passent tous par `redact_pii` : e-mails, téléphones, IBAN, jetons `Bearer` et
+  adresses IP (v4 et v6) sont
   remplacés par `[REDACTED]`, ainsi que la valeur de toute clé contenant `password`, `token`,
   `secret`, `authorization`, `cookie`, `email`, `phone`, `iban` ou `address`. Les journaux
   d'uvicorn et d'arq passent par le même filtre.
@@ -18,6 +19,10 @@
   paramètres de requête, les données SQL et les variables locales ; seuls les en-têtes
   `x-request-id` et `content-type` sont envoyés. Sentry (web) : `sendDefaultPii: false`, pas de
   rejeu de session.
+- Sentry (API) : `before_breadcrumb`, `before_send` et `before_send_transaction` appliquent le même
+  filtre que les journaux ; les lignes du journal d'accès d'uvicorn ne sont jamais envoyées.
+- Limiteur de débit : la clé Redis contient une empreinte HMAC-SHA-256 de l'IP (clé secrète du
+  serveur), jamais l'adresse elle-même.
 
 ## Vérifier Sentry de bout en bout
 

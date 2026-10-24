@@ -86,3 +86,14 @@ def test_stdlib_logs_are_json_and_redacted(capsys: pytest.CaptureFixture[str]) -
     line = _last_json_line(out)
     assert "jean.dupont@gmail.com" not in json.dumps(line)
     assert line["logger"] == "uvicorn.access"
+
+
+@pytest.mark.parametrize("ip", ["92.170.253.181", "2a01:e0a:1f5:8c40::7b3"])
+def test_redact_ip_addresses(ip: str) -> None:
+    event = redact_pii(None, "info", {"event": f'{ip}:0 - "GET /v1/x HTTP/1.1" 500'})
+    assert ip not in str(event["event"])
+
+
+@pytest.mark.parametrize("text", ["11:55:25", "CPython 3.12.15", "req_01a16dc406fe7777"])
+def test_times_and_versions_are_not_mistaken_for_ips(text: str) -> None:
+    assert redact_pii(None, "info", {"event": text}) == {"event": text}

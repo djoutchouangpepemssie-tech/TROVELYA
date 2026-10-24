@@ -67,7 +67,9 @@ def create_app(
     app.add_middleware(IdempotencyMiddleware)
     app.add_middleware(CsrfMiddleware, secret=settings.secret_key.get_secret_value())
     app.add_middleware(
-        AnonymousRateLimitMiddleware, per_minute=settings.rate_limit_anonymous_per_minute
+        AnonymousRateLimitMiddleware,
+        per_minute=settings.rate_limit_anonymous_per_minute,
+        secret=settings.secret_key.get_secret_value(),
     )
     app.add_middleware(RequestIdMiddleware)
     app.include_router(health_router)
