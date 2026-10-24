@@ -3,13 +3,15 @@
 from functools import lru_cache
 from typing import Literal
 
-from pydantic import Field, SecretStr, field_validator
+from pydantic import Field, SecretStr, field_validator, model_validator
 from pydantic_settings import BaseSettings, SettingsConfigDict
 
 Environment = Literal["local", "preview", "staging", "production", "test"]
 
 MIN_SECRET_KEY_LENGTH = 64
 MIN_PROXY_SECRET_LENGTH = 32
+MIN_FIELD_KEY_LENGTH = 32
+EmailProvider = Literal["smtp", "resend", "fake"]
 
 
 def asyncpg_url(url: str) -> str:
@@ -31,6 +33,13 @@ class Settings(BaseSettings):
     secret_key: SecretStr = Field(min_length=MIN_SECRET_KEY_LENGTH)
     # Shared with the web relay; authenticates the client IP it forwards (ADR-0015).
     proxy_shared_secret: SecretStr = Field(min_length=MIN_PROXY_SECRET_LENGTH)
+    # Application-level encryption (shared/crypto.py): e-mail jobs, GDPR exports.
+    field_encryption_key: SecretStr = Field(min_length=MIN_FIELD_KEY_LENGTH)
+    # Transactional e-mail (ADR-0017): smtp (Mailpit), resend (staging), fake (tests).
+    email_provider: EmailProvider = "fake"
+    email_api_key: SecretStr | None = None
+    email_from: str = "TROVÉLYA <no-reply@localhost>"
+    smtp_url: str = "smtp://localhost:1025"
     web_origin: str
     admin_origin: str
     sentry_dsn: str | None = None
@@ -42,6 +51,12 @@ class Settings(BaseSettings):
     session_ttl_days: int = Field(default=30, ge=1)
     session_idle_days: int = Field(default=14, ge=1)
     admin_session_ttl_hours: int = Field(default=12, ge=1)
+
+    @model_validator(mode="after")
+    def _resend_needs_a_key(self) -> "Settings":
+        if self.email_provider == "resend" and self.email_api_key is None:
+            raise ValueError("EMAIL_API_KEY is required when EMAIL_PROVIDER=resend")
+        return self
 
     @field_validator("database_url")
     @classmethod

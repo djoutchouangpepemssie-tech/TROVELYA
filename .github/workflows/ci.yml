@@ -183,6 +183,7 @@ jobs:
           REDIS_URL=redis://redis:6379/0
           SECRET_KEY=ci-only-secret-key-ci-only-secret-key-ci-only-secret-key-0123456789
           PROXY_SHARED_SECRET=ci-only-proxy-secret-ci-only-proxy-secret
+          FIELD_ENCRYPTION_KEY=ci-only-field-key-ci-only-field-key-0123
           WEB_ORIGIN=https://example.vercel.app
           ADMIN_ORIGIN=https://example.vercel.app
           ENV

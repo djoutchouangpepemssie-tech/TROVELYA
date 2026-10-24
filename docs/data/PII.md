@@ -41,6 +41,8 @@ P0 ne contenait que des données techniques. Les comptes arrivent en P1 (module 
 | Lieu | Donnée | Traitement |
 |---|---|---|
 | Journaux Railway (API, worker) | Adresse IP du visiteur, chemins appelés | IP **masquées** (`[REDACTED]`) par `redact_pii`, comme les e-mails, téléphones, IBAN et jetons ; conservation selon l'offre Railway |
+| Redis (file du worker) | Adresse e-mail, contenu des e-mails (dont liens de connexion) | **Chiffrés** (AES-256-GCM, clé dérivée de `FIELD_ENCRYPTION_KEY`) ; supprimés par arq après l'envoi |
+| Resend (sous-traitant, ADR-0017) | Adresse e-mail du destinataire, contenu des e-mails | Envoi des e-mails transactionnels. **Métadonnées stockées aux États-Unis** (clauses contractuelles types) : écart temporaire, seul Arcel reçoit des e-mails avant le lancement ; bascule vers un fournisseur hébergé dans l'UE avant le lancement public |
 | Redis (limiteur de débit) | Adresse IP | Jamais stockée : seule une empreinte HMAC-SHA-256 (clé secrète du serveur) sert de clé, avec une expiration de 60 s |
 | Sentry (API et web) | Erreurs et traces | Ni identité, ni IP, ni cookies, ni en-têtes (hors `x-request-id` et `content-type`), ni corps, ni paramètres d'URL, ni variables locales ; « Prevent Storing of IP Addresses » activé côté Sentry. La localisation affichée est celle du serveur qui envoie |
 | Cookie `NEXT_LOCALE` (web) | Langue choisie | Cookie fonctionnel, pas de consentement requis |

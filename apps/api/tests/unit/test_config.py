@@ -48,3 +48,14 @@ def test_short_proxy_secret_fails() -> None:
 
 def test_proxy_secret_is_not_printed() -> None:
     assert "p" * 48 not in repr(make_settings())
+
+
+def test_resend_requires_an_api_key() -> None:
+    with pytest.raises(ValidationError, match="EMAIL_API_KEY"):
+        make_settings(email_provider="resend")
+    assert make_settings(email_provider="resend", email_api_key="re_x").email_provider == "resend"
+
+
+def test_short_field_encryption_key_fails() -> None:
+    with pytest.raises(ValidationError):
+        make_settings(field_encryption_key="too-short")

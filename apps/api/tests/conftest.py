@@ -9,6 +9,7 @@ from trovelya.main import create_app
 
 TEST_SECRET = "s" * 64
 TEST_PROXY_SECRET = "p" * 48
+TEST_FIELD_KEY = "e" * 64
 
 
 def make_settings(**overrides: object) -> Settings:
@@ -18,6 +19,7 @@ def make_settings(**overrides: object) -> Settings:
         "redis_url": "redis://localhost:6379/0",
         "secret_key": TEST_SECRET,
         "proxy_shared_secret": TEST_PROXY_SECRET,
+        "field_encryption_key": TEST_FIELD_KEY,
         "web_origin": "http://localhost:3000",
         "admin_origin": "http://localhost:3001",
     }
