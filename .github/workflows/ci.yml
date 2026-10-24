@@ -63,7 +63,8 @@ jobs:
       - run: uv run ruff format --check
       - run: uv run pyright
       - run: uv run lint-imports
-      - run: uv run pytest
+      - name: Tests with global coverage (P0 gate, 85 %)
+        run: uv run pytest --cov=trovelya --cov-report=term --cov-fail-under=85
       - name: Money must stay fully covered (P0 gate G7)
         run: uv run pytest -q tests/unit/test_money.py --cov=trovelya.shared.money --cov-fail-under=100
 
@@ -135,3 +136,61 @@ jobs:
           for i in $(seq 1 30); do curl -fsS localhost:8000/ready && break; sleep 2; done
           curl -fsS localhost:8000/health
           curl -fsS localhost:8000/ready
+
+  security:
+    name: security
+    runs-on: ubuntu-latest
+    timeout-minutes: 20
+    steps:
+      - uses: actions/checkout@v5
+        with:
+          fetch-depth: 0 # gitleaks scans the full history
+      - uses: astral-sh/setup-uv@v6
+      - uses: pnpm/action-setup@v4
+      - uses: actions/setup-node@v4
+        with:
+          node-version-file: .nvmrc
+          cache: pnpm
+      - name: Semgrep (public rulesets + .semgrep.yml, blocking on ERROR)
+        env:
+          SEMGREP_SEND_METRICS: "off"
+        run: >-
+          uvx semgrep==1.182.1 scan --error --severity ERROR
+          --config p/python --config p/typescript --config p/secrets --config p/owasp-top-ten
+          --config .semgrep.yml
+          --exclude .claude
+      - name: Gitleaks (full git history)
+        env:
+          GITLEAKS_VERSION: 8.28.0
+        run: |
+          base="https://github.com/gitleaks/gitleaks/releases/download/v${GITLEAKS_VERSION}"
+          curl -fsSLO "${base}/gitleaks_${GITLEAKS_VERSION}_linux_x64.tar.gz"
+          curl -fsSLO "${base}/gitleaks_${GITLEAKS_VERSION}_checksums.txt"
+          sha256sum --check --ignore-missing "gitleaks_${GITLEAKS_VERSION}_checksums.txt"
+          tar xzf "gitleaks_${GITLEAKS_VERSION}_linux_x64.tar.gz" gitleaks
+          ./gitleaks git --config .gitleaks.toml --redact --no-banner .
+      - name: pip-audit (Python dependencies, dev included)
+        working-directory: apps/api
+        run: |
+          uv export --locked --all-groups --no-emit-project -o "$RUNNER_TEMP/requirements.txt"
+          uvx pip-audit==2.10.1 --strict --disable-pip -r "$RUNNER_TEMP/requirements.txt"
+      - name: pnpm audit (high and critical)
+        run: pnpm audit --audit-level high
+
+  sbom:
+    name: sbom
+    if: github.event_name == 'push' && github.ref == 'refs/heads/main'
+    runs-on: ubuntu-latest
+    timeout-minutes: 15
+    permissions:
+      contents: read
+    steps:
+      - uses: actions/checkout@v5
+      - name: CycloneDX SBOM of the repository (pnpm-lock.yaml and uv.lock)
+        uses: anchore/sbom-action@v0
+        with:
+          path: .
+          format: cyclonedx-json
+          output-file: sbom.cdx.json
+          artifact-name: sbom-${{ github.sha }}.cdx.json
+          upload-release-assets: false

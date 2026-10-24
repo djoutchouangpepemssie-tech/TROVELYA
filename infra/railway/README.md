@@ -30,7 +30,16 @@ toute modification faite dans le tableau de bord doit y être reportée.
 
 `DATABASE_URL` peut être en `postgresql://` : l'application et Alembic passent d'eux-mêmes au pilote asyncpg.
 
-## Worker arq (à créer)
+## `worker` — tâches de fond arq
 
-Même image et mêmes variables que l'API, commande de démarrage
-`arq trovelya.workers.main.WorkerSettings`, sans healthcheck HTTP ni domaine public.
+| Réglage | Valeur |
+| --- | --- |
+| Source | dépôt GitHub, branche `main` |
+| Répertoire racine | `/apps/api` (même image que l'API) |
+| Dockerfile | `Dockerfile` |
+| Commande de démarrage | `arq trovelya.workers.main.WorkerSettings` |
+| Chemins surveillés | `/apps/api/**` |
+| Redémarrage | `ON_FAILURE`, 10 essais |
+| Variables | références vers l'API : `${{TROVELYA.ENV}}`, `${{TROVELYA.SECRET_KEY}}`, `${{TROVELYA.WEB_ORIGIN}}`, `${{TROVELYA.ADMIN_ORIGIN}}`, `${{TROVELYA.SENTRY_DSN}}` ; `DATABASE_URL=${{pg.DATABASE_URL}}`, `REDIS_URL=${{Redis.REDIS_URL}}` |
+
+Pas de domaine public ni de healthcheck HTTP : les migrations restent l'affaire de l'API (commande avant déploiement).

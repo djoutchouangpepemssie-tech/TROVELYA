@@ -1,0 +1,15 @@
+# gitleaks : règles par défaut, plus les exceptions documentées ci-dessous.
+title = "TROVÉLYA"
+
+[extend]
+useDefault = true
+
+[allowlist]
+description = "Valeurs factices connues (tests et CI), jamais des secrets réels"
+paths = [
+  '''(^|/)pnpm-lock\.yaml$''',
+  '''(^|/)uv\.lock$''',
+]
+regexes = [
+  '''ci-only-secret-key-[a-z0-9-]+''',
+]
