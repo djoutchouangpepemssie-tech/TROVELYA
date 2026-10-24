@@ -7,6 +7,8 @@ from alembic import context
 from sqlalchemy.engine import Connection
 from sqlalchemy.ext.asyncio import create_async_engine
 
+from trovelya.core.config import asyncpg_url
+
 config = context.config
 
 
@@ -14,7 +16,7 @@ def _database_url() -> str:
     url = config.get_main_option("sqlalchemy.url") or os.environ.get("DATABASE_URL")
     if not url:
         raise RuntimeError("DATABASE_URL is not set")
-    return url
+    return asyncpg_url(url)
 
 
 def _run(connection: Connection) -> None:
