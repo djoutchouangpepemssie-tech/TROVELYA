@@ -9,9 +9,9 @@ rules:
     languages: [python]
     paths:
       include:
-        - apps/api/src/trovelya/shared/money.py
-        - apps/api/src/trovelya/modules/ledger/
-        - apps/api/src/trovelya/modules/orders/
+        - /apps/api/src/trovelya/shared/money.py
+        - /apps/api/src/trovelya/modules/ledger/
+        - /apps/api/src/trovelya/modules/orders/
     pattern-either:
       - pattern: float(...)
       - pattern: "$X: float"
@@ -25,8 +25,8 @@ rules:
     languages: [typescript]
     paths:
       include:
-        - apps/web/
-        - packages/ui/
+        - /apps/web/
+        - /packages/ui/
     pattern: <$EL dangerouslySetInnerHTML={...} />
 
   - id: trovelya-no-raw-sql-format
@@ -36,10 +36,10 @@ rules:
     languages: [python]
     paths:
       include:
-        - apps/api/src/
+        - /apps/api/src/
       exclude:
-        - apps/api/src/trovelya/core/migrations/
-        - apps/api/src/trovelya/modules/*/migrations/
+        - /apps/api/src/trovelya/core/migrations/
+        - /apps/api/src/trovelya/modules/*/migrations/
     pattern-either:
       - pattern: sqlalchemy.text(f"...")
       - pattern: text(f"...")
