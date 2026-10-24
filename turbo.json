@@ -18,6 +18,12 @@
     "dev": {
       "cache": false,
       "persistent": true
+    },
+    "@trovelya/web#typecheck": {
+      "dependsOn": ["^build", "@trovelya/web#lint"]
+    },
+    "@trovelya/web#lint": {
+      "dependsOn": ["^build", "@trovelya/web#build"]
     }
   }
 }
