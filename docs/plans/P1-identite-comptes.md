@@ -299,6 +299,7 @@ Parallélisables : T03 et T04 après T02c ; T06, T09a et T10 après T05 ; T08 d�
 - Le pseudo est mis en minuscules ; deux finalisations simultanées sur le même pseudo : l'une réussit, l'autre reçoit `409 username_taken`.
 - `terms_version` est enregistré tel quel (pas de version de CGU de référence avant les textes de l'avocat, D2).
 - Drapeaux exposés par `GET /v1/me` : `auth.passkeys`, `auth.oauth_google`, `auth.oauth_apple`.
+- T05b : `PATCH /v1/me` exige un profil complété et `If-Match: <version>` (`428 precondition_required` sans l'en-tête, `412 precondition_failed` si la version est dépassée) ; champs inconnus refusés (l'e-mail se change par T05c) ; `bio` vide l'efface ; `locale` limité à `fr-FR` tant que le site ne parle que français. Profil public `GET /v1/users/{username}` (pseudo insensible à la casse) : 404 aussi pour un profil non finalisé ; `member_since` est la date d'inscription (heure de Paris).
 
 ### P1-T06 — Adresses, zones de recherche, géocodage, préférences
 
