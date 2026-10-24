@@ -56,7 +56,7 @@ pnpm turbo run lint typecheck test build                     # comme la CI (côt
 | G9 | Page web rapide, accessible, traduite, installable | ✅ | Lighthouse mobile (accueil) : Performance 99, Accessibilité 100, Best Practices 100, SEO 100 ; Playwright + axe : 13 tests, 0 violation, manifeste installable ; `lang="fr"`, textes issus de `fr.json`. |
 | G10 | Sécurité web | ✅ | En-têtes de staging (24/10 12:35) : CSP à nonce par requête avec `strict-dynamic` et `frame-ancestors 'none'`, HSTS `max-age=63072000; includeSubDomains; preload`, `X-Frame-Options: DENY`, `nosniff`. |
 | G11 | Observabilité | ✅ partiel | Erreur volontaire visible dans Sentry (TROVELYA-API-1, staging), sans donnée personnelle ; moniteur de disponibilité actif sur le site de production (Sentry, 1 min). Moniteur de l'API impossible sur `*.railway.app` (limite Sentry du domaine partagé) : à créer sur `api.trovelya.com` dès l'achat du domaine. |
-| G12 | Production déployable | voir PR de documentation | Tag `v0.0.1` → `/health` de production à 200 (résultat ajouté avant la validation). |
+| G12 | Production déployable | ✅ | 24/10 : workflow « Deploy production » (run 40096300755, déclenché manuellement sur `3c4209f`, CI verte vérifiée) → `release` = `3c4209f` à 13:00:50 ; Railway production : API SUCCESS à 13:01:26 (`/ready` 200 à 13:01:23, base et Redis joignables), worker SUCCESS à 13:03:17 ; Vercel production READY sur `release` : `trovelya.vercel.app/fr` 200, exécution fra1, CSP pointant vers l'API de production. |
 | G13 | Documentation | ✅ | ADR-0001 à 0014 (`docs/adr`), `GLOSSARY.md`, `security/threat-model.md` v1, `data/PII.md`, runbooks deploy/rollback/restore/observability, dont restauration et retour arrière joués sur staging. |
 
 ## Écarts au plan, et pourquoi
