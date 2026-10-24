@@ -315,6 +315,9 @@ Parallélisables : T03 et T04 après T02c ; T06, T09a et T10 après T05 ; T08 d�
 - [ ] Tests d'abord : `test_geoplateforme_parsing` (réponse enregistrée) ; `test_geocoder_timeout_returns_503_problem` ; `test_address_crud_and_other_user_404` ; `test_zone_default_radius_5km` ; `test_zone_radius_invalid_422` ; `test_single_default_zone_switch` ; `test_preferences_unknown_universe_422` ; `test_preferences_sizes_bounds`.
 - [ ] ÉCHEC → implémenter → vert. Commit `feat(identity): addresses, search zones with geoplateforme geocoding and preferences`.
 
+**Réalisation (24/10/2026) :** découpée en T06a (géocodeur et `/v1/geo`), T06b (adresses et zones) et T06c (préférences).
+- T06a : `data.geopf.fr` n'est pas joignable depuis l'environnement de développement ; `tests/fixtures/geoplateforme_search.json` est construit d'après le format documenté de la Base Adresse Nationale (repris par la Géoplateforme), pas enregistré. À comparer avec une vraie réponse lors du premier essai sur staging. `district` « Lyon 7e Arrondissement » devient « Lyon 7e » (`place_name`). Routes réservées aux profils complétés ; `reverse` sans résultat : 404. `GEOCODER_PROVIDER=fake` pour le développement hors ligne.
+
 ### P1-T07 — Onboarding web (W07)
 
 **Fichiers :** `apps/web/app/[locale]/bienvenue/{page,steps/*}.tsx`, `messages/fr.json`, `tests/e2e/onboarding.spec.ts`, `packages/ui` (composant `ChoiceTile` si absent).

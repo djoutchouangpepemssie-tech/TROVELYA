@@ -174,3 +174,18 @@ class EmailChangeRequest(BaseModel):
 
 class EmailChangeVerify(BaseModel):
     token: str = Field(min_length=1, max_length=200)
+
+
+class PlaceOut(BaseModel):
+    label: str
+    place_name: str  # short name for a search zone: "Lyon 7e", "Bordeaux"
+    city: str
+    postal_code: str
+    district: str | None
+    country_code: str
+    lat: float
+    lon: float
+
+
+class PlaceList(BaseModel):
+    data: list[PlaceOut]
