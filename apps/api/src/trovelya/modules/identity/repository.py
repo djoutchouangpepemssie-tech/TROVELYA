@@ -486,13 +486,16 @@ async def erase_incomplete_account(db: AsyncSession, user_id: UUID) -> None:
         await db.execute(text(sql), {"id": user_id})
 
 
-# Column names of PATCH /v1/me: fixed here, never taken from the request.
-_EDITABLE = {
-    "username": "username",
-    "display_name": "display_name",
-    "bio": "bio",
-    "locale": "locale",
-}
+# One static statement: a field changes only when its `set_*` flag is true.
+_UPDATE_PROFILE = text(
+    "UPDATE users SET"
+    " username = CASE WHEN :set_username THEN :username ELSE username END,"
+    " display_name = CASE WHEN :set_display_name THEN :display_name ELSE display_name END,"
+    " bio = CASE WHEN :set_bio THEN :bio ELSE bio END,"
+    " locale = CASE WHEN :set_locale THEN :locale ELSE locale END"
+    " WHERE id = :id AND version = :version RETURNING id"
+)
+_EDITABLE = ("username", "display_name", "bio", "locale")
 
 _PUBLIC_PROFILE = text(
     "SELECT u.username::text AS username, u.display_name, u.bio,"
@@ -509,13 +512,11 @@ async def update_profile(
 ) -> bool:
     """False when `version` is not the current one (optimistic locking, 11.1). Raises
     IntegrityError if the new username is taken."""
-    assignments = ", ".join(f"{_EDITABLE[key]} = :{key}" for key in changes)
-    sql = text(
-        f"UPDATE users SET {assignments} WHERE id = :id AND version = :version"  # noqa: S608 — fixed column names
-        " RETURNING id"
-    )
-    params: dict[str, Any] = {**changes, "id": user_id, "version": version}
-    return (await db.execute(sql, params)).one_or_none() is not None
+    params: dict[str, Any] = {"id": user_id, "version": version}
+    for field in _EDITABLE:
+        params[f"set_{field}"] = field in changes
+        params[field] = changes.get(field)
+    return (await db.execute(_UPDATE_PROFILE, params)).one_or_none() is not None
 
 
 async def public_profile(db: AsyncSession, username: str) -> Row[Any] | None:
