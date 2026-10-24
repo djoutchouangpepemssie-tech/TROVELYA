@@ -12,6 +12,7 @@ from trovelya.modules.identity.service.auth import (
 from trovelya.modules.identity.service.gdpr import (
     EXPORT_JOB,
     build_data_export,
+    process_erasures,
     purge_expired_exports,
 )
 from trovelya.modules.identity.service.magic_links import (
@@ -53,6 +54,7 @@ __all__ = [
     "limit_magic_link_requests",
     "list_sessions",
     "optional_user",
+    "process_erasures",
     "purge_expired_exports",
     "purge_expired_magic_links",
     "request_magic_link",

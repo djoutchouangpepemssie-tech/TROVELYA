@@ -551,6 +551,45 @@ export interface paths {
         patch?: never;
         trace?: never;
     };
+    "/v1/me/erasure": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        get?: never;
+        put?: never;
+        /**
+         * Post Erasure
+         * @description Account erasure (Q10): every session is revoked (this one too) and the public profile
+         *     hidden at once; the account is erased after the grace period unless the person signs in
+         *     again and cancels.
+         */
+        post: operations["me_erasure_request"];
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/v1/me/erasure/cancel": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        get?: never;
+        put?: never;
+        /** Post Erasure Cancel */
+        post: operations["me_erasure_cancel"];
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
     "/v1/me/passkeys": {
         parameters: {
             query?: never;
@@ -933,6 +972,14 @@ export interface components {
         EmailChangeVerify: {
             /** Token */
             token: string;
+        };
+        /** ErasureAccepted */
+        ErasureAccepted: {
+            /**
+             * Erase At
+             * Format: date-time
+             */
+            erase_at: string;
         };
         /** HTTPValidationError */
         HTTPValidationError: {
@@ -2245,6 +2292,58 @@ export interface operations {
                 content: {
                     "application/json": components["schemas"]["HTTPValidationError"];
                 };
+            };
+        };
+    };
+    me_erasure_request: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description Successful Response */
+            202: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ErasureAccepted"];
+                };
+            };
+            /** @description step_up_required */
+            403: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content?: never;
+            };
+        };
+    };
+    me_erasure_cancel: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description Successful Response */
+            204: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content?: never;
+            };
+            /** @description no_erasure_pending */
+            409: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content?: never;
             };
         };
     };

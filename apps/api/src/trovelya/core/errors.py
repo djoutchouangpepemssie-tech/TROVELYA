@@ -44,6 +44,7 @@ class ErrorCode(StrEnum):
     PROFILE_INCOMPLETE = "profile_incomplete"
     PROFILE_ALREADY_COMPLETED = "profile_already_completed"
     EMAIL_TAKEN = "email_taken"
+    NO_ERASURE_PENDING = "no_erasure_pending"
 
 
 # French titles by default (section 2); translation by Accept-Language arrives with P1.
@@ -75,6 +76,7 @@ _TITLES: dict[ErrorCode, str] = {
     ErrorCode.PROFILE_INCOMPLETE: "Profil à compléter",
     ErrorCode.PROFILE_ALREADY_COMPLETED: "Profil déjà complété",
     ErrorCode.EMAIL_TAKEN: "Adresse e-mail déjà utilisée",
+    ErrorCode.NO_ERASURE_PENDING: "Aucune suppression de compte en attente",
 }
 
 _STATUS_CODES: dict[int, ErrorCode] = {

@@ -22,6 +22,7 @@ from trovelya.modules.identity.service import (
     EXPORT_JOB,
     build_data_export,
     identity_subscriptions,
+    process_erasures,
     purge_expired_exports,
     purge_expired_magic_links,
 )
@@ -111,6 +112,10 @@ async def build_data_export_job(ctx: Context, request_id: str) -> bool:
     )
 
 
+async def process_erasures_job(ctx: Context) -> int:
+    return await process_erasures(ctx["sessionmaker"], clock=ctx["clock"])
+
+
 async def purge_data_exports_job(ctx: Context) -> int:
     return await purge_expired_exports(ctx["sessionmaker"], clock=ctx["clock"])
 
@@ -124,6 +129,7 @@ class WorkerSettings:
         cron(relay_outbox, second=EVERY_SECOND, unique=True, timeout=30),
         cron(consume_events_job, second=EVERY_SECOND, unique=True, timeout=30),
         cron(audit_verify_chain_job, hour=3, minute=0, unique=True, timeout=600),
+        cron(process_erasures_job, hour=4, minute=0, unique=True, timeout=1800),
         cron(purge_idempotency_keys_job, hour=4, minute=30, unique=True, timeout=600),
         cron(purge_magic_links_job, hour=4, minute=45, unique=True, timeout=600),
         cron(purge_data_exports_job, hour=5, minute=0, unique=True, timeout=600),
