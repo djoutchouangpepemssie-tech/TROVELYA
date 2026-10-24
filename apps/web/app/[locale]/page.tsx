@@ -1,6 +1,6 @@
 import { getTranslations } from "next-intl/server";
 
-import { Logo } from "@/components/Logo";
+import { Logo } from "@trovelya/ui";
 
 export default async function HomePage() {
   const t = await getTranslations("Home");

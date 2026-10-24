@@ -15,7 +15,7 @@ const securityHeaders = [
 const config: NextConfig = {
   poweredByHeader: false,
   reactStrictMode: true,
-  transpilePackages: ["@trovelya/core"],
+  transpilePackages: ["@trovelya/core", "@trovelya/ui"],
   headers: () => Promise.resolve([{ source: "/:path*", headers: securityHeaders }]),
 };
 

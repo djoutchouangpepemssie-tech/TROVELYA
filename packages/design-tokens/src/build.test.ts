@@ -39,3 +39,48 @@ describe("buildThemeCss", () => {
     expect(css).toContain("--shadow-2: var(--trv-shadow-2);");
   });
 });
+
+// WCAG 2.2 AA: body text needs a contrast ratio of at least 4.5:1 (section 6.3).
+function luminance(hex: string): number {
+  const channels = [1, 3, 5].map((i) => parseInt(hex.slice(i, i + 2), 16) / 255);
+  const [r = 0, g = 0, b = 0] = channels.map((c) =>
+    c <= 0.04045 ? c / 12.92 : ((c + 0.055) / 1.055) ** 2.4,
+  );
+  return 0.2126 * r + 0.7152 * g + 0.0722 * b;
+}
+
+function contrast(a: string, b: string): number {
+  const [high, low] = [luminance(a), luminance(b)].sort((x, y) => y - x) as [number, number];
+  return (high + 0.05) / (low + 0.05);
+}
+
+describe("text colour contrast", () => {
+  const color = tokens.color as Record<string, { light: string; dark: string }>;
+  const cases = (["light", "dark"] as const).flatMap((mode) =>
+    ["ink", "ink-2", "ink-3"].flatMap((text) =>
+      ["surface", "surface-2"].map((background) => ({ mode, text, background })),
+    ),
+  );
+
+  it.each(cases)("$text on $background ($mode) is at least 4.5:1", ({ mode, text, background }) => {
+    const foreground = color[text]?.[mode] ?? "";
+    const back = color[background]?.[mode] ?? "";
+    expect(contrast(foreground, back)).toBeGreaterThanOrEqual(4.5);
+  });
+});
+
+describe("text on coloured fills", () => {
+  const color = tokens.color as Record<string, { light: string; dark: string }>;
+  const fills = ["danger", "live", "success", "warning"].flatMap((fill) =>
+    (["light", "dark"] as const).map((mode) => ({ fill, mode })),
+  );
+
+  // @trovelya/ui writes #0B0B0F on these fills: white would be below 4.5:1.
+  it.each(fills)("ink text on $fill ($mode) is at least 4.5:1", ({ fill, mode }) => {
+    expect(contrast("#0B0B0F", color[fill]?.[mode] ?? "")).toBeGreaterThanOrEqual(4.5);
+  });
+
+  it("brand fill keeps white text readable", () => {
+    expect(contrast("#FFFFFF", color.brand?.light ?? "")).toBeGreaterThanOrEqual(4.5);
+  });
+});
