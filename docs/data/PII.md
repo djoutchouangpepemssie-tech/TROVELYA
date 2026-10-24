@@ -20,6 +20,8 @@ P0 ne contenait que des données techniques. Les comptes arrivent en P1 (module 
 | `passkeys.credential_id`, `public_key`, `name`, `transports`, `last_used_at` | Clé publique de l'appareil, nom donné | Connexion par passkey | Exécution du contrat | Supprimée par la personne ou à l'effacement |
 | `magic_links.email`, `ip` | E-mail et IP de la demande de lien | Connexion, lutte contre les abus | Exécution du contrat / intérêt légitime | 24 heures après expiration (purge, P1-T02c) |
 | `sessions.ip`, `user_agent`, `device_label`, `country_code` | IP, navigateur, appareil, pays de connexion | Sécurité du compte, alerte de nouvel appareil, liste des sessions | Intérêt légitime | 12 mois après la fin de la session (journaux techniques, 14.1) ; supprimées à l'effacement |
+| `user_roles.user_id`, `granted_by`, `granted_at` | Rôles d'une personne, qui les a attribués | Contrôle d'accès, traçabilité staff | Intérêt légitime / obligation légale | Durée du rôle ; l'historique des attributions reste dans `audit_log` (10 ans) |
+| `approval_requests.requested_by`, `decided_by`, `payload`, `reason` | Identité du demandeur et de l'approbateur, objet de la demande | Double validation (3.2) | Obligation légale / intérêt légitime | 10 ans (comme le journal d'audit) ; minimiser le contenu de `payload` |
 | `audit_log.actor_id`, `approver_id` | Identifiant interne de la personne qui agit ou approuve | Traçabilité des actions sensibles (CLAUDE.md, DSA) | Obligation légale / intérêt légitime | 10 ans |
 | `audit_log.ip` | Adresse IP de l'action | Sécurité, enquête en cas d'abus | Intérêt légitime | 10 ans (avec la ligne d'audit, qui est inaltérable) |
 | `audit_log.user_agent` | Navigateur et système | Sécurité | Intérêt légitime | 10 ans |

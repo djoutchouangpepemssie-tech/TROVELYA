@@ -29,7 +29,7 @@ async def _insert_user(conn: AsyncConnection, **overrides: Any) -> Any:
     values = {
         "id": new_id(),
         "email": f"{new_id().hex}@example.org",
-        "username": f"u_{new_id().hex[:8]}",
+        "username": f"u_{new_id().hex[-8:]}",
         "display_name": "Membre",
     } | overrides
     await conn.execute(_INSERT_USER, values)
