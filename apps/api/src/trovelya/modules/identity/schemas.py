@@ -3,7 +3,7 @@
 from datetime import datetime
 from uuid import UUID
 
-from pydantic import BaseModel
+from pydantic import BaseModel, Field
 
 
 class SessionOut(BaseModel):
@@ -19,3 +19,18 @@ class SessionOut(BaseModel):
 
 class SessionList(BaseModel):
     data: list[SessionOut]
+
+
+class MagicLinkRequest(BaseModel):
+    email: str = Field(pattern=r"^[^@\s]+@[^@\s]+\.[^@\s]+$", max_length=254)
+    captcha_token: str | None = Field(default=None, max_length=4096)
+
+
+class MagicLinkVerify(BaseModel):
+    token: str = Field(min_length=1, max_length=128)
+
+
+class SignInResult(BaseModel):
+    user_id: UUID
+    is_new: bool
+    profile_completed: bool

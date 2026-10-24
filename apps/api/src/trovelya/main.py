@@ -3,6 +3,7 @@
 from collections.abc import AsyncGenerator, Mapping
 from contextlib import asynccontextmanager
 
+import httpx
 from arq.connections import ArqRedis
 from fastapi import FastAPI
 
@@ -18,6 +19,7 @@ from trovelya.core.logging import configure_logging
 from trovelya.core.middleware import RequestIdMiddleware
 from trovelya.core.observability import configure_observability
 from trovelya.core.ratelimit import AnonymousRateLimitMiddleware
+from trovelya.modules.identity.adapters.turnstile import AlwaysPass, TurnstileVerifier
 from trovelya.modules.identity.api import router as identity_router
 from trovelya.shared.clock import SystemClock
 
@@ -65,6 +67,13 @@ def create_app(
     )
     app.state.settings = settings
     app.state.clock = SystemClock()
+    app.state.captcha = (
+        TurnstileVerifier(
+            secret=settings.turnstile_secret_key.get_secret_value(), client=httpx.AsyncClient()
+        )
+        if settings.turnstile_secret_key is not None
+        else AlwaysPass()
+    )
     configure_observability(app, settings)
     app.state.readiness_checks = readiness_checks or {}
     install_error_handlers(app)

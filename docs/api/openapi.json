@@ -14,6 +14,48 @@
         "title": "HTTPValidationError",
         "type": "object"
       },
+      "MagicLinkRequest": {
+        "properties": {
+          "captcha_token": {
+            "anyOf": [
+              {
+                "maxLength": 4096,
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Captcha Token"
+          },
+          "email": {
+            "maxLength": 254,
+            "pattern": "^[^@\\s]+@[^@\\s]+\\.[^@\\s]+$",
+            "title": "Email",
+            "type": "string"
+          }
+        },
+        "required": [
+          "email"
+        ],
+        "title": "MagicLinkRequest",
+        "type": "object"
+      },
+      "MagicLinkVerify": {
+        "properties": {
+          "token": {
+            "maxLength": 128,
+            "minLength": 1,
+            "title": "Token",
+            "type": "string"
+          }
+        },
+        "required": [
+          "token"
+        ],
+        "title": "MagicLinkVerify",
+        "type": "object"
+      },
       "SessionList": {
         "properties": {
           "data": {
@@ -84,6 +126,30 @@
           "country_code"
         ],
         "title": "SessionOut",
+        "type": "object"
+      },
+      "SignInResult": {
+        "properties": {
+          "is_new": {
+            "title": "Is New",
+            "type": "boolean"
+          },
+          "profile_completed": {
+            "title": "Profile Completed",
+            "type": "boolean"
+          },
+          "user_id": {
+            "format": "uuid",
+            "title": "User Id",
+            "type": "string"
+          }
+        },
+        "required": [
+          "user_id",
+          "is_new",
+          "profile_completed"
+        ],
+        "title": "SignInResult",
         "type": "object"
       },
       "ValidationError": {
@@ -188,6 +254,94 @@
           }
         },
         "summary": "Logout",
+        "tags": [
+          "auth"
+        ]
+      }
+    },
+    "/v1/auth/magic-link": {
+      "post": {
+        "description": "Send a sign-in link. Same answer whether the address has an account or not.",
+        "operationId": "auth_magic_link_request",
+        "requestBody": {
+          "content": {
+            "application/json": {
+              "schema": {
+                "$ref": "#/components/schemas/MagicLinkRequest"
+              }
+            }
+          },
+          "required": true
+        },
+        "responses": {
+          "202": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "additionalProperties": {
+                    "type": "string"
+                  },
+                  "title": "Response Auth Magic Link Request",
+                  "type": "object"
+                }
+              }
+            },
+            "description": "Successful Response"
+          },
+          "422": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/HTTPValidationError"
+                }
+              }
+            },
+            "description": "Validation Error"
+          }
+        },
+        "summary": "Post Magic Link",
+        "tags": [
+          "auth"
+        ]
+      }
+    },
+    "/v1/auth/magic-link/verify": {
+      "post": {
+        "description": "Exchange the link's token for a session (cookie `__Host-trv_session`).",
+        "operationId": "auth_magic_link_verify",
+        "requestBody": {
+          "content": {
+            "application/json": {
+              "schema": {
+                "$ref": "#/components/schemas/MagicLinkVerify"
+              }
+            }
+          },
+          "required": true
+        },
+        "responses": {
+          "200": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/SignInResult"
+                }
+              }
+            },
+            "description": "Successful Response"
+          },
+          "422": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/HTTPValidationError"
+                }
+              }
+            },
+            "description": "Validation Error"
+          }
+        },
+        "summary": "Post Magic Link Verify",
         "tags": [
           "auth"
         ]
