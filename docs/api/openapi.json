@@ -363,6 +363,77 @@
         "title": "PasskeyRename",
         "type": "object"
       },
+      "PlaceList": {
+        "properties": {
+          "data": {
+            "items": {
+              "$ref": "#/components/schemas/PlaceOut"
+            },
+            "title": "Data",
+            "type": "array"
+          }
+        },
+        "required": [
+          "data"
+        ],
+        "title": "PlaceList",
+        "type": "object"
+      },
+      "PlaceOut": {
+        "properties": {
+          "city": {
+            "title": "City",
+            "type": "string"
+          },
+          "country_code": {
+            "title": "Country Code",
+            "type": "string"
+          },
+          "district": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "District"
+          },
+          "label": {
+            "title": "Label",
+            "type": "string"
+          },
+          "lat": {
+            "title": "Lat",
+            "type": "number"
+          },
+          "lon": {
+            "title": "Lon",
+            "type": "number"
+          },
+          "place_name": {
+            "title": "Place Name",
+            "type": "string"
+          },
+          "postal_code": {
+            "title": "Postal Code",
+            "type": "string"
+          }
+        },
+        "required": [
+          "label",
+          "place_name",
+          "city",
+          "postal_code",
+          "district",
+          "country_code",
+          "lat",
+          "lon"
+        ],
+        "title": "PlaceOut",
+        "type": "object"
+      },
       "ProfilePatch": {
         "additionalProperties": false,
         "description": "Only the fields sent are changed; `bio` set to blank clears it.",
@@ -1304,6 +1375,107 @@
         "summary": "Csrf Token",
         "tags": [
           "security"
+        ]
+      }
+    },
+    "/v1/geo/reverse": {
+      "get": {
+        "description": "The place at the browser's position; 404 when there is none (at sea, abroad).",
+        "operationId": "geo_reverse",
+        "parameters": [
+          {
+            "in": "query",
+            "name": "lat",
+            "required": true,
+            "schema": {
+              "maximum": 90,
+              "minimum": -90,
+              "title": "Lat",
+              "type": "number"
+            }
+          },
+          {
+            "in": "query",
+            "name": "lon",
+            "required": true,
+            "schema": {
+              "maximum": 180,
+              "minimum": -180,
+              "title": "Lon",
+              "type": "number"
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/PlaceOut"
+                }
+              }
+            },
+            "description": "Successful Response"
+          },
+          "422": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/HTTPValidationError"
+                }
+              }
+            },
+            "description": "Validation Error"
+          }
+        },
+        "summary": "Reverse",
+        "tags": [
+          "geo"
+        ]
+      }
+    },
+    "/v1/geo/search": {
+      "get": {
+        "description": "Address or town autocompletion (France).",
+        "operationId": "geo_search",
+        "parameters": [
+          {
+            "in": "query",
+            "name": "q",
+            "required": true,
+            "schema": {
+              "maxLength": 200,
+              "minLength": 3,
+              "title": "Q",
+              "type": "string"
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/PlaceList"
+                }
+              }
+            },
+            "description": "Successful Response"
+          },
+          "422": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/HTTPValidationError"
+                }
+              }
+            },
+            "description": "Validation Error"
+          }
+        },
+        "summary": "Search",
+        "tags": [
+          "geo"
         ]
       }
     },

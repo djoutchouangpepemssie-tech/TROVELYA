@@ -20,6 +20,11 @@ from trovelya.core.logging import configure_logging
 from trovelya.core.middleware import RequestIdMiddleware
 from trovelya.core.observability import configure_observability
 from trovelya.core.ratelimit import AnonymousRateLimitMiddleware
+from trovelya.modules.identity.adapters.geocoder import (
+    FakeGeocoder,
+    Geocoder,
+    GeoplateformeGeocoder,
+)
 from trovelya.modules.identity.adapters.oidc import (
     AppleProvider,
     OidcProvider,
@@ -58,6 +63,12 @@ def _oidc_providers(settings: Settings) -> dict[str, OidcProvider]:
             private_key=settings.oauth_apple_private_key.get_secret_value(),
         )
     return providers
+
+
+def _geocoder(settings: Settings) -> Geocoder:
+    if settings.geocoder_provider == "fake":
+        return FakeGeocoder()
+    return GeoplateformeGeocoder(httpx.AsyncClient())
 
 
 def create_app(
@@ -107,6 +118,7 @@ def create_app(
     app.state.settings = settings
     app.state.clock = SystemClock()
     app.state.oidc = _oidc_providers(settings)
+    app.state.geocoder = _geocoder(settings)
     app.state.captcha = (
         TurnstileVerifier(
             secret=settings.turnstile_secret_key.get_secret_value(), client=httpx.AsyncClient()

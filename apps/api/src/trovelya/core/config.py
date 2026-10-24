@@ -12,6 +12,7 @@ MIN_SECRET_KEY_LENGTH = 64
 MIN_PROXY_SECRET_LENGTH = 32
 MIN_FIELD_KEY_LENGTH = 32
 EmailProvider = Literal["smtp", "resend", "fake"]
+GeocoderProvider = Literal["geoplateforme", "fake"]
 
 
 def asyncpg_url(url: str) -> str:
@@ -52,6 +53,8 @@ class Settings(BaseSettings):
     oauth_apple_private_key: SecretStr | None = None
     web_origin: str
     admin_origin: str
+    # Geocoding (P1-T06a, E10): IGN Géoplateforme; "fake" for tests and offline development.
+    geocoder_provider: GeocoderProvider = "geoplateforme"
     # Passkeys (P1-T04): relying party; defaults to the web origin's host and the web origin.
     webauthn_rp_id: str | None = None
     webauthn_rp_name: str = "TROVÉLYA"

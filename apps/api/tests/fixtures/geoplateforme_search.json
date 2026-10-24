@@ -1,0 +1,47 @@
+{
+  "type": "FeatureCollection",
+  "features": [
+    {
+      "type": "Feature",
+      "geometry": {"type": "Point", "coordinates": [4.842374, 45.744212]},
+      "properties": {
+        "label": "12 Rue de Marseille 69007 Lyon",
+        "score": 0.97,
+        "housenumber": "12",
+        "id": "69387_4630_00012",
+        "name": "12 Rue de Marseille",
+        "postcode": "69007",
+        "citycode": "69387",
+        "city": "Lyon",
+        "district": "Lyon 7e Arrondissement",
+        "context": "69, Rhône, Auvergne-Rhône-Alpes",
+        "type": "housenumber",
+        "importance": 0.73,
+        "street": "Rue de Marseille",
+        "_type": "address"
+      }
+    },
+    {
+      "type": "Feature",
+      "geometry": {"type": "Point", "coordinates": [-0.587877, 44.851895]},
+      "properties": {
+        "label": "Bordeaux",
+        "score": 0.91,
+        "id": "33063",
+        "name": "Bordeaux",
+        "postcode": "33000",
+        "citycode": "33063",
+        "city": "Bordeaux",
+        "context": "33, Gironde, Nouvelle-Aquitaine",
+        "type": "municipality",
+        "importance": 0.81,
+        "_type": "address"
+      }
+    },
+    {
+      "type": "Feature",
+      "geometry": {"type": "Point", "coordinates": [2.0, 48.0]},
+      "properties": {"label": "Sans ville ni code postal", "type": "street"}
+    }
+  ]
+}
