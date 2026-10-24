@@ -36,6 +36,14 @@ IDENTITY_TABLES = {
     "role_permissions",
     "user_roles",
     "approval_requests",
+    "addresses",
+    "search_zones",
+    "user_preferences",
+    "consents",
+    "follows",
+    "blocks",
+    "data_requests",
+    "data_exports",
 }
 
 
