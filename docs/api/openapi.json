@@ -382,6 +382,102 @@
         "title": "AddressPatch",
         "type": "object"
       },
+      "ApprovalList": {
+        "properties": {
+          "data": {
+            "items": {
+              "$ref": "#/components/schemas/ApprovalOut"
+            },
+            "title": "Data",
+            "type": "array"
+          }
+        },
+        "required": [
+          "data"
+        ],
+        "title": "ApprovalList",
+        "type": "object"
+      },
+      "ApprovalOut": {
+        "properties": {
+          "created_at": {
+            "format": "date-time",
+            "title": "Created At",
+            "type": "string"
+          },
+          "expires_at": {
+            "format": "date-time",
+            "title": "Expires At",
+            "type": "string"
+          },
+          "id": {
+            "format": "uuid",
+            "title": "Id",
+            "type": "string"
+          },
+          "payload": {
+            "additionalProperties": true,
+            "title": "Payload",
+            "type": "object"
+          },
+          "permission_key": {
+            "title": "Permission Key",
+            "type": "string"
+          },
+          "reason": {
+            "title": "Reason",
+            "type": "string"
+          },
+          "requested_by": {
+            "format": "uuid",
+            "title": "Requested By",
+            "type": "string"
+          }
+        },
+        "required": [
+          "id",
+          "permission_key",
+          "requested_by",
+          "payload",
+          "reason",
+          "created_at",
+          "expires_at"
+        ],
+        "title": "ApprovalOut",
+        "type": "object"
+      },
+      "ApprovalOutcomeOut": {
+        "properties": {
+          "approval_id": {
+            "anyOf": [
+              {
+                "format": "uuid",
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Approval Id"
+          },
+          "status": {
+            "enum": [
+              "pending",
+              "done",
+              "approved",
+              "rejected"
+            ],
+            "title": "Status",
+            "type": "string"
+          }
+        },
+        "required": [
+          "approval_id",
+          "status"
+        ],
+        "title": "ApprovalOutcomeOut",
+        "type": "object"
+      },
       "BlockList": {
         "properties": {
           "data": {
@@ -1387,6 +1483,46 @@
           "profile_completed"
         ],
         "title": "SignInResult",
+        "type": "object"
+      },
+      "StaffRoleRequest": {
+        "additionalProperties": false,
+        "properties": {
+          "grant": {
+            "title": "Grant",
+            "type": "boolean"
+          },
+          "reason": {
+            "maxLength": 500,
+            "minLength": 1,
+            "title": "Reason",
+            "type": "string"
+          },
+          "role_key": {
+            "enum": [
+              "staff_moderator",
+              "staff_support",
+              "staff_trust",
+              "staff_finance",
+              "staff_admin",
+              "staff_superadmin"
+            ],
+            "title": "Role Key",
+            "type": "string"
+          },
+          "user_id": {
+            "format": "uuid",
+            "title": "User Id",
+            "type": "string"
+          }
+        },
+        "required": [
+          "user_id",
+          "role_key",
+          "grant",
+          "reason"
+        ],
+        "title": "StaffRoleRequest",
         "type": "object"
       },
       "StepUpRequest": {
@@ -3360,6 +3496,172 @@
         "summary": "Update Zone",
         "tags": [
           "me"
+        ]
+      }
+    },
+    "/v1/staff/approvals": {
+      "get": {
+        "description": "Pending requests this person could decide (they hold the permission), theirs included.",
+        "operationId": "staff_approvals_list",
+        "responses": {
+          "200": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ApprovalList"
+                }
+              }
+            },
+            "description": "Successful Response"
+          }
+        },
+        "summary": "Get Approvals",
+        "tags": [
+          "staff"
+        ]
+      }
+    },
+    "/v1/staff/approvals/{approval_id}/approve": {
+      "post": {
+        "operationId": "staff_approvals_approve",
+        "parameters": [
+          {
+            "in": "path",
+            "name": "approval_id",
+            "required": true,
+            "schema": {
+              "format": "uuid",
+              "title": "Approval Id",
+              "type": "string"
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ApprovalOutcomeOut"
+                }
+              }
+            },
+            "description": "Successful Response"
+          },
+          "409": {
+            "description": "approval_not_pending or approval_expired"
+          },
+          "422": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/HTTPValidationError"
+                }
+              }
+            },
+            "description": "Validation Error"
+          }
+        },
+        "summary": "Post Approve",
+        "tags": [
+          "staff"
+        ]
+      }
+    },
+    "/v1/staff/approvals/{approval_id}/reject": {
+      "post": {
+        "operationId": "staff_approvals_reject",
+        "parameters": [
+          {
+            "in": "path",
+            "name": "approval_id",
+            "required": true,
+            "schema": {
+              "format": "uuid",
+              "title": "Approval Id",
+              "type": "string"
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ApprovalOutcomeOut"
+                }
+              }
+            },
+            "description": "Successful Response"
+          },
+          "409": {
+            "description": "approval_not_pending or approval_expired"
+          },
+          "422": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/HTTPValidationError"
+                }
+              }
+            },
+            "description": "Validation Error"
+          }
+        },
+        "summary": "Post Reject",
+        "tags": [
+          "staff"
+        ]
+      }
+    },
+    "/v1/staff/roles/requests": {
+      "post": {
+        "description": "Grant or revoke a staff role on a staff account (`staff_roles.manage`, 🔒 dual approval\nfor the super-administrator: 202 and a pending request).",
+        "operationId": "staff_roles_request",
+        "requestBody": {
+          "content": {
+            "application/json": {
+              "schema": {
+                "$ref": "#/components/schemas/StaffRoleRequest"
+              }
+            }
+          },
+          "required": true
+        },
+        "responses": {
+          "200": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ApprovalOutcomeOut"
+                }
+              }
+            },
+            "description": "Done at once"
+          },
+          "202": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ApprovalOutcomeOut"
+                }
+              }
+            },
+            "description": "Successful Response"
+          },
+          "422": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/HTTPValidationError"
+                }
+              }
+            },
+            "description": "Validation Error"
+          }
+        },
+        "summary": "Post Role Request",
+        "tags": [
+          "staff"
         ]
       }
     },
