@@ -37,6 +37,11 @@ class Settings(BaseSettings):
     otel_exporter_otlp_endpoint: str | None = None
     feature_flags_default: dict[str, bool] = Field(default_factory=dict[str, bool])
     rate_limit_anonymous_per_minute: int = Field(default=120, ge=1)  # section 11.4
+    rate_limit_user_per_minute: int = Field(default=600, ge=1)  # section 11.4
+    # Sessions (section 13.2, P1 plan Q9): absolute lifetime, inactivity, staff sessions.
+    session_ttl_days: int = Field(default=30, ge=1)
+    session_idle_days: int = Field(default=14, ge=1)
+    admin_session_ttl_hours: int = Field(default=12, ge=1)
 
     @field_validator("database_url")
     @classmethod

@@ -1,4 +1,133 @@
 {
+  "components": {
+    "schemas": {
+      "HTTPValidationError": {
+        "properties": {
+          "detail": {
+            "items": {
+              "$ref": "#/components/schemas/ValidationError"
+            },
+            "title": "Detail",
+            "type": "array"
+          }
+        },
+        "title": "HTTPValidationError",
+        "type": "object"
+      },
+      "SessionList": {
+        "properties": {
+          "data": {
+            "items": {
+              "$ref": "#/components/schemas/SessionOut"
+            },
+            "title": "Data",
+            "type": "array"
+          }
+        },
+        "required": [
+          "data"
+        ],
+        "title": "SessionList",
+        "type": "object"
+      },
+      "SessionOut": {
+        "description": "A sign-in session as shown in the account settings. Never the IP or the user agent.",
+        "properties": {
+          "country_code": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Country Code"
+          },
+          "created_at": {
+            "format": "date-time",
+            "title": "Created At",
+            "type": "string"
+          },
+          "current": {
+            "title": "Current",
+            "type": "boolean"
+          },
+          "device_label": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Device Label"
+          },
+          "id": {
+            "format": "uuid",
+            "title": "Id",
+            "type": "string"
+          },
+          "last_used_at": {
+            "format": "date-time",
+            "title": "Last Used At",
+            "type": "string"
+          }
+        },
+        "required": [
+          "id",
+          "current",
+          "created_at",
+          "last_used_at",
+          "device_label",
+          "country_code"
+        ],
+        "title": "SessionOut",
+        "type": "object"
+      },
+      "ValidationError": {
+        "properties": {
+          "ctx": {
+            "title": "Context",
+            "type": "object"
+          },
+          "input": {
+            "title": "Input"
+          },
+          "loc": {
+            "items": {
+              "anyOf": [
+                {
+                  "type": "string"
+                },
+                {
+                  "type": "integer"
+                }
+              ]
+            },
+            "title": "Location",
+            "type": "array"
+          },
+          "msg": {
+            "title": "Message",
+            "type": "string"
+          },
+          "type": {
+            "title": "Error Type",
+            "type": "string"
+          }
+        },
+        "required": [
+          "loc",
+          "msg",
+          "type"
+        ],
+        "title": "ValidationError",
+        "type": "object"
+      }
+    }
+  },
   "info": {
     "title": "TROVÉLYA API",
     "version": "0.0.0"
@@ -49,6 +178,21 @@
         ]
       }
     },
+    "/v1/auth/logout": {
+      "post": {
+        "description": "Revoke the current session and clear its cookie.",
+        "operationId": "auth_logout",
+        "responses": {
+          "204": {
+            "description": "Successful Response"
+          }
+        },
+        "summary": "Logout",
+        "tags": [
+          "auth"
+        ]
+      }
+    },
     "/v1/csrf": {
       "get": {
         "operationId": "csrf_get",
@@ -71,6 +215,76 @@
         "summary": "Csrf Token",
         "tags": [
           "security"
+        ]
+      }
+    },
+    "/v1/me/sessions": {
+      "delete": {
+        "description": "Sign out everywhere else; the current session stays open.",
+        "operationId": "me_sessions_revoke_others",
+        "responses": {
+          "204": {
+            "description": "Successful Response"
+          }
+        },
+        "summary": "Delete Other Sessions",
+        "tags": [
+          "me"
+        ]
+      },
+      "get": {
+        "operationId": "me_sessions_list",
+        "responses": {
+          "200": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/SessionList"
+                }
+              }
+            },
+            "description": "Successful Response"
+          }
+        },
+        "summary": "Get Sessions",
+        "tags": [
+          "me"
+        ]
+      }
+    },
+    "/v1/me/sessions/{session_id}": {
+      "delete": {
+        "operationId": "me_sessions_revoke",
+        "parameters": [
+          {
+            "in": "path",
+            "name": "session_id",
+            "required": true,
+            "schema": {
+              "format": "uuid",
+              "title": "Session Id",
+              "type": "string"
+            }
+          }
+        ],
+        "responses": {
+          "204": {
+            "description": "Successful Response"
+          },
+          "422": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/HTTPValidationError"
+                }
+              }
+            },
+            "description": "Validation Error"
+          }
+        },
+        "summary": "Delete Session",
+        "tags": [
+          "me"
         ]
       }
     }

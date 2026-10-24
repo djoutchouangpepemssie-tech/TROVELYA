@@ -17,6 +17,8 @@ from trovelya.core.logging import configure_logging
 from trovelya.core.middleware import RequestIdMiddleware
 from trovelya.core.observability import configure_observability
 from trovelya.core.ratelimit import AnonymousRateLimitMiddleware
+from trovelya.modules.identity.api import router as identity_router
+from trovelya.shared.clock import SystemClock
 
 
 def create_app(
@@ -59,6 +61,7 @@ def create_app(
         redoc_url=None,
     )
     app.state.settings = settings
+    app.state.clock = SystemClock()
     configure_observability(app, settings)
     app.state.readiness_checks = readiness_checks or {}
     install_error_handlers(app)
@@ -75,6 +78,7 @@ def create_app(
     app.add_middleware(RequestIdMiddleware)
     app.include_router(health_router)
     app.include_router(csrf_router)
+    app.include_router(identity_router)
     if settings.env != "production":
         app.include_router(debug_routes.router)
     if settings.env in {"local", "test"}:

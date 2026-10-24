@@ -30,6 +30,8 @@ class ErrorCode(StrEnum):
     CSRF_FAILED = "csrf_failed"
     PRECONDITION_FAILED = "precondition_failed"
     SERVICE_UNAVAILABLE = "service_unavailable"
+    UNAUTHENTICATED = "unauthenticated"
+    FORBIDDEN = "forbidden"
 
 
 # French titles by default (section 2); translation by Accept-Language arrives with P1.
@@ -47,10 +49,14 @@ _TITLES: dict[ErrorCode, str] = {
     ErrorCode.CSRF_FAILED: "Jeton CSRF invalide",
     ErrorCode.PRECONDITION_FAILED: "Version obsolète",
     ErrorCode.SERVICE_UNAVAILABLE: "Service indisponible",
+    ErrorCode.UNAUTHENTICATED: "Connexion requise",
+    ErrorCode.FORBIDDEN: "Action non autorisée",
 }
 
 _STATUS_CODES: dict[int, ErrorCode] = {
     400: ErrorCode.BAD_REQUEST,
+    401: ErrorCode.UNAUTHENTICATED,
+    403: ErrorCode.FORBIDDEN,
     404: ErrorCode.NOT_FOUND,
     405: ErrorCode.METHOD_NOT_ALLOWED,
     412: ErrorCode.PRECONDITION_FAILED,
