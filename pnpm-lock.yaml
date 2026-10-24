@@ -22,6 +22,9 @@ importers:
       '@sentry/nextjs':
         specifier: 11.9.0
         version: 11.9.0(next@16.4.3(@opentelemetry/api@1.10.0)(@playwright/test@1.64.1)(@types/node@24.19.2)(react-dom@19.3.1(react@19.3.1))(react@19.3.1))(react@19.3.1)(vite@8.3.5(@types/node@24.19.2)(jiti@2.7.0))
+      '@simplewebauthn/browser':
+        specifier: 14.0.0
+        version: 14.0.0
       '@trovelya/core':
         specifier: workspace:*
         version: link:../../packages/core
@@ -1899,6 +1902,9 @@ packages:
   '@sentry/vercel-edge@11.9.0':
     resolution: {integrity: sha512-qZIXHS84Pa9/KHnVFHjNh6Yk8v+U4Z7xfVPa+Bpa1bArZ8jNHL9NOEigZIb1rOx/KyCw0SDdrzQytcuiFSBmsg==}
     engines: {node: '>=20.19.0 <22.0.0 || >=22.12.0 <23.0.0 || >=23.2.0'}
+
+  '@simplewebauthn/browser@14.0.0':
+    resolution: {integrity: sha512-1odWVqeEBTl7lJ9zMKLEsmTlnyrDO5iRcTvfMKKk1WThUnp/i8JJdffdj2icP+tty159s4PgwE3BiMoEW9NFow==}
 
   '@swc/core-darwin-arm64@1.16.20':
     resolution: {integrity: sha512-i7NFSDnuE6tdBvBgmoVKKmburgcwZt/FZK2IusJaVGrjFrMUC1hrgE3RI+Kt9RhYM7vHvQj0W9j53zSxKEMbWQ==}
@@ -4905,6 +4911,8 @@ snapshots:
       '@opentelemetry/api': 1.10.0
       '@sentry/core': 11.9.0
       '@sentry/server-utils': 11.9.0
+
+  '@simplewebauthn/browser@14.0.0': {}
 
   '@swc/core-darwin-arm64@1.16.20':
     optional: true

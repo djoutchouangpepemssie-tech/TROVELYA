@@ -246,7 +246,7 @@ Parallélisables : T03 et T04 après T02c ; T06, T09a et T10 après T05 ; T08 d�
 - [ ] Commit `feat(identity): google and apple sign-in with pkce, state, nonce and id token validation`.
 
 **Réalisation (24/10/2026) :** découpée en T03a (Google, PR dédiée) puis T03b (Apple, `form_post` et `finish`, flag éteint faute de compte Apple Developer, décision Q4).
-- Écart de sécurité, à valider par Arcel : un compte n'est **créé** que si le fournisseur certifie l'adresse (`email_verified`), sinon `oauth_email_unverified`. Sans cela, un compte Google à adresse non vérifiée pourrait réserver l'adresse d'un tiers.
+- Écart de sécurité, **validé par Arcel le 24/10/2026** : un compte n'est **créé** que si le fournisseur certifie l'adresse (`email_verified`), sinon `oauth_email_unverified`. Sans cela, un compte Google à adresse non vérifiée pourrait réserver l'adresse d'un tiers.
 - Les erreurs du rappel redirigent vers `/fr/connexion?erreur=<code>` (navigation du navigateur, pas un appel d'API) ; après succès : `/fr/bienvenue` tant que le profil n'est pas complété, sinon `/fr`.
 - Les comptes staff sont refusés comme toute autre erreur (`oauth_failed`), comme pour le lien magique (ADR-0018).
 - Activation sur staging : `OAUTH_GOOGLE_CLIENT_ID`, `OAUTH_GOOGLE_CLIENT_SECRET` et `FEATURE_FLAGS_DEFAULT={"auth.oauth_google": true}`.
@@ -272,6 +272,7 @@ Parallélisables : T03 et T04 après T02c ; T06, T09a et T10 après T05 ; T08 d�
 - Le challenge est à usage unique (`GETDEL`), avec une expiration de 5 min vérifiée aussi avec l'horloge de l'application. Toute erreur répond `passkey_invalid`, sans dire quelle vérification a échoué.
 - Un compteur de signatures qui recule (authentificateur peut-être cloné) est refusé ; la mise à jour du compteur est conditionnelle (deux connexions simultanées ne l'avancent qu'une fois).
 - T04b : `POST /v1/auth/step-up/options` (ajouté au plan) donne un challenge lié à l'utilisateur, limité à ses passkeys ; `POST /v1/auth/step-up` répond `204` avec rotation de session (passkey) ou `202` (lien envoyé, page `/fr/confirmer`) ; `POST /v1/auth/step-up/verify {token}` fait la rotation. Un lien `step_up` présenté par un autre compte est refusé et la transaction annulée : l'intrus ne peut pas « griller » le lien du propriétaire, qui reste à usage unique.
+- T04c : `apps/web/lib/passkeys.ts` (`@simplewebauthn/browser` 14.0.0) — `registerPasskey`, `signInWithPasskey`, `stepUpWithPasskey`, `requestStepUpLink` ; résultats sans exception (`unsupported`, `cancelled`, `refused`, `step_up_required`, `rate_limited`, `unavailable`) que les écrans (T07, T08) traduisent en messages.
 - Valeurs par défaut : `WEBAUTHN_RP_ID` = hôte de `WEB_ORIGIN` ; `WEBAUTHN_ORIGINS` = `[WEB_ORIGIN]`. Comme pour Google, le flag `auth.passkeys` reste éteint sur staging tant que les écrans n'existent pas.
 
 ### P1-T05 — Profil privé et public, changement d'e-mail
