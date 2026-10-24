@@ -1485,6 +1485,49 @@
         "title": "SignInResult",
         "type": "object"
       },
+      "StaffEnrolmentOptions": {
+        "properties": {
+          "enrolment_token": {
+            "maxLength": 100,
+            "minLength": 20,
+            "title": "Enrolment Token",
+            "type": "string"
+          }
+        },
+        "required": [
+          "enrolment_token"
+        ],
+        "title": "StaffEnrolmentOptions",
+        "type": "object"
+      },
+      "StaffEnrolmentVerify": {
+        "properties": {
+          "credential": {
+            "additionalProperties": true,
+            "title": "Credential",
+            "type": "object"
+          },
+          "enrolment_token": {
+            "maxLength": 100,
+            "minLength": 20,
+            "title": "Enrolment Token",
+            "type": "string"
+          },
+          "name": {
+            "default": "Passkey staff",
+            "maxLength": 64,
+            "minLength": 1,
+            "title": "Name",
+            "type": "string"
+          }
+        },
+        "required": [
+          "enrolment_token",
+          "credential"
+        ],
+        "title": "StaffEnrolmentVerify",
+        "type": "object"
+      },
       "StaffRoleRequest": {
         "additionalProperties": false,
         "properties": {
@@ -2219,6 +2262,98 @@
           }
         },
         "summary": "Oauth Start",
+        "tags": [
+          "auth"
+        ]
+      }
+    },
+    "/v1/auth/passkeys/enrol/options": {
+      "post": {
+        "description": "Staff enrolment (ADR-0018): creation options for the account of the link.",
+        "operationId": "auth_passkeys_enrol_options",
+        "requestBody": {
+          "content": {
+            "application/json": {
+              "schema": {
+                "$ref": "#/components/schemas/StaffEnrolmentOptions"
+              }
+            }
+          },
+          "required": true
+        },
+        "responses": {
+          "200": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "additionalProperties": true,
+                  "title": "Response Auth Passkeys Enrol Options",
+                  "type": "object"
+                }
+              }
+            },
+            "description": "Successful Response"
+          },
+          "400": {
+            "description": "enrolment_invalid"
+          },
+          "422": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/HTTPValidationError"
+                }
+              }
+            },
+            "description": "Validation Error"
+          }
+        },
+        "summary": "Enrol Options",
+        "tags": [
+          "auth"
+        ]
+      }
+    },
+    "/v1/auth/passkeys/enrol/verify": {
+      "post": {
+        "description": "Registers the staff account's first passkey (single-use link) and opens an admin\nsession (cookie `__Host-trv_session`).",
+        "operationId": "auth_passkeys_enrol_verify",
+        "requestBody": {
+          "content": {
+            "application/json": {
+              "schema": {
+                "$ref": "#/components/schemas/StaffEnrolmentVerify"
+              }
+            }
+          },
+          "required": true
+        },
+        "responses": {
+          "200": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/SignInResult"
+                }
+              }
+            },
+            "description": "Successful Response"
+          },
+          "400": {
+            "description": "enrolment_invalid or passkey_invalid"
+          },
+          "422": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/HTTPValidationError"
+                }
+              }
+            },
+            "description": "Validation Error"
+          }
+        },
+        "summary": "Enrol Verify",
         "tags": [
           "auth"
         ]

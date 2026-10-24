@@ -1,6 +1,7 @@
 import { describe, expect, it, vi } from "vitest";
 
 import {
+  enrolStaffPasskey,
   type PasskeyDependencies,
   registerPasskey,
   requestStepUpLink,
@@ -110,5 +111,30 @@ describe("step-up", () => {
   it("maps rate limiting", async () => {
     const d = deps([json(429, { code: "rate_limited" })]);
     expect(await requestStepUpLink(d.all)).toEqual({ ok: false, error: "rate_limited" });
+  });
+});
+
+describe("enrolStaffPasskey", () => {
+  const TOKEN = "t".repeat(43);
+
+  it("sends the link's token with both requests and signs the staff member in", async () => {
+    const d = deps([json(200, OPTIONS), json(200, { user_id: "u1", profile_completed: true })]);
+    expect(await enrolStaffPasskey(TOKEN, d.all)).toEqual({ ok: true, value: { userId: "u1" } });
+    const [optionsPath, optionsInit] = call(d.api, 0);
+    expect(optionsPath).toBe("/v1/auth/passkeys/enrol/options");
+    expect(JSON.parse(optionsInit.body as string)).toEqual({ enrolment_token: TOKEN });
+    expect(d.register).toHaveBeenCalledWith({ optionsJSON: OPTIONS });
+    const [verifyPath, verifyInit] = call(d.api, 1);
+    expect(verifyPath).toBe("/v1/auth/passkeys/enrol/verify");
+    expect(JSON.parse(verifyInit.body as string)).toEqual({
+      enrolment_token: TOKEN,
+      credential: CREDENTIAL,
+    });
+  });
+
+  it("reports a used or expired link", async () => {
+    const d = deps([json(400, { code: "enrolment_invalid" })]);
+    expect(await enrolStaffPasskey(TOKEN, d.all)).toEqual({ ok: false, error: "link_invalid" });
+    expect(d.register).not.toHaveBeenCalled();
   });
 });

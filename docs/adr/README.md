@@ -21,3 +21,4 @@ Format : contexte, décision, conséquences. Une décision qui change donne un n
 | [0015](0015-relais-same-origin.md) | Relais same-origin entre le web et l'API, IP de confiance | Acceptée (écarts E1 à E4 du plan P1) |
 | [0016](0016-export-rgpd.md) | Export RGPD chiffré, stocké en base jusqu'au stockage de fichiers | Acceptée (Q16, E8) |
 | [0017](0017-resend-provisoire.md) | E-mails par Resend, écart temporaire à la résidence UE | Acceptée, provisoire (décision Q6) |
+| [0018](0018-comptes-staff.md) | Comptes staff : passkey seule, création et enrôlement par script | Acceptée (Q18, E9) |
