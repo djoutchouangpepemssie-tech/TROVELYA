@@ -1,0 +1,10 @@
+{
+  "name": "@trovelya/api",
+  "version": "0.0.0",
+  "private": true,
+  "scripts": {
+    "lint": "uv run ruff check && uv run ruff format --check",
+    "typecheck": "uv run pyright",
+    "test": "uv run pytest"
+  }
+}
