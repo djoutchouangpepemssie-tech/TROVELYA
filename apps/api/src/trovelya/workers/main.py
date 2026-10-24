@@ -21,6 +21,7 @@ from trovelya.core.redis import make_redis
 from trovelya.modules.identity.service import (
     EXPORT_JOB,
     build_data_export,
+    expire_approvals,
     identity_subscriptions,
     process_erasures,
     purge_expired_exports,
@@ -112,6 +113,10 @@ async def build_data_export_job(ctx: Context, request_id: str) -> bool:
     )
 
 
+async def expire_approvals_job(ctx: Context) -> int:
+    return await expire_approvals(ctx["sessionmaker"], clock=ctx["clock"])
+
+
 async def process_erasures_job(ctx: Context) -> int:
     return await process_erasures(ctx["sessionmaker"], clock=ctx["clock"])
 
@@ -129,6 +134,7 @@ class WorkerSettings:
         cron(relay_outbox, second=EVERY_SECOND, unique=True, timeout=30),
         cron(consume_events_job, second=EVERY_SECOND, unique=True, timeout=30),
         cron(audit_verify_chain_job, hour=3, minute=0, unique=True, timeout=600),
+        cron(expire_approvals_job, minute=set(range(0, 60, 10)), unique=True, timeout=120),
         cron(process_erasures_job, hour=4, minute=0, unique=True, timeout=1800),
         cron(purge_idempotency_keys_job, hour=4, minute=30, unique=True, timeout=600),
         cron(purge_magic_links_job, hour=4, minute=45, unique=True, timeout=600),

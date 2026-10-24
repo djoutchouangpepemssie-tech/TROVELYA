@@ -434,3 +434,48 @@ class BlockedMember(BaseModel):
 
 class BlockList(BaseModel):
     data: list[BlockedMember]
+
+
+STAFF_ROLES = (
+    "staff_moderator",
+    "staff_support",
+    "staff_trust",
+    "staff_finance",
+    "staff_admin",
+    "staff_superadmin",
+)
+
+
+class StaffRoleRequest(BaseModel):
+    model_config = ConfigDict(extra="forbid")
+
+    user_id: UUID
+    role_key: Literal[
+        "staff_moderator",
+        "staff_support",
+        "staff_trust",
+        "staff_finance",
+        "staff_admin",
+        "staff_superadmin",
+    ]
+    grant: bool  # False: revoke
+    reason: str = Field(min_length=1, max_length=500)
+
+
+class ApprovalOutcomeOut(BaseModel):
+    approval_id: UUID | None
+    status: Literal["pending", "done", "approved", "rejected"]
+
+
+class ApprovalOut(BaseModel):
+    id: UUID
+    permission_key: str
+    requested_by: UUID
+    payload: dict[str, Any]
+    reason: str
+    created_at: datetime
+    expires_at: datetime
+
+
+class ApprovalList(BaseModel):
+    data: list[ApprovalOut]

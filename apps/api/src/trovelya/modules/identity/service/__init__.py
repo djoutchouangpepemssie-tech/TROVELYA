@@ -1,5 +1,6 @@
 """Public interface of the identity module: other modules import from here only (5.4)."""
 
+from trovelya.modules.identity.service.access import expire_approvals
 from trovelya.modules.identity.service.alerts import identity_subscriptions
 from trovelya.modules.identity.service.auth import (
     clear_session_cookie,
@@ -48,6 +49,7 @@ __all__ = [
     "clear_session_cookie",
     "create_session",
     "current_user",
+    "expire_approvals",
     "get_clock",
     "get_session_policy",
     "identity_subscriptions",

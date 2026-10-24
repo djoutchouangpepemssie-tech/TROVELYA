@@ -754,6 +754,81 @@ export interface paths {
         patch: operations["me_zones_update"];
         trace?: never;
     };
+    "/v1/staff/approvals": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        /**
+         * Get Approvals
+         * @description Pending requests this person could decide (they hold the permission), theirs included.
+         */
+        get: operations["staff_approvals_list"];
+        put?: never;
+        post?: never;
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/v1/staff/approvals/{approval_id}/approve": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        get?: never;
+        put?: never;
+        /** Post Approve */
+        post: operations["staff_approvals_approve"];
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/v1/staff/approvals/{approval_id}/reject": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        get?: never;
+        put?: never;
+        /** Post Reject */
+        post: operations["staff_approvals_reject"];
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/v1/staff/roles/requests": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        get?: never;
+        put?: never;
+        /**
+         * Post Role Request
+         * @description Grant or revoke a staff role on a staff account (`staff_roles.manage`, 🔒 dual approval
+         *     for the super-administrator: 202 and a pending request).
+         */
+        post: operations["staff_roles_request"];
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
     "/v1/users/{user_id}/block": {
         parameters: {
             query?: never;
@@ -916,6 +991,52 @@ export interface components {
             phone_e164?: string | null;
             /** Postal Code */
             postal_code?: string | null;
+        };
+        /** ApprovalList */
+        ApprovalList: {
+            /** Data */
+            data: components["schemas"]["ApprovalOut"][];
+        };
+        /** ApprovalOut */
+        ApprovalOut: {
+            /**
+             * Created At
+             * Format: date-time
+             */
+            created_at: string;
+            /**
+             * Expires At
+             * Format: date-time
+             */
+            expires_at: string;
+            /**
+             * Id
+             * Format: uuid
+             */
+            id: string;
+            /** Payload */
+            payload: {
+                [key: string]: unknown;
+            };
+            /** Permission Key */
+            permission_key: string;
+            /** Reason */
+            reason: string;
+            /**
+             * Requested By
+             * Format: uuid
+             */
+            requested_by: string;
+        };
+        /** ApprovalOutcomeOut */
+        ApprovalOutcomeOut: {
+            /** Approval Id */
+            approval_id: string | null;
+            /**
+             * Status
+             * @enum {string}
+             */
+            status: "pending" | "done" | "approved" | "rejected";
         };
         /** BlockList */
         BlockList: {
@@ -1309,6 +1430,23 @@ export interface components {
             is_new: boolean;
             /** Profile Completed */
             profile_completed: boolean;
+            /**
+             * User Id
+             * Format: uuid
+             */
+            user_id: string;
+        };
+        /** StaffRoleRequest */
+        StaffRoleRequest: {
+            /** Grant */
+            grant: boolean;
+            /** Reason */
+            reason: string;
+            /**
+             * Role Key
+             * @enum {string}
+             */
+            role_key: "staff_moderator" | "staff_support" | "staff_trust" | "staff_finance" | "staff_admin" | "staff_superadmin";
             /**
              * User Id
              * Format: uuid
@@ -2789,6 +2927,144 @@ export interface operations {
                 };
                 content: {
                     "application/json": components["schemas"]["ZoneOut"];
+                };
+            };
+            /** @description Validation Error */
+            422: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["HTTPValidationError"];
+                };
+            };
+        };
+    };
+    staff_approvals_list: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description Successful Response */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ApprovalList"];
+                };
+            };
+        };
+    };
+    staff_approvals_approve: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                approval_id: string;
+            };
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description Successful Response */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ApprovalOutcomeOut"];
+                };
+            };
+            /** @description approval_not_pending or approval_expired */
+            409: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content?: never;
+            };
+            /** @description Validation Error */
+            422: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["HTTPValidationError"];
+                };
+            };
+        };
+    };
+    staff_approvals_reject: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                approval_id: string;
+            };
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description Successful Response */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ApprovalOutcomeOut"];
+                };
+            };
+            /** @description approval_not_pending or approval_expired */
+            409: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content?: never;
+            };
+            /** @description Validation Error */
+            422: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["HTTPValidationError"];
+                };
+            };
+        };
+    };
+    staff_roles_request: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        requestBody: {
+            content: {
+                "application/json": components["schemas"]["StaffRoleRequest"];
+            };
+        };
+        responses: {
+            /** @description Done at once */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ApprovalOutcomeOut"];
+                };
+            };
+            /** @description Successful Response */
+            202: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ApprovalOutcomeOut"];
                 };
             };
             /** @description Validation Error */

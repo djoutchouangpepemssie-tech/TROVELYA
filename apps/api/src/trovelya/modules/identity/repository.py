@@ -1146,3 +1146,111 @@ async def list_blocks(db: AsyncSession, user_id: UUID) -> list[Row[Any]]:
 
 async def relationship(db: AsyncSession, *, viewer: UUID, target: UUID) -> Row[Any]:
     return (await db.execute(_RELATIONSHIP, {"a": viewer, "b": target})).one()
+
+
+# --- Permissions and dual approval (P1-T11a, sections 3.1-3.2) ------------------------------
+
+_PERMISSION_GRANTS = text(
+    "SELECT rp.requires_approval, rp.limit_minor FROM user_roles ur"
+    " JOIN role_permissions rp ON rp.role_key = ur.role_key"
+    " WHERE ur.user_id = :u AND rp.permission_key = :p"
+)
+_INSERT_APPROVAL = text(
+    "INSERT INTO approval_requests"
+    " (id, permission_key, requested_by, payload, reason, status, expires_at, created_at)"
+    " VALUES (:id, :p, :u, :payload, :reason, 'pending', :expires_at, :now)"
+).bindparams(bindparam("payload", type_=JSONB))
+_LOCK_APPROVAL = text(
+    "SELECT id, permission_key, requested_by, payload, status, expires_at"
+    " FROM approval_requests WHERE id = :id FOR UPDATE"
+)
+_DECIDE_APPROVAL = text(
+    "UPDATE approval_requests SET status = :status, decided_by = :by, decided_at = :now"
+    " WHERE id = :id"
+)
+# Pending requests the viewer could decide: they hold the permission through one of their roles.
+_PENDING_APPROVALS = text(
+    "SELECT a.id, a.permission_key, a.requested_by, a.payload, a.reason, a.created_at,"
+    " a.expires_at FROM approval_requests a"
+    " WHERE a.status = 'pending' AND a.expires_at > :now AND EXISTS ("
+    "   SELECT 1 FROM user_roles ur JOIN role_permissions rp ON rp.role_key = ur.role_key"
+    "   WHERE ur.user_id = :u AND rp.permission_key = a.permission_key)"
+    " ORDER BY a.created_at"
+)
+_EXPIRE_APPROVALS = text(
+    "UPDATE approval_requests SET status = 'expired'"
+    " WHERE status = 'pending' AND expires_at <= :now"
+)
+_IS_STAFF_ACCOUNT = text(
+    "SELECT EXISTS (SELECT 1 FROM users WHERE id = :u AND is_staff AND status <> 'deleted')"
+)
+_GRANT_ROLE = text(
+    "INSERT INTO user_roles (user_id, role_key, granted_by)"
+    " VALUES (:u, :r, :by) ON CONFLICT DO NOTHING RETURNING role_key"
+)
+_REVOKE_ROLE = text(
+    "DELETE FROM user_roles WHERE user_id = :u AND role_key = :r RETURNING role_key"
+)
+
+
+async def permission_grants(db: AsyncSession, user_id: UUID, permission: str) -> list[Row[Any]]:
+    return list((await db.execute(_PERMISSION_GRANTS, {"u": user_id, "p": permission})).all())
+
+
+async def insert_approval(
+    db: AsyncSession,
+    *,
+    approval_id: UUID,
+    permission: str,
+    requested_by: UUID,
+    payload: dict[str, Any],
+    reason: str,
+    expires_at: datetime,
+    now: datetime,
+) -> None:
+    await db.execute(
+        _INSERT_APPROVAL,
+        {
+            "id": approval_id,
+            "p": permission,
+            "u": requested_by,
+            "payload": payload,
+            "reason": reason,
+            "expires_at": expires_at,
+            "now": now,
+        },
+    )
+
+
+async def lock_approval(db: AsyncSession, approval_id: UUID) -> Row[Any] | None:
+    return (await db.execute(_LOCK_APPROVAL, {"id": approval_id})).one_or_none()
+
+
+async def decide_approval(
+    db: AsyncSession, *, approval_id: UUID, status: str, decided_by: UUID, now: datetime
+) -> None:
+    await db.execute(
+        _DECIDE_APPROVAL, {"id": approval_id, "status": status, "by": decided_by, "now": now}
+    )
+
+
+async def pending_approvals(db: AsyncSession, *, viewer: UUID, now: datetime) -> list[Row[Any]]:
+    return list((await db.execute(_PENDING_APPROVALS, {"u": viewer, "now": now})).all())
+
+
+async def expire_approvals(db: AsyncSession, *, now: datetime) -> int:
+    result = await db.execute(_EXPIRE_APPROVALS, {"now": now})
+    return result.rowcount  # pyright: ignore[reportAttributeAccessIssue, reportUnknownMemberType, reportUnknownVariableType]
+
+
+async def is_staff_account(db: AsyncSession, user_id: UUID) -> bool:
+    return bool(await db.scalar(_IS_STAFF_ACCOUNT, {"u": user_id}))
+
+
+async def grant_role(db: AsyncSession, *, user_id: UUID, role: str, granted_by: UUID) -> bool:
+    result = await db.execute(_GRANT_ROLE, {"u": user_id, "r": role, "by": granted_by})
+    return result.one_or_none() is not None
+
+
+async def revoke_role(db: AsyncSession, *, user_id: UUID, role: str) -> bool:
+    return (await db.execute(_REVOKE_ROLE, {"u": user_id, "r": role})).one_or_none() is not None

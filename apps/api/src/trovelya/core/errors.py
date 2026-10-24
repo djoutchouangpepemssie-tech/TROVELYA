@@ -45,6 +45,8 @@ class ErrorCode(StrEnum):
     PROFILE_ALREADY_COMPLETED = "profile_already_completed"
     EMAIL_TAKEN = "email_taken"
     NO_ERASURE_PENDING = "no_erasure_pending"
+    APPROVAL_NOT_PENDING = "approval_not_pending"
+    APPROVAL_EXPIRED = "approval_expired"
 
 
 # French titles by default (section 2); translation by Accept-Language arrives with P1.
@@ -77,6 +79,8 @@ _TITLES: dict[ErrorCode, str] = {
     ErrorCode.PROFILE_ALREADY_COMPLETED: "Profil déjà complété",
     ErrorCode.EMAIL_TAKEN: "Adresse e-mail déjà utilisée",
     ErrorCode.NO_ERASURE_PENDING: "Aucune suppression de compte en attente",
+    ErrorCode.APPROVAL_NOT_PENDING: "Cette demande a déjà été traitée",
+    ErrorCode.APPROVAL_EXPIRED: "Cette demande a expiré",
 }
 
 _STATUS_CODES: dict[int, ErrorCode] = {
