@@ -11,7 +11,7 @@ P0 ne contenait que des données techniques. Les comptes arrivent en P1 (module 
 | `users.email`, `email_verified_at` | Adresse e-mail | Connexion, e-mails transactionnels | Exécution du contrat | Durée du compte ; compte inactif 3 ans puis suppression après préavis ; anonymisée à l'effacement (P1-T09b) |
 | `users.phone_e164`, `phone_verified_at` | Téléphone (non collecté en P1) | Vérification vendeur au-delà d'un seuil (P4) | Exécution du contrat | Idem |
 | `users.username`, `display_name`, `bio`, `avatar_media_id` | Identité publique choisie | Profil public | Exécution du contrat | Idem ; remplacés à l'effacement |
-| `users.birth_year` | Année de naissance | Âge minimum (8.18), protection des mineurs | Obligation légale | Idem ; effacée à l'effacement |
+| `users.birth_year` | Année de naissance | Âge minimum (8.18), protection des mineurs | Obligation légale | Idem ; effacée à l'effacement. Moins de 15 ans à l'inscription : jamais enregistrée, le compte non finalisé est effacé |
 | `users.locale`, `timezone`, `country_code` | Langue, fuseau, pays | Affichage, règles par pays | Exécution du contrat | Idem |
 | `users.status`, `visibility_factor`, `is_staff` | Statut du compte, sanctions | Sécurité, modération | Intérêt légitime / obligation légale (DSA) | Idem |
 | `users.marketing_opt_in` | Choix marketing | Envoi d'e-mails promotionnels | Consentement | Idem |
@@ -25,7 +25,7 @@ P0 ne contenait que des données techniques. Les comptes arrivent en P1 (module 
 | `addresses.*` (nom complet, adresse, code postal, ville, pays, téléphone, position) | Adresse postale et coordonnées | Livraison, remise en main propre (P4-P5) | Exécution du contrat | Supprimée par la personne (suppression logique) ou à l'effacement ; les adresses copiées dans une commande suivent la commande (10 ans, P4) |
 | `search_zones.label`, `place_name`, `center`, `radius_m` | Lieux de recherche (maison, travail) et leur position | Priorité territoriale (8.11) | Exécution du contrat | Supprimées par la personne ou à l'effacement |
 | `user_preferences.*` | Intérêts, tailles, budget, marques bloquées, réglages du fil et des notifications | Personnalisation du fil, notifications | Exécution du contrat ; le fil personnalisé est désactivable (DSA 38) | Durée du compte ; supprimées à l'effacement |
-| `consents.user_id`, `anonymous_id`, `purpose`, `granted`, `policy_version`, `source` | Choix de consentement et sa preuve | Prouver le consentement (RGPD art. 7) | Obligation légale | Proposition : 5 ans après le retrait ou la fin du compte **[À VALIDER]** ; à l'effacement, seul l'identifiant interne reste |
+| `consents.user_id`, `anonymous_id`, `purpose`, `granted`, `policy_version`, `source` | Choix de consentement et sa preuve ; version des CGU acceptée (`purpose='terms'`) | Prouver le consentement (RGPD art. 7) et l'acceptation des CGU | Obligation légale | Proposition : 5 ans après le retrait ou la fin du compte **[À VALIDER]** ; à l'effacement, seul l'identifiant interne reste |
 | `follows.*`, `blocks.*` | Relations entre comptes | Abonnements, blocages | Exécution du contrat | Supprimés par la personne ou à l'effacement |
 | `data_requests.*` | Demandes d'export et d'effacement | Exercice des droits, preuve de leur traitement | Obligation légale | Proposition : 5 ans après traitement **[À VALIDER]** |
 | `data_exports.ciphertext` | Archive chiffrée de toutes les données de la personne | Export RGPD (ADR-0016) | Obligation légale | 7 jours [PARAM `retention.data_export_days`], purge quotidienne |

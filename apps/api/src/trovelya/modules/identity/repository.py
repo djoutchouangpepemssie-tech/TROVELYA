@@ -8,6 +8,7 @@ from sqlalchemy import Row, text
 from sqlalchemy.ext.asyncio import AsyncSession
 
 from trovelya.modules.identity.models import BLOCKED_STATUSES, SessionKind
+from trovelya.shared.ids import new_id
 
 _BLOCKED = [status.value for status in BLOCKED_STATUSES]
 
@@ -390,3 +391,96 @@ async def rename_passkey(
 async def delete_passkey(db: AsyncSession, *, passkey_id: UUID, user_id: UUID) -> bool:
     params = {"id": passkey_id, "user_id": user_id}
     return (await db.execute(_DELETE_PASSKEY, params)).one_or_none() is not None
+
+
+# --- Profile --------------------------------------------------------------------------------
+
+_ME = text(
+    "SELECT u.id, u.email::text AS email, u.username::text AS username, u.display_name, u.bio,"
+    " u.locale, u.country_code, u.birth_year, u.profile_completed_at IS NOT NULL"
+    " AS profile_completed, u.erasure_requested_at, u.version,"
+    " coalesce(array_agg(r.role_key ORDER BY r.role_key)"
+    "   FILTER (WHERE r.role_key IS NOT NULL), '{}') AS roles"
+    " FROM users u LEFT JOIN user_roles r ON r.user_id = u.id WHERE u.id = :id GROUP BY u.id"
+)
+
+_TAKEN_USERNAMES = text("SELECT username::text FROM users WHERE username = ANY(:candidates)")
+
+_COMPLETE_PROFILE = text(
+    "UPDATE users SET username = :username, display_name = :display_name,"
+    " birth_year = :birth_year, profile_completed_at = :now"
+    " WHERE id = :id AND profile_completed_at IS NULL RETURNING id"
+)
+
+_INSERT_CONSENT = text(
+    "INSERT INTO consents (id, user_id, purpose, granted, policy_version, source, created_at)"
+    " VALUES (:id, :user_id, :purpose, :granted, :policy_version, :source, :now)"
+)
+
+# Everything a not-yet-completed account can own (every other route needs a completed profile).
+_ERASE_INCOMPLETE = (
+    "DELETE FROM sessions WHERE user_id = :id",
+    "DELETE FROM auth_identities WHERE user_id = :id",
+    "DELETE FROM user_preferences WHERE user_id = :id",
+    "DELETE FROM consents WHERE user_id = :id",
+    "DELETE FROM magic_links WHERE email = (SELECT email FROM users WHERE id = :id)",
+    "DELETE FROM users WHERE id = :id AND profile_completed_at IS NULL",
+)
+
+
+async def me(db: AsyncSession, user_id: UUID) -> Row[Any]:
+    return (await db.execute(_ME, {"id": user_id})).one()
+
+
+async def taken_usernames(db: AsyncSession, candidates: list[str]) -> set[str]:
+    return set((await db.scalars(_TAKEN_USERNAMES, {"candidates": candidates})).all())
+
+
+async def complete_profile(
+    db: AsyncSession,
+    *,
+    user_id: UUID,
+    username: str,
+    display_name: str,
+    birth_year: int,
+    now: datetime,
+) -> bool:
+    """False when the profile was already completed. Raises IntegrityError if the username
+    is taken (unique, case-insensitive)."""
+    params = {
+        "id": user_id,
+        "username": username,
+        "display_name": display_name,
+        "birth_year": birth_year,
+        "now": now,
+    }
+    return (await db.execute(_COMPLETE_PROFILE, params)).one_or_none() is not None
+
+
+async def insert_consent(
+    db: AsyncSession,
+    *,
+    user_id: UUID,
+    purpose: str,
+    granted: bool,
+    policy_version: str,
+    source: str,
+    now: datetime,
+) -> None:
+    await db.execute(
+        _INSERT_CONSENT,
+        {
+            "id": new_id(),
+            "user_id": user_id,
+            "purpose": purpose,
+            "granted": granted,
+            "policy_version": policy_version,
+            "source": source,
+            "now": now,
+        },
+    )
+
+
+async def erase_incomplete_account(db: AsyncSession, user_id: UUID) -> None:
+    for sql in _ERASE_INCOMPLETE:
+        await db.execute(text(sql), {"id": user_id})

@@ -22,13 +22,12 @@ from trovelya.modules.identity.schemas import (
 from trovelya.modules.identity.service import (
     CurrentUser,
     SessionPolicy,
-    current_user,
     get_clock,
     get_session_policy,
     set_session_cookie,
 )
 from trovelya.modules.identity.service import passkeys as service
-from trovelya.modules.identity.service.auth import Uow, recent_mfa_user
+from trovelya.modules.identity.service.auth import Uow, completed_user, recent_mfa_user
 from trovelya.shared.clock import Clock
 
 
@@ -41,7 +40,7 @@ auth_router = APIRouter(prefix="/v1/auth/passkeys", tags=["auth"], dependencies=
 me_router = APIRouter(prefix="/v1/me/passkeys", tags=["me"], dependencies=[Depends(_enabled)])
 
 ClockDep = Annotated[Clock, Depends(get_clock)]
-Me = Annotated[CurrentUser, Depends(current_user)]
+Me = Annotated[CurrentUser, Depends(completed_user)]
 StepUp = Annotated[CurrentUser, Depends(recent_mfa_user)]
 
 

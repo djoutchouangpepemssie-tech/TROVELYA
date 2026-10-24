@@ -1,6 +1,65 @@
 {
   "components": {
     "schemas": {
+      "CompleteProfile": {
+        "properties": {
+          "accept_terms": {
+            "const": true,
+            "title": "Accept Terms",
+            "type": "boolean"
+          },
+          "birth_year": {
+            "minimum": 1900.0,
+            "title": "Birth Year",
+            "type": "integer"
+          },
+          "display_name": {
+            "maxLength": 60,
+            "minLength": 1,
+            "title": "Display Name",
+            "type": "string"
+          },
+          "terms_version": {
+            "maxLength": 32,
+            "minLength": 1,
+            "title": "Terms Version",
+            "type": "string"
+          },
+          "username": {
+            "maxLength": 30,
+            "minLength": 3,
+            "title": "Username",
+            "type": "string"
+          }
+        },
+        "required": [
+          "username",
+          "display_name",
+          "birth_year",
+          "accept_terms",
+          "terms_version"
+        ],
+        "title": "CompleteProfile",
+        "type": "object"
+      },
+      "Counters": {
+        "properties": {
+          "notifications": {
+            "title": "Notifications",
+            "type": "integer"
+          },
+          "unread_messages": {
+            "title": "Unread Messages",
+            "type": "integer"
+          }
+        },
+        "required": [
+          "unread_messages",
+          "notifications"
+        ],
+        "title": "Counters",
+        "type": "object"
+      },
       "HTTPValidationError": {
         "properties": {
           "detail": {
@@ -54,6 +113,113 @@
           "token"
         ],
         "title": "MagicLinkVerify",
+        "type": "object"
+      },
+      "MeOut": {
+        "description": "The signed-in person's own account. Never shown to anybody else.",
+        "properties": {
+          "bio": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Bio"
+          },
+          "counters": {
+            "$ref": "#/components/schemas/Counters"
+          },
+          "country_code": {
+            "title": "Country Code",
+            "type": "string"
+          },
+          "display_name": {
+            "title": "Display Name",
+            "type": "string"
+          },
+          "email": {
+            "title": "Email",
+            "type": "string"
+          },
+          "erasure_requested_at": {
+            "anyOf": [
+              {
+                "format": "date-time",
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Erasure Requested At"
+          },
+          "flags": {
+            "additionalProperties": {
+              "type": "boolean"
+            },
+            "title": "Flags",
+            "type": "object"
+          },
+          "id": {
+            "format": "uuid",
+            "title": "Id",
+            "type": "string"
+          },
+          "is_minor": {
+            "anyOf": [
+              {
+                "type": "boolean"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Is Minor"
+          },
+          "locale": {
+            "title": "Locale",
+            "type": "string"
+          },
+          "profile_completed": {
+            "title": "Profile Completed",
+            "type": "boolean"
+          },
+          "roles": {
+            "items": {
+              "type": "string"
+            },
+            "title": "Roles",
+            "type": "array"
+          },
+          "username": {
+            "title": "Username",
+            "type": "string"
+          },
+          "version": {
+            "title": "Version",
+            "type": "integer"
+          }
+        },
+        "required": [
+          "id",
+          "email",
+          "username",
+          "display_name",
+          "bio",
+          "locale",
+          "country_code",
+          "profile_completed",
+          "roles",
+          "flags",
+          "is_minor",
+          "erasure_requested_at",
+          "counters",
+          "version"
+        ],
+        "title": "MeOut",
         "type": "object"
       },
       "PasskeyList": {
@@ -305,6 +471,19 @@
           "token"
         ],
         "title": "StepUpVerify",
+        "type": "object"
+      },
+      "UsernameSuggestion": {
+        "properties": {
+          "username": {
+            "title": "Username",
+            "type": "string"
+          }
+        },
+        "required": [
+          "username"
+        ],
+        "title": "UsernameSuggestion",
         "type": "object"
       },
       "ValidationError": {
@@ -958,6 +1137,72 @@
         ]
       }
     },
+    "/v1/me": {
+      "get": {
+        "operationId": "me_get",
+        "responses": {
+          "200": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/MeOut"
+                }
+              }
+            },
+            "description": "Successful Response"
+          }
+        },
+        "summary": "Get Me",
+        "tags": [
+          "me"
+        ]
+      }
+    },
+    "/v1/me/complete-profile": {
+      "post": {
+        "description": "First step of /bienvenue (Q11). Under the minimum age nothing is kept: the account is\nerased, the session cookie cleared, and the answer is `400 too_young`.",
+        "operationId": "me_complete_profile",
+        "requestBody": {
+          "content": {
+            "application/json": {
+              "schema": {
+                "$ref": "#/components/schemas/CompleteProfile"
+              }
+            }
+          },
+          "required": true
+        },
+        "responses": {
+          "200": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/MeOut"
+                }
+              }
+            },
+            "description": "Successful Response"
+          },
+          "400": {
+            "description": "too_young: the account has been erased"
+          },
+          "422": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/HTTPValidationError"
+                }
+              }
+            },
+            "description": "Validation Error"
+          }
+        },
+        "summary": "Post Complete Profile",
+        "tags": [
+          "me"
+        ]
+      }
+    },
     "/v1/me/passkeys": {
       "get": {
         "operationId": "me_passkeys_list",
@@ -1131,6 +1376,27 @@
           }
         },
         "summary": "Delete Session",
+        "tags": [
+          "me"
+        ]
+      }
+    },
+    "/v1/me/username-suggestion": {
+      "get": {
+        "operationId": "me_username_suggestion",
+        "responses": {
+          "200": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/UsernameSuggestion"
+                }
+              }
+            },
+            "description": "Successful Response"
+          }
+        },
+        "summary": "Get Username Suggestion",
         "tags": [
           "me"
         ]
