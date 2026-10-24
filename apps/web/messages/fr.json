@@ -87,7 +87,8 @@
       "submit": "Continuer",
       "tooYoungTitle": "TROVÉLYA est réservé aux personnes de 15 ans et plus",
       "tooYoungBody": "Votre compte n'a pas été créé et nous n'avons conservé aucune de vos informations.",
-      "backHome": "Revenir à l'accueil"
+      "backHome": "Revenir à l'accueil",
+      "termsLink": "Lire les conditions générales d'utilisation"
     },
     "interests": {
       "title": "Qu'est-ce qui vous passionne ?",
@@ -142,5 +143,46 @@
       "nearbyNew": "Nouveautés près de chez moi",
       "finish": "Terminer"
     }
+  },
+  "Legal": {
+    "provisional": "Version provisoire — à valider par un juriste avant le lancement.",
+    "version": "Version : {version}",
+    "footerLabel": "Informations légales",
+    "footer": {
+      "cgu": "Conditions d'utilisation",
+      "confidentialite": "Confidentialité",
+      "cookies": "Gestion des cookies",
+      "mentions": "Mentions légales"
+    },
+    "titles": {
+      "cgu": "Conditions générales d'utilisation · TROVÉLYA",
+      "confidentialite": "Politique de confidentialité · TROVÉLYA",
+      "cookies": "Gestion des cookies · TROVÉLYA",
+      "mentions": "Mentions légales · TROVÉLYA"
+    },
+    "purposes": {
+      "analytics": "Mesure d'audience",
+      "marketing_email": "E-mails promotionnels",
+      "personalised_ads": "Publicité personnalisée",
+      "location": "Localisation précise"
+    },
+    "banner": {
+      "title": "Vos choix de cookies",
+      "body": "Nous aimerions utiliser des cookies facultatifs. Vous pouvez tout accepter, tout refuser ou choisir, et changer d'avis à tout moment.",
+      "more": "En savoir plus",
+      "acceptAll": "Tout accepter",
+      "refuseAll": "Tout refuser",
+      "customise": "Personnaliser",
+      "customiseTitle": "Personnaliser mes choix",
+      "save": "Enregistrer mes choix"
+    },
+    "choices": {
+      "title": "Vos choix",
+      "loading": "Chargement de vos choix…",
+      "none": "Aucun cookie soumis à votre accord n'est utilisé aujourd'hui : il n'y a rien à régler.",
+      "saved": "Choix enregistré."
+    },
+    "close": "Fermer",
+    "error": "Votre choix n'a pas pu être enregistré. Réessayez dans un instant."
   }
 }

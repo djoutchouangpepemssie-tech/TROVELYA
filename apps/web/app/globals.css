@@ -23,3 +23,54 @@ body {
     transition-duration: 0.01ms !important;
   }
 }
+
+/* Long-form text (legal documents rendered from Markdown). */
+.trv-prose {
+  line-height: 1.6;
+}
+.trv-prose h1 {
+  font-size: 1.875rem;
+  font-weight: 600;
+  letter-spacing: -0.01em;
+  margin-bottom: var(--trv-space-4);
+}
+.trv-prose h2 {
+  font-size: 1.25rem;
+  font-weight: 600;
+  margin: var(--trv-space-8) 0 var(--trv-space-3);
+}
+.trv-prose h3 {
+  font-weight: 600;
+  margin: var(--trv-space-6) 0 var(--trv-space-2);
+}
+.trv-prose p,
+.trv-prose ul {
+  margin-bottom: var(--trv-space-4);
+}
+.trv-prose ul {
+  list-style: disc;
+  padding-left: var(--trv-space-5);
+}
+.trv-prose a {
+  color: var(--trv-color-brand);
+  text-decoration: underline;
+  text-underline-offset: 2px;
+}
+.trv-prose table {
+  width: 100%;
+  border-collapse: collapse;
+  font-size: 0.9375rem;
+  margin-bottom: var(--trv-space-4);
+}
+.trv-prose th,
+.trv-prose td {
+  border-bottom: 1px solid var(--trv-color-line);
+  padding: var(--trv-space-2) var(--trv-space-3) var(--trv-space-2) 0;
+  text-align: left;
+  vertical-align: top;
+}
+.trv-prose code {
+  font-family: var(--trv-font-mono);
+  font-size: 0.875em;
+  overflow-wrap: anywhere;
+}

@@ -4,11 +4,11 @@ import { Button, Checkbox, Input } from "@trovelya/ui";
 import { useLocale, useTranslations } from "next-intl";
 import { type SyntheticEvent, useEffect, useRef, useState } from "react";
 
+import { TERMS_VERSION } from "@/lib/legal";
+
 import { onboardingApi } from "../api";
 import { StepLayout } from "../StepLayout";
 
-/** Provisional terms until the lawyer's version (D2); the legal pages arrive with P1-T08. */
-export const TERMS_VERSION = "provisoire-2026-10";
 const USERNAME = /^[a-z0-9_.]{3,30}$/;
 
 type Errors = { username?: string; displayName?: string; birthYear?: string; terms?: string };
@@ -153,6 +153,14 @@ export function ProfileStep({ onCompleted }: { onCompleted: () => void }) {
           />
           <div>
             <Checkbox label={t("profile.terms")} checked={terms} onCheckedChange={setTerms} />
+            <a
+              className="mt-1 inline-block text-sm text-brand underline underline-offset-2"
+              href={`/${locale}/legal/cgu`}
+              target="_blank"
+              rel="noopener"
+            >
+              {t("profile.termsLink")}
+            </a>
             {errors.terms ? (
               <p role="alert" className="trv-field-error mt-1">
                 {errors.terms}
