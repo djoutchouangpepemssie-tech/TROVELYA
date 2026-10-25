@@ -1,6 +1,6 @@
 import { describe, expect, it, vi } from "vitest";
 
-import { apiFetch, readCookie } from "./api";
+import { apiCall, apiFetch, readCookie } from "./api";
 
 describe("readCookie", () => {
   it("finds a cookie by its exact name", () => {
@@ -49,5 +49,43 @@ describe("apiFetch", () => {
     ]);
     const [, init] = fetchImpl.mock.calls[1] as unknown as [string, RequestInit];
     expect(new Headers(init.headers).get("x-csrf-token")).toBe("fresh");
+  });
+});
+
+describe("apiCall", () => {
+  const deps = (response: Response | Error) => ({
+    fetch: vi.fn(() =>
+      response instanceof Error ? Promise.reject(response) : Promise.resolve(response),
+    ),
+    cookies: () => "__Host-trv_csrf=t",
+  });
+
+  it("returns the parsed body and sends JSON", async () => {
+    const d = deps(Response.json({ id: "1" }));
+    const result = await apiCall<{ id: string }>("/v1/me", { method: "PATCH", body: "{}" }, d);
+    expect(result).toEqual({ ok: true, data: { id: "1" } });
+    const [, init] = d.fetch.mock.calls[0] as unknown as [string, RequestInit];
+    expect(new Headers(init.headers).get("content-type")).toBe("application/json");
+  });
+
+  it("returns the status and error code", async () => {
+    const d = deps(Response.json({ code: "username_taken" }, { status: 409 }));
+    expect(await apiCall("/v1/me", {}, d)).toEqual({
+      ok: false,
+      status: 409,
+      code: "username_taken",
+    });
+  });
+
+  it("handles no content and network failures", async () => {
+    expect(await apiCall("/v1/me", {}, deps(new Response(null, { status: 204 })))).toEqual({
+      ok: true,
+      data: null,
+    });
+    expect(await apiCall("/v1/me", {}, deps(new Error("offline")))).toEqual({
+      ok: false,
+      status: 0,
+      code: "network",
+    });
   });
 });

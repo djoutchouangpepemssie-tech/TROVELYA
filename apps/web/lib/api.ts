@@ -46,3 +46,30 @@ export async function apiFetch(
   }
   return deps.fetch(`/api${path}`, { ...init, method, headers, credentials: "same-origin" });
 }
+
+export type ApiResult<T> = { ok: true; data: T } | { ok: false; status: number; code: string };
+
+/** JSON call: the parsed body, or the status and error `code` (`network` when unreachable). */
+export async function apiCall<T>(
+  path: `/v1/${string}`,
+  init: RequestInit = {},
+  deps: Dependencies = browser,
+): Promise<ApiResult<T>> {
+  const headers = new Headers(init.headers);
+  if (init.body) headers.set("content-type", "application/json");
+  let response: Response;
+  try {
+    response = await apiFetch(path, { ...init, headers }, deps);
+  } catch {
+    return { ok: false, status: 0, code: "network" };
+  }
+  if (!response.ok) {
+    const body = (await response.json().catch(() => ({}))) as { code?: string };
+    return { ok: false, status: response.status, code: body.code ?? "unknown" };
+  }
+  if (response.status === 204) {
+    await response.body?.cancel();
+    return { ok: true, data: null as T };
+  }
+  return { ok: true, data: (await response.json()) as T };
+}
