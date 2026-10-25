@@ -2,7 +2,7 @@
 
 import { Button } from "@trovelya/ui";
 import { useFormatter, useTranslations } from "next-intl";
-import { useRef, useState } from "react";
+import { useEffect, useRef, useState } from "react";
 
 import { useSession } from "@/components/SessionProvider";
 import { apiCall } from "@/lib/api";
@@ -32,8 +32,12 @@ export function ErasureNotice() {
     }
     setCancelled(true);
     await refresh();
-    status.current?.focus();
   }
+
+  // The button is gone with the notice: focus goes to the confirmation once it is drawn.
+  useEffect(() => {
+    if (cancelled) status.current?.focus();
+  }, [cancelled]);
 
   if (cancelled) {
     return (
