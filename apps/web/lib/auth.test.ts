@@ -1,6 +1,6 @@
-import { describe, expect, it } from "vitest";
+import { afterEach, describe, expect, it, vi } from "vitest";
 
-import { safeNext } from "./auth";
+import { authApi, safeNext } from "./auth";
 
 describe("safeNext", () => {
   it("keeps a path of this site", () => {
@@ -33,5 +33,40 @@ describe("safeNext", () => {
     ]) {
       expect(safeNext(value)).toBeNull();
     }
+  });
+});
+
+describe("authApi.me", () => {
+  afterEach(() => {
+    vi.unstubAllGlobals();
+  });
+
+  it("is null only when the API says signed out", async () => {
+    vi.stubGlobal(
+      "fetch",
+      vi.fn(() => Promise.resolve(new Response(null, { status: 401 }))),
+    );
+    expect(await authApi.me()).toBeNull();
+  });
+
+  it("is unknown on a server error or a network failure", async () => {
+    vi.stubGlobal(
+      "fetch",
+      vi.fn(() => Promise.resolve(new Response("", { status: 503 }))),
+    );
+    expect(await authApi.me()).toBeUndefined();
+    vi.stubGlobal(
+      "fetch",
+      vi.fn(() => Promise.reject(new Error("offline"))),
+    );
+    expect(await authApi.me()).toBeUndefined();
+  });
+
+  it("returns the member", async () => {
+    vi.stubGlobal(
+      "fetch",
+      vi.fn(() => Promise.resolve(Response.json({ id: "1" }))),
+    );
+    expect(await authApi.me()).toEqual({ id: "1" });
   });
 });

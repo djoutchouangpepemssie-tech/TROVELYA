@@ -49,7 +49,10 @@ export function BottomTabs() {
       >
         <ul className="mx-auto grid max-w-md grid-cols-2">
           {tabs.map((tab) => {
-            const current = pathname === tab.href;
+            // The settings pages belong to the Profil tab too.
+            const current =
+              pathname === tab.href ||
+              (tab.href.endsWith("/compte") && pathname.startsWith(`${tab.href}/`));
             return (
               <li key={tab.label}>
                 <a

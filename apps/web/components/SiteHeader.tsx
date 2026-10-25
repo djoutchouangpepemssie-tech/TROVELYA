@@ -5,15 +5,9 @@ import { useLocale, useTranslations } from "next-intl";
 import { usePathname } from "next/navigation";
 import { useEffect, useId, useRef, useState } from "react";
 
-import { useSession } from "./SessionProvider";
+import { initials } from "@/lib/initials";
 
-function initials(name: string): string {
-  const letters = name
-    .split(/\s+/)
-    .filter(Boolean)
-    .map((part) => part[0]?.toUpperCase() ?? "");
-  return letters.slice(0, 2).join("") || "?";
-}
+import { useSession } from "./SessionProvider";
 
 /** Header (6.5) with only what works in P1: the logo, then "Se connecter" or the account. */
 export function SiteHeader() {

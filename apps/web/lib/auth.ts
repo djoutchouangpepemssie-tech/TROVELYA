@@ -81,11 +81,17 @@ export const authApi = {
     }
   },
 
-  async me(): Promise<Me | null> {
+  /** The member, `null` when signed out (401), `undefined` when the answer is unknown. */
+  async me(): Promise<Me | null | undefined> {
     try {
-      return await bodyOrNull<Me>(await apiFetch("/v1/me"));
+      const response = await apiFetch("/v1/me");
+      if (response.status === 401) {
+        await response.body?.cancel();
+        return null;
+      }
+      return (await bodyOrNull<Me>(response)) ?? undefined;
     } catch {
-      return null;
+      return undefined;
     }
   },
 

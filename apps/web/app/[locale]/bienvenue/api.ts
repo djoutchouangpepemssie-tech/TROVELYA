@@ -1,6 +1,6 @@
 /** API calls of the onboarding (through the same-origin relay, `apiFetch`). */
 
-import { apiFetch } from "@/lib/api";
+import { apiCall as call } from "@/lib/api";
 
 export type Me = { profile_completed: boolean };
 
@@ -24,25 +24,6 @@ export type Place = {
   lat: number;
   lon: number;
 };
-
-export type ApiResult<T> = { ok: true; data: T } | { ok: false; status: number; code: string };
-
-async function call<T>(path: `/v1/${string}`, init: RequestInit = {}): Promise<ApiResult<T>> {
-  const headers = new Headers(init.headers);
-  if (init.body) headers.set("content-type", "application/json");
-  let response: Response;
-  try {
-    response = await apiFetch(path, { ...init, headers });
-  } catch {
-    return { ok: false, status: 0, code: "network" };
-  }
-  if (!response.ok) {
-    const body = (await response.json().catch(() => ({}))) as { code?: string };
-    return { ok: false, status: response.status, code: body.code ?? "unknown" };
-  }
-  const data = (response.status === 204 ? null : await response.json()) as T;
-  return { ok: true, data };
-}
 
 export const onboardingApi = {
   me: () => call<Me>("/v1/me"),

@@ -1,23 +1,24 @@
 "use client";
 
-import { Button } from "@trovelya/ui";
+import { Avatar, Button } from "@trovelya/ui";
 import { useLocale, useTranslations } from "next-intl";
-import { useRouter } from "next/navigation";
-import { useEffect, useState } from "react";
+import { useState } from "react";
 
 import { useSession } from "@/components/SessionProvider";
+import { initials } from "@/lib/initials";
 
+import { useAccount } from "./useAccount";
+
+// Each group appears with its page (security, privacy and data arrive with P1-T12b2 and b3).
+const SECTIONS = [["profile", "parametres"]] as const;
+
+/** W20: the account hub, then one page per group of settings. */
 export function AccountSummary() {
   const t = useTranslations("Account");
   const locale = useLocale();
-  const router = useRouter();
-  const { me, signOut } = useSession();
+  const { signOut } = useSession();
+  const me = useAccount();
   const [failed, setFailed] = useState(false);
-
-  useEffect(() => {
-    if (me === null) router.replace(`/${locale}/connexion?suivant=%2F${locale}%2Fcompte`);
-    else if (me && !me.profile_completed) router.replace(`/${locale}/bienvenue`);
-  }, [me, router, locale]);
 
   if (!me) {
     return (
@@ -27,11 +28,44 @@ export function AccountSummary() {
     );
   }
   return (
-    <main className="mx-auto flex max-w-xl flex-col gap-4 px-4 py-10">
+    <main className="mx-auto flex w-full max-w-xl flex-col gap-6 px-4 py-8">
       <h1 className="text-3xl font-semibold tracking-tight">{t("title")}</h1>
-      <p className="text-lg font-medium">{me.display_name}</p>
-      <p className="text-ink-2">@{me.username}</p>
-      <p className="text-ink-2">{t("signedInAs", { email: me.email })}</p>
+      <div className="flex items-center gap-4">
+        <Avatar name={me.display_name} initials={initials(me.display_name)} size={56} />
+        <div className="min-w-0">
+          <p className="truncate text-lg font-semibold">{me.display_name}</p>
+          <p className="truncate text-ink-2">@{me.username}</p>
+          <p className="truncate text-sm text-ink-2">{t("signedInAs", { email: me.email })}</p>
+        </div>
+      </div>
+      <a
+        href={`/${locale}/u/${me.username}`}
+        className="self-start text-sm font-semibold text-ink underline underline-offset-2"
+      >
+        {t("publicProfile")}
+      </a>
+
+      <nav aria-label={t("navLabel")}>
+        <ul className="divide-y divide-line overflow-hidden rounded-xl border border-line">
+          {SECTIONS.map(([key, path]) => (
+            <li key={key}>
+              <a
+                href={`/${locale}/compte/${path}`}
+                className="flex items-center justify-between gap-4 px-4 py-3.5 hover:bg-surface-2"
+              >
+                <span className="flex flex-col">
+                  <span className="font-medium">{t(`nav.${key}`)}</span>
+                  <span className="text-sm text-ink-2">{t(`navHints.${key}`)}</span>
+                </span>
+                <span aria-hidden="true" className="text-ink-3">
+                  ›
+                </span>
+              </a>
+            </li>
+          ))}
+        </ul>
+      </nav>
+
       <div>
         <Button
           variant="secondary"
