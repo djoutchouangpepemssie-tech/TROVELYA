@@ -4,6 +4,8 @@ import { useLocale, useTranslations } from "next-intl";
 import { useRouter } from "next/navigation";
 import { useEffect, useState } from "react";
 
+import { takeNext } from "@/lib/auth";
+
 import { onboardingApi, type Preferences } from "./api";
 import { InterestsStep } from "./steps/InterestsStep";
 import { NotificationsStep } from "./steps/NotificationsStep";
@@ -67,8 +69,9 @@ export function Onboarding() {
     setStep(next);
   }
 
+  // Back to the page the person came from before signing in, if any.
   function finish() {
-    router.push(home);
+    router.push(takeNext() ?? home);
   }
 
   // Steps 2 to 4 save over the stored preferences: never shown before they are loaded.
@@ -76,7 +79,7 @@ export function Onboarding() {
     return (
       <main className="flex min-h-dvh items-center justify-center" aria-busy={!error}>
         {error ? (
-          <p role="alert" className="text-danger">
+          <p role="alert" className="text-danger-ink">
             {error}
           </p>
         ) : (

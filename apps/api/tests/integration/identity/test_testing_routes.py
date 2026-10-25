@@ -54,3 +54,5 @@ async def test_session_route_absent_outside_test_and_local(
             assert (await client.post("/v1/_test/session", json={})).status_code == 404, env
             staff = await client.post("/v1/_test/staff-enrolment", json={})
             assert staff.status_code == 404, env
+            link = await client.post("/v1/_test/magic-link", json={"email": "a@example.org"})
+            assert link.status_code == 404, env

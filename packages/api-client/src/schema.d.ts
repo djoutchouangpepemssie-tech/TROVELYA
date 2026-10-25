@@ -118,6 +118,26 @@ export interface paths {
         patch?: never;
         trace?: never;
     };
+    "/v1/auth/methods": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        /**
+         * Get Methods
+         * @description Sign-in methods to show; the screens hide the others (no dead buttons).
+         */
+        get: operations["auth_methods"];
+        put?: never;
+        post?: never;
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
     "/v1/auth/oauth/{provider}/callback": {
         parameters: {
             query?: never;
@@ -1079,6 +1099,25 @@ export interface components {
              */
             status: "pending" | "done" | "approved" | "rejected";
         };
+        /**
+         * AuthMethods
+         * @description What the sign-in screen may offer (flags on and, for Google/Apple, credentials set).
+         */
+        AuthMethods: {
+            /** Apple */
+            apple: boolean;
+            /** Google */
+            google: boolean;
+            /** Magic Link */
+            magic_link: boolean;
+            /**
+             * Magic Link Ttl Min
+             * @description Lifetime of a sign-in link, in minutes
+             */
+            magic_link_ttl_min: number;
+            /** Passkey */
+            passkey: boolean;
+        };
         /** BlockList */
         BlockList: {
             /** Data */
@@ -1778,6 +1817,26 @@ export interface operations {
                 };
                 content: {
                     "application/json": components["schemas"]["HTTPValidationError"];
+                };
+            };
+        };
+    };
+    auth_methods: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description Successful Response */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["AuthMethods"];
                 };
             };
         };

@@ -63,7 +63,7 @@ export function CookieChoices() {
       )}
       <p aria-live="polite" className="mt-3 text-sm">
         {status === "saved" && <span className="text-ink-2">{t("choices.saved")}</span>}
-        {status === "failed" && <span className="text-danger">{t("error")}</span>}
+        {status === "failed" && <span className="text-danger-ink">{t("error")}</span>}
       </p>
     </section>
   );

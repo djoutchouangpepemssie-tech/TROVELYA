@@ -25,6 +25,16 @@ class SessionList(BaseModel):
     data: list[SessionOut]
 
 
+class AuthMethods(BaseModel):
+    """What the sign-in screen may offer (flags on and, for Google/Apple, credentials set)."""
+
+    magic_link: bool
+    magic_link_ttl_min: int = Field(description="Lifetime of a sign-in link, in minutes")
+    passkey: bool
+    google: bool
+    apple: bool
+
+
 class MagicLinkRequest(BaseModel):
     email: str = Field(pattern=r"^[^@\s]+@[^@\s]+\.[^@\s]+$", max_length=254)
     captcha_token: str | None = Field(default=None, max_length=4096)

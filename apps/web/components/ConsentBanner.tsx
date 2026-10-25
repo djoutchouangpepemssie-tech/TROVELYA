@@ -71,7 +71,7 @@ export function ConsentBanner() {
           </a>
         </p>
         {failed && (
-          <p role="alert" className="text-sm text-danger">
+          <p role="alert" className="text-sm text-danger-ink">
             {t("error")}
           </p>
         )}

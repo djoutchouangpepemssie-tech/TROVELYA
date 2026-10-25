@@ -2,10 +2,12 @@
 
 `POST /v1/_test/session` creates a member and signs the browser in, so end-to-end tests do not
 go through e-mails; `POST /v1/_test/staff-enrolment` creates a staff account and returns its
-enrolment link, as the creation script prints it. Nothing here exists on staging or in
-production.
+enrolment link, as the creation script prints it; `POST /v1/_test/magic-link` returns the
+sign-in link the e-mail would carry (or an already expired one). Nothing here exists on
+staging or in production.
 """
 
+from datetime import timedelta
 from typing import Annotated
 
 from fastapi import APIRouter, Depends, Request, Response
@@ -21,7 +23,7 @@ from trovelya.modules.identity.service import (
     set_session_cookie,
 )
 from trovelya.modules.identity.service.auth import Uow
-from trovelya.modules.identity.service.magic_links import provisional_username
+from trovelya.modules.identity.service.magic_links import issue_magic_link, provisional_username
 from trovelya.modules.identity.service.staff_accounts import issue_staff_enrolment
 from trovelya.shared.clock import Clock
 from trovelya.shared.ids import new_id
@@ -95,3 +97,30 @@ async def test_staff_enrolment(
         clock=clock,
     )
     return TestStaffEnrolment(user_id=str(enrolment.user_id), link=enrolment.link)
+
+
+class TestMagicLinkRequest(BaseModel):
+    email: str = Field(max_length=254)
+    expired: bool = False
+
+
+class TestMagicLink(BaseModel):
+    link: str
+
+
+@router.post("/magic-link", operation_id="test_magic_link")
+async def test_magic_link(
+    body: TestMagicLinkRequest,
+    request: Request,
+    db: Uow,
+    clock: Annotated[Clock, Depends(get_clock)],
+) -> TestMagicLink:
+    link, _ = await issue_magic_link(
+        db,
+        email=body.email,
+        ip=None,
+        settings=request.app.state.settings,
+        clock=clock,
+        ttl=timedelta(minutes=-1) if body.expired else None,
+    )
+    return TestMagicLink(link=link)

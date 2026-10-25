@@ -48,7 +48,7 @@ export function StepLayout({ step, title, intro, error, children, actions }: Ste
         {title}
       </h1>
       {intro ? <p className="mt-1.5 text-ink-2">{intro}</p> : null}
-      <p role="alert" className="mt-3 empty:hidden text-danger">
+      <p role="alert" className="mt-3 empty:hidden text-danger-ink">
         {error ?? ""}
       </p>
       <div className="mt-6 flex-1">{children}</div>

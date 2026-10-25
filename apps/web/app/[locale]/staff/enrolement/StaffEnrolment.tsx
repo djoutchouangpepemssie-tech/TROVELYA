@@ -36,7 +36,7 @@ export function StaffEnrolment() {
       <h1 className="text-2xl font-semibold">{t("title")}</h1>
       {state.step === "reading" && <p className="text-ink-2">{t("loading")}</p>}
       {state.step === "missing" && (
-        <p role="alert" className="text-danger">
+        <p role="alert" className="text-danger-ink">
           {t("errors.link_invalid")}
         </p>
       )}
@@ -44,7 +44,7 @@ export function StaffEnrolment() {
         <>
           <p className="text-ink-2">{t("intro")}</p>
           {state.error && (
-            <p role="alert" className="text-danger">
+            <p role="alert" className="text-danger-ink">
               {t(`errors.${state.error}`)}
             </p>
           )}

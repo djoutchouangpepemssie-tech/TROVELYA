@@ -57,7 +57,8 @@ function contrast(a: string, b: string): number {
 describe("text colour contrast", () => {
   const color = tokens.color as Record<string, { light: string; dark: string }>;
   const cases = (["light", "dark"] as const).flatMap((mode) =>
-    ["ink", "ink-2", "ink-3"].flatMap((text) =>
+    // danger-ink: error messages written as text (danger itself is a fill).
+    ["ink", "ink-2", "ink-3", "danger-ink"].flatMap((text) =>
       ["surface", "surface-2"].map((background) => ({ mode, text, background })),
     ),
   );

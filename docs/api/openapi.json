@@ -478,6 +478,41 @@
         "title": "ApprovalOutcomeOut",
         "type": "object"
       },
+      "AuthMethods": {
+        "description": "What the sign-in screen may offer (flags on and, for Google/Apple, credentials set).",
+        "properties": {
+          "apple": {
+            "title": "Apple",
+            "type": "boolean"
+          },
+          "google": {
+            "title": "Google",
+            "type": "boolean"
+          },
+          "magic_link": {
+            "title": "Magic Link",
+            "type": "boolean"
+          },
+          "magic_link_ttl_min": {
+            "description": "Lifetime of a sign-in link, in minutes",
+            "title": "Magic Link Ttl Min",
+            "type": "integer"
+          },
+          "passkey": {
+            "title": "Passkey",
+            "type": "boolean"
+          }
+        },
+        "required": [
+          "magic_link",
+          "magic_link_ttl_min",
+          "passkey",
+          "google",
+          "apple"
+        ],
+        "title": "AuthMethods",
+        "type": "object"
+      },
       "BlockList": {
         "properties": {
           "data": {
@@ -2058,6 +2093,28 @@
           }
         },
         "summary": "Post Magic Link Verify",
+        "tags": [
+          "auth"
+        ]
+      }
+    },
+    "/v1/auth/methods": {
+      "get": {
+        "description": "Sign-in methods to show; the screens hide the others (no dead buttons).",
+        "operationId": "auth_methods",
+        "responses": {
+          "200": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/AuthMethods"
+                }
+              }
+            },
+            "description": "Successful Response"
+          }
+        },
+        "summary": "Get Methods",
         "tags": [
           "auth"
         ]
