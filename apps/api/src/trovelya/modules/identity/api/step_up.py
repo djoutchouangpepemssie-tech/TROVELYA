@@ -45,8 +45,9 @@ def _secret(request: Request) -> str:
     return _settings(request).proxy_shared_secret.get_secret_value()
 
 
-async def _require_passkeys(request: Request) -> None:
-    if not await request.app.state.flags.is_enabled("auth.passkeys"):
+async def _require_passkeys(request: Request, user: CurrentUser) -> None:
+    """Passkeys open to this member (the flag, or its allow list for beta testers)."""
+    if not await request.app.state.flags.is_enabled("auth.passkeys", user_id=user.id):
         raise AppError(ErrorCode.NOT_FOUND, 404)
 
 
@@ -58,7 +59,7 @@ def _rotated(response: Response, issued: IssuedSession, clock: Clock) -> None:
 @router.post("/options", operation_id="auth_step_up_options")
 async def options(request: Request, db: Uow, user: Me, clock: ClockDep) -> dict[str, Any]:
     """WebAuthn request options limited to the signed-in user's passkeys."""
-    await _require_passkeys(request)
+    await _require_passkeys(request, user)
     rp = RelyingParty.from_settings(_settings(request))
     return await step_up_options(db, request.app.state.redis, user=user, rp=rp, clock=clock)
 
@@ -93,7 +94,7 @@ async def step_up(
         )
         response.status_code = status.HTTP_202_ACCEPTED
         return
-    await _require_passkeys(request)
+    await _require_passkeys(request, user)
     issued = await step_up_with_passkey(
         db,
         request.app.state.redis,

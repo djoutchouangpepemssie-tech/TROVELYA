@@ -9,7 +9,8 @@ from sqlalchemy import text
 from sqlalchemy.ext.asyncio import AsyncSession, async_sessionmaker
 
 from tests.conftest import TEST_PROXY_SECRET, make_settings
-from trovelya.core.flags import FlagService
+from tests.integration.identity.test_profile import make_account
+from trovelya.core.flags import CACHE_PREFIX, FlagService
 from trovelya.main import create_app
 
 
@@ -80,3 +81,42 @@ async def test_provider_needs_flag_and_credentials(
         oauth_google_client_secret="ci-only-secret-key-google-0123456789",
     )
     assert methods["google"] is True
+
+
+async def test_passkeys_follow_the_flag_allow_list(
+    sessionmaker: async_sessionmaker[AsyncSession], redis_client: Redis
+) -> None:
+    """Flag off for all but the allowed members (beta testers): they see and manage passkeys."""
+    allowed = await make_account(sessionmaker, completed=True)
+    other = await make_account(sessionmaker, completed=True)
+    async with sessionmaker() as db:
+        await db.execute(
+            text(
+                "INSERT INTO feature_flags (key, enabled, allow_user_ids)"
+                " VALUES ('auth.passkeys', false, ARRAY[CAST(:id AS uuid)])"
+            ),
+            {"id": allowed.id},
+        )
+        await db.commit()
+    await redis_client.delete(CACHE_PREFIX + "auth.passkeys")
+    try:
+        app = create_app(make_settings())
+        app.state.sessionmaker = sessionmaker
+        app.state.redis = redis_client
+        app.state.flags = FlagService(sessionmaker, redis_client, {})
+        async with AsyncClient(transport=ASGITransport(app=app), base_url="https://test") as client:
+            client.headers.update({"x-trv-proxy-secret": TEST_PROXY_SECRET})
+            for account, expected in ((allowed, True), (other, False)):
+                methods = (await client.get("/v1/auth/methods", headers=account.headers)).json()
+                assert methods["passkey"] is expected
+                listed = await client.get("/v1/me/passkeys", headers=account.headers)
+                assert listed.status_code == (200 if expected else 404)
+                options = await client.post("/v1/auth/step-up/options", headers=account.headers)
+                assert (options.status_code != 404) is expected
+            # Signed out: the flag as everyone sees it.
+            assert (await client.get("/v1/auth/methods")).json()["passkey"] is False
+    finally:
+        async with sessionmaker() as db:
+            await db.execute(text("DELETE FROM feature_flags WHERE key = 'auth.passkeys'"))
+            await db.commit()
+        await redis_client.delete(CACHE_PREFIX + "auth.passkeys")

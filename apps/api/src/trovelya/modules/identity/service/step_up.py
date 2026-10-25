@@ -8,6 +8,7 @@ a new token carrying `mfa_at`, the old one revoked.
 import secrets
 from datetime import timedelta
 from typing import Any
+from uuid import UUID
 
 from redis.asyncio import Redis
 from sqlalchemy.ext.asyncio import AsyncSession
@@ -58,18 +59,12 @@ async def step_up_with_passkey(
     )
 
 
-async def request_step_up_link(
-    db: AsyncSession,
-    queue: JobQueue,
-    *,
-    user: CurrentUser,
-    ip: str,
-    settings: Settings,
-    clock: Clock,
-) -> str:
-    """E-mail a confirmation link to the account's address; returns that address."""
+async def issue_step_up_link(
+    db: AsyncSession, *, user_id: UUID, ip: str, settings: Settings, clock: Clock
+) -> tuple[str, str, int]:
+    """Store a new step-up link; answers the link, the account's address and the lifetime."""
     now = clock.now()
-    email = await repository.user_email(db, user.id)
+    email = await repository.user_email(db, user_id)
     ttl_min = await repository.setting_int(db, "auth.magic_link_ttl_min", default=DEFAULT_TTL_MIN)
     token = secrets.token_urlsafe(TOKEN_BYTES)
     await repository.insert_magic_link(
@@ -82,7 +77,22 @@ async def request_step_up_link(
         ip=ip if ip != "unknown" else None,
         now=now,
     )
-    link = f"{settings.web_origin.rstrip('/')}/fr/confirmer#token={token}"
+    return f"{settings.web_origin.rstrip('/')}/fr/confirmer#token={token}", email, ttl_min
+
+
+async def request_step_up_link(
+    db: AsyncSession,
+    queue: JobQueue,
+    *,
+    user: CurrentUser,
+    ip: str,
+    settings: Settings,
+    clock: Clock,
+) -> str:
+    """E-mail a confirmation link to the account's address; returns that address."""
+    link, email, ttl_min = await issue_step_up_link(
+        db, user_id=user.id, ip=ip, settings=settings, clock=clock
+    )
     message = step_up_message(to=email, link=link, ttl_minutes=ttl_min)
     await enqueue_email(db, queue, message, settings=settings)
     return email

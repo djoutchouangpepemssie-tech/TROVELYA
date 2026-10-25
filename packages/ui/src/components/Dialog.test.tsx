@@ -1,4 +1,5 @@
 import { render, screen } from "@testing-library/react";
+import { useState } from "react";
 import userEvent from "@testing-library/user-event";
 import { describe, expect, it } from "vitest";
 
@@ -33,5 +34,36 @@ describe("<Dialog>", () => {
 
     await user.keyboard("{Escape}");
     expect(screen.queryByRole("dialog")).toBeNull();
+  });
+});
+
+function OpenedByCode() {
+  const [open, setOpen] = useState(false);
+  return (
+    <>
+      <Button
+        onClick={() => {
+          setOpen(true);
+        }}
+      >
+        Action sensible
+      </Button>
+      <Dialog open={open} onOpenChange={setOpen} title="Confirmer" closeLabel="Fermer">
+        <Button>Valider</Button>
+      </Dialog>
+    </>
+  );
+}
+
+describe("<Dialog> without a trigger", () => {
+  it("opens by code and gives focus back where it was", async () => {
+    const user = userEvent.setup();
+    render(<OpenedByCode />);
+    const action = screen.getByRole("button", { name: "Action sensible" });
+    await user.click(action);
+    expect(screen.getByRole("dialog", { name: "Confirmer" })).toBeTruthy();
+    await user.keyboard("{Escape}");
+    expect(screen.queryByRole("dialog")).toBeNull();
+    expect(document.activeElement).toBe(action);
   });
 });

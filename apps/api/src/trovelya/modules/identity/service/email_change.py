@@ -32,21 +32,21 @@ from trovelya.shared.ids import new_id
 PURPOSE = "change_email"
 
 
-async def request_email_change(
+async def issue_email_change_link(
     db: AsyncSession,
-    queue: JobQueue,
     *,
-    user: CurrentUser,
+    user_id: UUID,
     new_email: str,
     ip: str,
     settings: Settings,
     clock: Clock,
-) -> None:
+) -> tuple[str, int] | None:
+    """Store a link for the new address; `None` when the address is already in use."""
     if await repository.email_in_use(db, new_email):
-        return
+        return None
     now = clock.now()
     ttl_min = await repository.setting_int(db, "auth.magic_link_ttl_min", default=DEFAULT_TTL_MIN)
-    token = f"{user.id.hex}.{secrets.token_urlsafe(TOKEN_BYTES)}"
+    token = f"{user_id.hex}.{secrets.token_urlsafe(TOKEN_BYTES)}"
     await repository.insert_magic_link(
         db,
         link_id=new_id(),
@@ -57,7 +57,25 @@ async def request_email_change(
         ip=ip if ip != "unknown" else None,
         now=now,
     )
-    link = f"{settings.web_origin.rstrip('/')}/fr/compte/email/confirmer#token={token}"
+    return f"{settings.web_origin.rstrip('/')}/fr/compte/email/confirmer#token={token}", ttl_min
+
+
+async def request_email_change(
+    db: AsyncSession,
+    queue: JobQueue,
+    *,
+    user: CurrentUser,
+    new_email: str,
+    ip: str,
+    settings: Settings,
+    clock: Clock,
+) -> None:
+    issued = await issue_email_change_link(
+        db, user_id=user.id, new_email=new_email, ip=ip, settings=settings, clock=clock
+    )
+    if issued is None:
+        return
+    link, ttl_min = issued
     message = email_change_message(to=new_email, link=link, ttl_minutes=ttl_min)
     await enqueue_email(db, queue, message, settings=settings)
 

@@ -3,9 +3,10 @@
 import { Button, Logo } from "@trovelya/ui";
 import { useLocale, useTranslations } from "next-intl";
 import { useRouter } from "next/navigation";
-import { useEffect, useRef, useState } from "react";
+import { useEffect, useState } from "react";
 
 import { useSession } from "@/components/SessionProvider";
+import { useLinkToken } from "@/components/useLinkToken";
 import { authApi, takeNext } from "@/lib/auth";
 
 type State =
@@ -19,20 +20,12 @@ export function Verify() {
   const router = useRouter();
   const { refresh } = useSession();
   const [state, setState] = useState<State>({ step: "reading" });
-  // Read once: the effect runs twice in development (strict mode), after the hash is gone.
-  const token = useRef<string | null | undefined>(undefined);
+  const token = useLinkToken();
 
   useEffect(() => {
-    if (token.current === undefined) {
-      token.current = new URLSearchParams(window.location.hash.slice(1)).get("token");
-      // The token leaves the address bar and the history at once.
-      window.history.replaceState(null, "", window.location.pathname);
-    }
-    const read = token.current;
-    setState(
-      read ? { step: "ready", token: read, sending: false, error: null } : { step: "invalid" },
-    );
-  }, []);
+    if (token === undefined) return;
+    setState(token ? { step: "ready", token, sending: false, error: null } : { step: "invalid" });
+  }, [token]);
 
   async function signIn(token: string) {
     setState({ step: "ready", token, sending: true, error: null });
