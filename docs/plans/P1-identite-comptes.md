@@ -454,6 +454,7 @@ Parallélisables : T03 et T04 après T02c ; T06, T09a et T10 après T05 ; T08 d�
 
 **T12c2 réalisé (25/10/2026) :** job CI `e2e-full` : `apps/web/tests/e2e-full/stack.sh` démarre PostgreSQL (notre image), Redis et Mailpit, puis l'API et le worker arq depuis l'image que Railway déploie, construite à partir du commit (`ENV=staging`, e-mails par SMTP vers Mailpit, géocodeur factice) ; le site est servi par sa construction de production (`playwright.full.config.ts`, `pnpm --filter @trovelya/web test:e2e:full`). `tests/e2e-full/parcours-1.spec.ts` : `/fr/inscription` → e-mail envoyé par le worker et lu dans l'API de Mailpit → « Me connecter » → profil (pseudo, nom, 1990) → 2 univers → zone « Lyon 7e » → accueil connecté ; vérifie par l'API un profil complet et une zone par défaut de 5000 m ; axe sans violation. En cas d'échec, les journaux de l'API et du worker sont affichés.
 
+**T12c3 réalisé (25/10/2026) :** `docs/HANDOFF.md` réécrit pour la fin de P1 (preuves de la porte G1 à G10, écarts, actions d'Arcel, annexe P0) ; `docs/GLOSSARY.md` : vocabulaire technique de P1 ; `docs/security/threat-model.md` v3 : état à la fin de P1, anti-robot Friendly Captcha, fuites de télémétrie trouvées et corrigées. Restent à Arcel les démonstrations sur staging (G3, G4, G5, G8) et la validation de la porte.
 ---
 
 ## 6. Porte de P1 (cahier 17.2) : checklist et preuves

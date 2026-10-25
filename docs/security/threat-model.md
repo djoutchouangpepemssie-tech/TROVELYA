@@ -1,6 +1,6 @@
-# Modèle de menaces — v2 (P0 + P1 authentification et comptes)
+# Modèle de menaces — v3 (P0 + P1 authentification et comptes)
 
-**Date :** 24 octobre 2026. **Méthode :** STRIDE (usurpation, altération, répudiation, divulgation, déni de service, élévation de privilèges). **À revoir :** à chaque phase qui ajoute une surface (P1 authentification, P4 paiements, P12 enchères…).
+**Date :** 24 octobre 2026, mis à jour le 25 octobre 2026 (fin de P1). **Méthode :** STRIDE (usurpation, altération, répudiation, divulgation, déni de service, élévation de privilèges). **À revoir :** à chaque phase qui ajoute une surface (P1 authentification, P4 paiements, P12 enchères…).
 
 ## Périmètre et frontières de confiance
 
@@ -50,7 +50,7 @@ Nouvelles frontières :
 Navigateur ──▶ Vercel (Next.js) ── relais /api/* (secret partagé, IP et pays du client) ──▶ API
                   cookie __Host-trv_session posé sur l'origine du web (ADR-0015)
 API ──HTTPS──▶ Resend (e-mails, ADR-0017) · Google / Apple (OIDC) · Géoplateforme IGN (géocodage)
-     · Cloudflare Turnstile (anti-robots, flag)
+     · anti-robot (Friendly Captcha, UE, avant la production)
 worker ──▶ envoi d'e-mails, export et effacement RGPD
 ```
 
@@ -63,7 +63,7 @@ Les colonnes « Tâches » renvoient à `docs/plans/P1-identite-comptes.md`.
 | Session | **S** Session volée utilisée longtemps | Expiration absolue 30 jours, inactivité 14 jours, révocation unitaire ou globale immédiate, notification de nouvel appareil ou pays | T02b, T02c |
 | Lien magique | **S** Interception de l'e-mail | Usage unique, 15 minutes, jeton dans le fragment d'URL (jamais dans les journaux ni le `Referer`), confirmation par bouton (POST), notification de nouvelle connexion | T02c |
 | Lien magique | **I** Énumération des comptes | Même parcours, même réponse `202` et même travail serveur que l'e-mail existe ou non (le compte naît à la vérification) | T02c |
-| Lien magique | **D** Bombardement d'e-mails ou de requêtes | 5 par heure par e-mail, 20 par heure par IP, Turnstile (flag) | T02c |
+| Lien magique | **D** Bombardement d'e-mails ou de requêtes | 5 par heure par e-mail, 20 par heure par IP ; anti-robot Friendly Captcha avant la production (décision d'Arcel du 25 octobre 2026, Turnstile écarté : hors UE) | T02c |
 | Lien magique | **T** Préchargement par un scanner d'e-mails qui consomme le lien | La page `/verifier` n'agit qu'après un clic (POST) | T02c, T12a |
 | OAuth / OIDC | **S** Connexion forcée sur le compte d'un attaquant (CSRF de connexion), rejeu du code | `state`, `nonce` et `code_verifier` (PKCE) côté serveur, à usage unique, liés au navigateur ; `id_token` vérifié (signature JWKS, `iss`, `aud`, `exp`, `nonce`) | T03 |
 | OAuth / OIDC | **E** Prise de compte par liaison sur un e-mail non vérifié | Liaison automatique seulement si `email_verified` est vrai chez le fournisseur ; sinon refus avec invitation à se connecter par lien magique | T03 |
@@ -76,14 +76,24 @@ Les colonnes « Tâches » renvoient à `docs/plans/P1-identite-comptes.md`.
 | Double validation | **R/E** Un seul membre du staff fait seul une action critique | Demande `pending`, approbateur différent qui détient la permission, expiration 24 h, deux identités dans l'audit | T11 |
 | RGPD | **I** Export téléchargé par un tiers | Step-up, archive chiffrée (AES-256-GCM), propriétaire seul, expiration 7 jours | T09a |
 | RGPD | **T/R** Effacement incomplet ou contesté | Registre des « effaceurs » par module, anonymisation des lignes à conserver, journal d'audit, délai de grâce de 30 jours annulable | T09b |
-| Journaux | **I** E-mail, jeton, IP ou adresse dans les journaux, Sentry ou traces | `redact_pii` étendu aux nouveaux champs ; test de bout en bout sur le parcours de connexion | T02c, T12c |
-| Inscription | **D** Création de comptes en masse | Turnstile (flag), limites de débit, pas de compte avant vérification de l'e-mail | T02c |
+| Journaux | **I** E-mail, jeton, IP ou adresse dans les journaux, Sentry ou traces | `redact_pii` étendu aux nouveaux champs ; Sentry et traces passent par le même masquage, sans chaîne de requête (`scrub_telemetry`, `RedactingSpanExporter`) ; erreurs de base sans message ; `test_no_pii_in_telemetry` sur un parcours complet | T02c, T12c |
+| Inscription | **D** Création de comptes en masse | Limites de débit, pas de compte avant vérification de l'e-mail ; anti-robot Friendly Captcha avant la production | T02c |
 | Mineurs | **I** Profilage d'un mineur | Année de naissance seule ; moins de 15 ans refusé sans rien conserver ; drapeau « mineur » qui exclura toute publicité personnalisée (P11) | T05 |
 | E-mails | **I** Données transférées hors UE (Resend : métadonnées aux États-Unis) | Écart temporaire documenté (ADR-0017), seul Arcel reçoit des e-mails avant l'ouverture ; bascule vers un fournisseur hébergé dans l'UE avant le lancement public | T02c |
 | Secrets | **I/E** Fuite de `SECRET_KEY`, `PROXY_SHARED_SECRET` ou `FIELD_ENCRYPTION_KEY` | Variables Railway/Vercel chiffrées, différentes par environnement ; procédure de rotation dans `docs/runbooks/secrets.md` | T02a, T09a |
 
+## État à la fin de P1 (25 octobre 2026)
+
+Toutes les parades du tableau P1 sont en place et testées, sauf l'anti-robot, à brancher avant la production (Friendly Captcha). Deux tests gardent les frontières :
+- `test_access_matrix` : les 61 routes de l'API sont déclarées ; anonyme → 401, tiers → 404 sur toute ressource d'autrui, membre → 403 sur les routes staff.
+- `test_no_pii_in_telemetry` : aucun e-mail, jeton, IP, nom, adresse, téléphone, coordonnée ni année de naissance dans les journaux, Sentry ou les traces, sur un parcours complet.
+
+Ce second test a trouvé et fait corriger cinq fuites qui seraient parties en production : la chaîne de requête (adresse recherchée) dans les traces et dans la ligne d'accès d'uvicorn ; l'URL des appels sortants dans les journaux de `httpx` et dans les transactions Sentry ; les valeurs d'une requête SQL en échec citées par le pilote `asyncpg`.
+
+Reste ouvert : rotation des secrets (procédure écrite, non jouée) ; e-mails par Resend (métadonnées aux États-Unis, ADR-0017) jusqu'au fournisseur UE ; passkeys et Apple sur le domaine `trovelya.com` après son achat.
+
 ## Hypothèses
 
 - Railway, Vercel, GitHub et Sentry sont des tiers de confiance ; leurs comptes sont protégés par une double authentification (à vérifier par Arcel).
-- La valeur `NEXT_PUBLIC_*` n'est jamais secrète (DSN Sentry du web, clé publique Turnstile).
+- La valeur `NEXT_PUBLIC_*` n'est jamais secrète (DSN Sentry du web, clé publique de l'anti-robot).
 - Avant le lancement public, `trovelya.com` est acheté : passkeys, Apple et e-mails basculent sur ce domaine (les passkeys de test créées sur `vercel.app` sont perdues).

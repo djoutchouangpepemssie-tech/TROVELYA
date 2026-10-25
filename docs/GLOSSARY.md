@@ -68,3 +68,26 @@ Les identifiants de code sont en anglais (`snake_case` en Python et SQL, `camelC
 | Masquage des données personnelles | `redact_pii` | Filtre appliqué à tous les journaux et à tout ce qui part vers Sentry (e-mails, téléphones, IBAN, jetons, adresses IP, clés sensibles). |
 | Staging / production | `main` / `release` | Deux environnements complets (Railway et Vercel) : `main` part en staging à chaque fusion, `release` n'avance que par le workflow *Deploy production* (ADR-0013). |
 | Contrat d'API | `docs/api/openapi.json` | Description OpenAPI générée depuis le code ; le client TypeScript en est dérivé et la CI vérifie qu'ils sont à jour (ADR-0004). |
+
+## Vocabulaire technique (P1 — identité et comptes)
+
+| Terme | Identifiant code | Définition |
+|---|---|---|
+| Lien magique | `magic_links`, `/fr/verifier` | Connexion sans mot de passe : un lien à usage unique (15 minutes, `auth.magic_link_ttl_min`) envoyé par e-mail ; le jeton est dans le fragment de l'URL, et la connexion n'a lieu qu'après un clic sur « Me connecter ». |
+| Session | `sessions`, `__Host-trv_session` | Session opaque (ADR-0008) : le navigateur garde un jeton aléatoire, la base n'en garde que l'empreinte ; 30 jours au plus, 14 jours d'inactivité, révocable appareil par appareil. |
+| Relais same-origin | `/api/*`, `lib/relay.ts`, `PROXY_SHARED_SECRET` | Le site relaie les appels à l'API depuis sa propre origine (ADR-0015) ; l'API ne croit l'IP et le pays transmis que si le secret partagé est présent. |
+| Jeton CSRF | `__Host-trv_csrf`, `x-csrf-token` | Double soumission signée : toute requête qui modifie un état renvoie dans un en-tête la valeur du cookie. |
+| Preuve forte (step-up) | `sessions.mfa_at`, `recent_mfa_user`, `components/StepUp.tsx` | Connexion forte de moins de 12 h (`auth.step_up_max_age_h`) exigée pour les actions sensibles ; obtenue par passkey ou par un lien envoyé par e-mail. |
+| Passkey | `passkeys`, WebAuthn | Clé d'accès liée à l'appareil ; ouverte aux membres par le drapeau `auth.passkeys`, obligatoire pour le staff. |
+| Profil complété | `users.profile_completed_at`, `completed_user` | Pseudo, nom, année de naissance et CGU acceptées ; sans profil complété, seules les routes du compte lui-même répondent. |
+| Drapeau | `feature_flags`, `allow_user_ids` | Interrupteur d'une fonctionnalité : activé pour tous, pour une part des membres, par pays ou pour une liste de membres (bêta-testeurs), qui l'emporte sur l'interrupteur général. |
+| Consentement | `consents`, `__Host-trv_anon` | Choix accordé ou retiré pour une finalité facultative, avec la version de la politique ; l'historique est conservé comme preuve. |
+| Demande RGPD | `data_requests` | Demande d'export ou d'effacement, avec son état (`received`, `processing`, `completed`, `refused`). |
+| Export RGPD | `data_exports`, `register_exporter` | Archive ZIP scellée de toutes les données d'un compte (ADR-0016), construite par le worker et téléchargeable 7 jours (`retention.data_export_days`) ; chaque module enregistre son exportateur. |
+| Délai de grâce | `retention.erasure_grace_days`, `users.erasure_requested_at` | 30 jours entre la demande d'effacement et l'effacement ; pendant ce délai le compte est masqué et peut être rétabli par « Annuler la suppression ». |
+| Effaceur | `register_eraser` | Fonction de chaque module qui efface ou anonymise ses données à la fin du délai de grâce. |
+| Compte staff | `users.is_staff`, `staff_user` | Compte interne distinct, connecté par passkey en session d'administration de 12 h (ADR-0018). |
+| Double validation | `approval_requests`, `require_permission` | Action critique demandée par un membre du staff et approuvée par un autre qui détient la permission, avant 24 h ; les deux identités sont dans le journal d'audit. |
+| Matrice d'accès | `tests/integration/identity/test_access_matrix.py` | Liste de toutes les routes de l'API par règle d'accès (publique, ouverte, membre, ressource possédée, staff) ; une route non déclarée fait échouer la CI. |
+| Masquage de la télémétrie | `scrub_telemetry`, `RedactingSpanExporter` | Le masquage des journaux appliqué à Sentry et aux traces, sans chaîne de requête ; les erreurs de base gardent leur type, jamais leur message. |
+| Parcours 1 | `tests/e2e-full/parcours-1.spec.ts`, job `e2e-full` | Inscription par e-mail jusqu'à l'accueil connecté, sur la pile telle qu'elle est déployée (image de l'API, worker, Mailpit). |
