@@ -19,9 +19,12 @@ class _NoQueue:
 
 
 def _client(
-    sessionmaker: async_sessionmaker[AsyncSession], redis_client: Redis, env: str
+    sessionmaker: async_sessionmaker[AsyncSession],
+    redis_client: Redis,
+    env: str,
+    **settings: object,
 ) -> AsyncClient:
-    app = create_app(make_settings(env=env))
+    app = create_app(make_settings(env=env, **settings))
     app.state.sessionmaker = sessionmaker
     app.state.redis = redis_client
     app.state.flags = FlagService(sessionmaker, redis_client, {})
@@ -137,3 +140,37 @@ async def test_flag_allow_opens_a_flag_to_one_member(
                 await db.execute(text("DELETE FROM feature_flags WHERE key = 'auth.passkeys'"))
                 await db.commit()
             await redis_client.delete("flag:auth.passkeys")
+
+
+async def test_flag_allow_keeps_the_default_and_lists_a_member_once(
+    sessionmaker: async_sessionmaker[AsyncSession], redis_client: Redis
+) -> None:
+    """A flag first written by the route stays at its configured default for everyone else."""
+    key = "test.default_on"
+    async with _client(
+        sessionmaker, redis_client, "test", feature_flags_default={key: True}
+    ) as client:
+        response = await client.post("/v1/_test/session", json={"completed": True})
+        user_id = response.json()["user_id"]
+        await _with_csrf(client)
+        try:
+            for _ in range(2):
+                allowed = await client.post("/v1/_test/flag-allow", json={"key": key})
+                assert allowed.status_code == 204
+            async with sessionmaker() as db:
+                row = (
+                    await db.execute(
+                        text(
+                            "SELECT enabled, CAST(allow_user_ids AS text[]) AS ids"
+                            " FROM feature_flags WHERE key = :key"
+                        ),
+                        {"key": key},
+                    )
+                ).one()
+            assert row.enabled is True
+            assert row.ids == [user_id]
+        finally:
+            async with sessionmaker() as db:
+                await db.execute(text("DELETE FROM feature_flags WHERE key = :key"), {"key": key})
+                await db.commit()
+            await redis_client.delete("flag:" + key)

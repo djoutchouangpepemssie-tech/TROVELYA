@@ -45,10 +45,12 @@ export function Dialog({
             }
           }}
           onCloseAutoFocus={(event) => {
-            if (trigger || !returnTo.current) return;
-            event.preventDefault();
-            returnTo.current.focus();
+            const target = returnTo.current;
             returnTo.current = null;
+            // Gone from the page (its row was deleted): the caller places focus itself.
+            if (trigger || !target?.isConnected) return;
+            event.preventDefault();
+            target.focus();
           }}
           {...(description ? {} : { "aria-describedby": undefined })}
         >

@@ -4,7 +4,7 @@ import { Button, Dialog } from "@trovelya/ui";
 import { useTranslations } from "next-intl";
 import { type ReactNode, useCallback, useEffect, useRef, useState } from "react";
 
-import type { ApiResult } from "@/lib/api";
+import { apiCall, type ApiResult } from "@/lib/api";
 import { authApi } from "@/lib/auth";
 import { type PasskeyError, requestStepUpLink, stepUpWithPasskey } from "@/lib/passkeys";
 
@@ -14,44 +14,65 @@ export const STEP_UP_RETURN_KEY = "trv_stepup_return";
 
 type Outcome = "confirmed" | "link_sent" | "cancelled";
 
+type RunOptions = {
+  /**
+   * Do the action again once confirmed with a passkey (default). `false` for an action that
+   * opens a browser prompt itself (adding a passkey): the gesture was spent on the
+   * confirmation, so the member clicks again (`step_up_confirmed`).
+   */
+  retry?: boolean;
+};
+
 /**
  * Sensitive actions (13.2) answer `403 step_up_required` without a recent strong proof.
  * `run(action)` then asks for one (passkey, or a link by e-mail) and, once confirmed with a
  * passkey, does the action again. With the e-mailed link, the member comes back to this page
- * and does it again themselves.
+ * and does it again themselves. Several actions waiting at once all get the same outcome.
  */
 export function useStepUp(): {
-  run: <T>(action: () => Promise<ApiResult<T>>) => Promise<ApiResult<T>>;
+  run: <T>(action: () => Promise<ApiResult<T>>, options?: RunOptions) => Promise<ApiResult<T>>;
   dialog: ReactNode;
 } {
   const [open, setOpen] = useState(false);
-  const settle = useRef<((outcome: Outcome) => void) | null>(null);
+  const waiting = useRef<((outcome: Outcome) => void)[]>([]);
 
   const finish = useCallback((outcome: Outcome) => {
     setOpen(false);
-    settle.current?.(outcome);
-    settle.current = null;
+    const settle = waiting.current;
+    waiting.current = [];
+    for (const resolve of settle) resolve(outcome);
   }, []);
 
-  const run = useCallback(async <T,>(action: () => Promise<ApiResult<T>>) => {
-    // The button that started the action: focus goes back to it once it is usable again.
-    const opener = document.activeElement instanceof HTMLElement ? document.activeElement : null;
-    const first = await action();
-    if (first.ok || first.code !== "step_up_required") return first;
-    const outcome = await new Promise<Outcome>((resolve) => {
-      settle.current = resolve;
-      setOpen(true);
-    });
-    if (opener) focusWhenEnabled(opener);
-    if (outcome !== "confirmed") {
-      return {
-        ok: false as const,
-        status: 403,
-        code: outcome === "link_sent" ? "step_up_pending" : "step_up_cancelled",
-      };
-    }
-    return action();
-  }, []);
+  // Leaving the page with the dialog open: nobody stays waiting.
+  useEffect(
+    () => () => {
+      finish("cancelled");
+    },
+    [finish],
+  );
+
+  const run = useCallback(
+    async <T,>(action: () => Promise<ApiResult<T>>, options: RunOptions = {}) => {
+      // The button that started the action: focus goes back to it once it is usable again.
+      const opener = document.activeElement instanceof HTMLElement ? document.activeElement : null;
+      const first = await action();
+      if (first.ok || first.code !== "step_up_required") return first;
+      const outcome = await new Promise<Outcome>((resolve) => {
+        waiting.current.push(resolve);
+        setOpen(true);
+      });
+      if (opener) focusWhenEnabled(opener);
+      if (outcome === "confirmed" && options.retry !== false) return action();
+      const code =
+        outcome === "confirmed"
+          ? "step_up_confirmed"
+          : outcome === "link_sent"
+            ? "step_up_pending"
+            : "step_up_cancelled";
+      return { ok: false as const, status: 403, code };
+    },
+    [],
+  );
 
   return { run, dialog: <StepUpDialog open={open} onFinish={finish} /> };
 }
@@ -70,12 +91,26 @@ function StepUpDialog({ open, onFinish }: { open: boolean; onFinish: (outcome: O
     setError(null);
     setLinkSent(false);
   }
+  // At each opening: a passkey is offered only to a member who has one (passkeys open to them,
+  // and at least one registered); otherwise the browser would offer someone else's.
   useEffect(() => {
-    if (!open || passkeys !== null) return;
-    void authApi.methods().then((methods) => {
-      setPasskeys(methods?.passkey ?? false);
-    });
-  }, [open, passkeys]);
+    if (!open) return;
+    // An object, not a plain boolean: it changes after the awaits below.
+    const alive = { current: true };
+    void (async () => {
+      const methods = await authApi.methods();
+      if (!methods?.passkey) {
+        if (alive.current) setPasskeys(false);
+        return;
+      }
+      const listed = await apiCall<{ data: unknown[] }>("/v1/me/passkeys");
+      if (alive.current) setPasskeys(listed.ok && listed.data.data.length > 0);
+    })();
+    return () => {
+      alive.current = false;
+      setPasskeys(null);
+    };
+  }, [open]);
 
   async function withPasskey() {
     setBusy(true);
@@ -143,7 +178,7 @@ function StepUpDialog({ open, onFinish }: { open: boolean; onFinish: (outcome: O
 }
 
 /** Focus an element as soon as it is enabled again (a button disabled while its action runs). */
-function focusWhenEnabled(element: HTMLElement, frames = 30) {
+function focusWhenEnabled(element: HTMLElement, frames = 600) {
   if (!element.isConnected) return;
   if (!element.matches(":disabled")) {
     element.focus();

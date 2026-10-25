@@ -67,3 +67,45 @@ describe("<Dialog> without a trigger", () => {
     expect(document.activeElement).toBe(action);
   });
 });
+
+function DeletesItsOpener() {
+  const [open, setOpen] = useState(false);
+  const [rowShown, setRowShown] = useState(true);
+  return (
+    <>
+      <h2 tabIndex={-1}>Clés</h2>
+      {rowShown && (
+        <Button
+          onClick={() => {
+            setOpen(true);
+          }}
+        >
+          Supprimer
+        </Button>
+      )}
+      <Dialog open={open} onOpenChange={setOpen} title="Supprimer ?" closeLabel="Fermer">
+        <Button
+          onClick={() => {
+            setRowShown(false);
+            setOpen(false);
+          }}
+        >
+          Confirmer
+        </Button>
+      </Dialog>
+    </>
+  );
+}
+
+describe("<Dialog> whose opener is gone", () => {
+  it("leaves focus to the page instead of a removed element", async () => {
+    const user = userEvent.setup();
+    render(<DeletesItsOpener />);
+    const opener = screen.getByRole("button", { name: "Supprimer" });
+    await user.click(opener);
+    await user.click(screen.getByRole("button", { name: "Confirmer" }));
+    expect(screen.queryByRole("dialog")).toBeNull();
+    expect(opener.isConnected).toBe(false);
+    expect(document.activeElement).not.toBe(opener);
+  });
+});

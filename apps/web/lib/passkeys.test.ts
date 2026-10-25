@@ -138,3 +138,40 @@ describe("enrolStaffPasskey", () => {
     expect(d.register).not.toHaveBeenCalled();
   });
 });
+
+describe("network down", () => {
+  it("answers « unavailable » instead of throwing, at every step", async () => {
+    const offline = () => Promise.reject(new TypeError("Failed to fetch"));
+    for (const run of [
+      (d: PasskeyDependencies) => registerPasskey("Téléphone", d),
+      (d: PasskeyDependencies) => signInWithPasskey(d),
+      (d: PasskeyDependencies) => stepUpWithPasskey(d),
+      (d: PasskeyDependencies) => requestStepUpLink(d),
+      (d: PasskeyDependencies) => enrolStaffPasskey("jeton", d),
+    ]) {
+      const { all } = deps([], { api: vi.fn(offline) as unknown as PasskeyDependencies["api"] });
+      await expect(run(all)).resolves.toEqual({ ok: false, error: "unavailable" });
+    }
+  });
+
+  it("also when only the final check fails", async () => {
+    let calls = 0;
+    const api = vi.fn(() => {
+      calls += 1;
+      return calls === 1
+        ? Promise.resolve(json(200, OPTIONS))
+        : Promise.reject(new TypeError("offline"));
+    });
+    const { all } = deps([], { api: api as unknown as PasskeyDependencies["api"] });
+    await expect(registerPasskey("Téléphone", all)).resolves.toEqual({
+      ok: false,
+      error: "unavailable",
+    });
+  });
+
+  it("an empty name is not sent: the screens show a translated default", async () => {
+    const { all, api } = deps([json(200, OPTIONS), json(201, { id: "p1", name: null })]);
+    await registerPasskey("", all);
+    expect(JSON.parse(call(api, 1)[1].body as string)).not.toHaveProperty("name");
+  });
+});

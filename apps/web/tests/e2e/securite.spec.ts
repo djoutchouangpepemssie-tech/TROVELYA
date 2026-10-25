@@ -52,6 +52,7 @@ test("revoke another session", async ({ page, browser }) => {
   await revoke.click();
   await expect(page.getByRole("status")).toContainText(s.sessions.revoked);
   await expect(revoke).toHaveCount(0);
+  await expect(page.getByRole("heading", { name: s.sessions.title })).toBeFocused();
   expect(await other.page.evaluate(async () => (await fetch("/api/v1/me")).status)).toBe(401);
   // This device is still signed in.
   expect(await page.evaluate(async () => (await fetch("/api/v1/me")).status)).toBe(200);
@@ -96,6 +97,7 @@ test("changing the e-mail asks for a strong proof, by link, then sends the confi
   await expectNoAxeViolations(page);
   await page.getByRole("button", { name: step.confirmSubmit }).click();
   await expect(page.getByRole("status")).toContainText(step.confirmed);
+  await expect(page.getByRole("link", { name: step.back })).toBeFocused();
   await page.getByRole("link", { name: step.back }).click();
   await expect(page).toHaveURL(/\/fr\/compte\/parametres\/securite$/);
 
@@ -124,6 +126,41 @@ test("the link sent to the new address changes it, once", async ({ page }) => {
   await page.goto(sitePath(link));
   await page.getByRole("button", { name: confirm.submit }).click();
   await expect(page.getByRole("alert").filter({ hasText: confirm.invalid })).toBeVisible();
+});
+
+test("a strong-proof link opened where the member is not signed in says so", async ({
+  page,
+  browser,
+}) => {
+  await signIn(page, { completed: true, strong: false });
+  await page.goto("/fr");
+  const { link } = await postAsMember<{ link: string }>(page, "/v1/_test/step-up-link");
+  const context = await browser.newContext({ baseURL: test.info().project.use.baseURL ?? "" });
+  const elsewhere = await context.newPage();
+  await elsewhere.goto(sitePath(link));
+  await elsewhere.getByRole("button", { name: step.confirmSubmit }).click();
+  await expect(
+    elsewhere.getByRole("alert").filter({ hasText: step.confirmOtherDevice }),
+  ).toBeVisible();
+  await expect(elsewhere.getByRole("heading", { level: 1 })).toBeFocused();
+  await context.close();
+});
+
+test("an address taken since the link was sent is not changed", async ({ page, browser }) => {
+  const { email } = await signIn(page, { completed: true });
+  await page.goto("/fr");
+  const newEmail = `e2e-taken-${Date.now().toString(36)}@example.org`;
+  const { link } = await postAsMember<{ link: string }>(page, "/v1/_test/email-change-link", {
+    new_email: newEmail,
+  });
+  // Someone else signs up with that address before the link is opened.
+  const context = await browser.newContext({ baseURL: test.info().project.use.baseURL ?? "" });
+  await signIn(await context.newPage(), { email: newEmail });
+  await context.close();
+  await page.goto(sitePath(link));
+  await page.getByRole("button", { name: confirm.submit }).click();
+  await expect(page.getByRole("alert").filter({ hasText: confirm.taken })).toBeVisible();
+  expect(await meEmail(page)).toBe(email);
 });
 
 test("add passkey asks step-up, then rename and delete it", async ({ page }) => {
@@ -167,9 +204,16 @@ test("add passkey asks step-up, then rename and delete it", async ({ page }) => 
   await page
     .getByRole("button", { name: s.passkeys.renameLabel.replace("{name}", "Téléphone de test") })
     .click();
+  // A name is required to rename.
+  await page.getByLabel(s.passkeys.name).fill("  ");
+  await page.getByRole("button", { name: s.passkeys.save }).click();
+  await expect(page.getByText(s.passkeys.nameRequired)).toBeVisible();
   await page.getByLabel(s.passkeys.name).fill("Ordinateur");
   await page.getByRole("button", { name: s.passkeys.save }).click();
   await expect(page.getByRole("status")).toContainText(s.passkeys.renamed);
+  await expect(
+    page.getByRole("button", { name: s.passkeys.renameLabel.replace("{name}", "Ordinateur") }),
+  ).toBeFocused();
 
   await page
     .getByRole("button", { name: s.passkeys.deleteLabel.replace("{name}", "Ordinateur") })
@@ -180,4 +224,5 @@ test("add passkey asks step-up, then rename and delete it", async ({ page }) => 
   await confirmDelete.getByRole("button", { name: s.passkeys.deleteConfirm }).click();
   await expect(page.getByRole("status")).toContainText(s.passkeys.deleted);
   await expect(page.getByText(s.passkeys.none)).toBeVisible();
+  await expect(page.getByRole("heading", { name: s.passkeys.title })).toBeFocused();
 });

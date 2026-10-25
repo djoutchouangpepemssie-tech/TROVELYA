@@ -181,10 +181,14 @@ class TestFlagAllow(BaseModel):
     key: str = Field(max_length=100)
 
 
+# A flag first written here keeps its configured default for everyone else; a member is listed
+# once however many times a test asks.
 _ALLOW = text(
-    "INSERT INTO feature_flags (key, allow_user_ids) VALUES (:key, ARRAY[CAST(:id AS uuid)])"
+    "INSERT INTO feature_flags (key, enabled, allow_user_ids)"
+    " VALUES (:key, :enabled, ARRAY[CAST(:id AS uuid)])"
     " ON CONFLICT (key) DO UPDATE"
     " SET allow_user_ids = array_append(feature_flags.allow_user_ids, CAST(:id AS uuid))"
+    " WHERE NOT CAST(:id AS uuid) = ANY(feature_flags.allow_user_ids)"
 )
 
 
@@ -195,5 +199,6 @@ async def test_flag_allow(
     db: Uow,
     user: Annotated[CurrentUser, Depends(current_user)],
 ) -> None:
-    await db.execute(_ALLOW, {"key": body.key, "id": user.id})
+    enabled = request.app.state.settings.feature_flags_default.get(body.key, False)
+    await db.execute(_ALLOW, {"key": body.key, "id": user.id, "enabled": enabled})
     await request.app.state.redis.delete(CACHE_PREFIX + body.key)

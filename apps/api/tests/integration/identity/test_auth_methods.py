@@ -10,6 +10,7 @@ from sqlalchemy.ext.asyncio import AsyncSession, async_sessionmaker
 
 from tests.conftest import TEST_PROXY_SECRET, make_settings
 from tests.integration.identity.test_profile import make_account
+from trovelya.core.csrf import SESSION_COOKIE
 from trovelya.core.flags import CACHE_PREFIX, FlagService
 from trovelya.main import create_app
 
@@ -120,3 +121,23 @@ async def test_passkeys_follow_the_flag_allow_list(
             await db.execute(text("DELETE FROM feature_flags WHERE key = 'auth.passkeys'"))
             await db.commit()
         await redis_client.delete(CACHE_PREFIX + "auth.passkeys")
+
+
+async def test_a_dead_session_cookie_still_gets_the_methods(
+    sessionmaker: async_sessionmaker[AsyncSession], redis_client: Redis
+) -> None:
+    """A forged or revoked cookie must not lock a visitor out of the sign-in screen."""
+    account = await make_account(sessionmaker, completed=True)
+    async with sessionmaker() as db:
+        await db.execute(text("DELETE FROM sessions WHERE user_id = :id"), {"id": account.id})
+        await db.commit()
+    app = create_app(make_settings())
+    app.state.sessionmaker = sessionmaker
+    app.state.redis = redis_client
+    app.state.flags = FlagService(sessionmaker, redis_client, {"auth.passkeys": True})
+    async with AsyncClient(transport=ASGITransport(app=app), base_url="https://test") as client:
+        client.headers.update({"x-trv-proxy-secret": TEST_PROXY_SECRET})
+        for cookie in (account.headers["cookie"], f"{SESSION_COOKIE}=forged"):
+            response = await client.get("/v1/auth/methods", headers={"cookie": cookie})
+            assert response.status_code == 200, cookie
+            assert response.json()["passkey"] is True

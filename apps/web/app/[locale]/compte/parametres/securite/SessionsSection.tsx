@@ -2,7 +2,7 @@
 
 import { Badge, Button } from "@trovelya/ui";
 import { useFormatter, useLocale, useTranslations } from "next-intl";
-import { useCallback, useEffect, useState } from "react";
+import { useCallback, useEffect, useRef, useState } from "react";
 
 import { apiCall } from "@/lib/api";
 
@@ -25,6 +25,7 @@ export function SessionsSection({ onDone }: { onDone: (message: string) => void 
   const [loadFailed, setLoadFailed] = useState(false);
   const [failed, setFailed] = useState(false);
   const [busy, setBusy] = useState(false);
+  const heading = useRef<HTMLHeadingElement>(null);
 
   const load = useCallback(async () => {
     setLoadFailed(false);
@@ -35,6 +36,17 @@ export function SessionsSection({ onDone }: { onDone: (message: string) => void 
 
   useEffect(() => {
     void load();
+  }, [load]);
+
+  // Back on this tab after signing in elsewhere: the list shows the new device.
+  useEffect(() => {
+    function refresh() {
+      if (document.visibilityState === "visible") void load();
+    }
+    document.addEventListener("visibilitychange", refresh);
+    return () => {
+      document.removeEventListener("visibilitychange", refresh);
+    };
   }, [load]);
 
   async function revoke(path: `/v1/${string}`, message: string) {
@@ -49,6 +61,8 @@ export function SessionsSection({ onDone }: { onDone: (message: string) => void 
     }
     onDone(message);
     await load();
+    // The button pressed is gone with its row: focus goes to the section title.
+    heading.current?.focus();
   }
 
   function country(code: string | null): string | null {
@@ -67,7 +81,7 @@ export function SessionsSection({ onDone }: { onDone: (message: string) => void 
       aria-labelledby="sessions-title"
       className="flex flex-col gap-3 border-t border-line pt-6"
     >
-      <h2 id="sessions-title" className="text-xl font-semibold">
+      <h2 id="sessions-title" ref={heading} tabIndex={-1} className="text-xl font-semibold">
         {t("title")}
       </h2>
       <p className="text-sm text-ink-2">{t("intro")}</p>

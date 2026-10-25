@@ -2,12 +2,15 @@
 
 import { Button, Dialog, Input } from "@trovelya/ui";
 import { useFormatter, useTranslations } from "next-intl";
-import { type SyntheticEvent, useCallback, useEffect, useState } from "react";
+import { type SyntheticEvent, useCallback, useEffect, useRef, useState } from "react";
 
 import { apiCall, type ApiResult } from "@/lib/api";
 import { registerPasskey } from "@/lib/passkeys";
 
-type StepUp = <T>(action: () => Promise<ApiResult<T>>) => Promise<ApiResult<T>>;
+type StepUp = <T>(
+  action: () => Promise<ApiResult<T>>,
+  options?: { retry?: boolean },
+) => Promise<ApiResult<T>>;
 type Passkey = { id: string; name: string | null; created_at: string; last_used_at: string | null };
 
 const NAME_MAX = 64;
@@ -30,6 +33,17 @@ export function PasskeysSection({
   const [newName, setNewName] = useState("");
   const [renaming, setRenaming] = useState<{ id: string; name: string } | null>(null);
   const [deleting, setDeleting] = useState<Passkey | null>(null);
+  const [nameMissing, setNameMissing] = useState(false);
+  const heading = useRef<HTMLHeadingElement>(null);
+  const list = useRef<HTMLUListElement>(null);
+
+  // After a change that removes the focused control, focus goes to a stable place: the
+  // row's first button (rename), or the section title once the row is gone.
+  function focusRow(id: string) {
+    requestAnimationFrame(() => {
+      list.current?.querySelector<HTMLButtonElement>(`[data-passkey="${id}"] button`)?.focus();
+    });
+  }
 
   const load = useCallback(async () => {
     setLoadFailed(false);
@@ -56,7 +70,8 @@ export function PasskeysSection({
       return true;
     }
     // The step-up dialog explains itself; a browser prompt closed by the person is no error.
-    if (!["step_up_pending", "step_up_cancelled", "cancelled"].includes(result.code)) {
+    if (result.code === "step_up_confirmed") setFailed(t("confirmedClickAgain"));
+    else if (!["step_up_pending", "step_up_cancelled", "cancelled"].includes(result.code)) {
       setFailed(result.code === "unsupported" ? t("unsupported") : t("error"));
     }
     return false;
@@ -64,19 +79,24 @@ export function PasskeysSection({
 
   async function add(event: SyntheticEvent<HTMLFormElement>) {
     event.preventDefault();
-    const name = newName.trim() || t("defaultName");
+    // No name: none is stored, the list shows a translated default.
+    const name = newName.trim();
     const added = await act(
       () =>
-        stepUp(async () => {
-          const result = await registerPasskey(name);
-          return result.ok
-            ? { ok: true as const, data: result.value }
-            : {
-                ok: false as const,
-                status: result.error === "step_up_required" ? 403 : 0,
-                code: result.error,
-              };
-        }),
+        stepUp(
+          async () => {
+            const result = await registerPasskey(name);
+            return result.ok
+              ? { ok: true as const, data: result.value }
+              : {
+                  ok: false as const,
+                  status: result.error === "step_up_required" ? 403 : 0,
+                  code: result.error,
+                };
+          },
+          // The browser prompt needs a fresh click after the confirmation.
+          { retry: false },
+        ),
       t("added"),
     );
     if (added) setNewName("");
@@ -86,26 +106,36 @@ export function PasskeysSection({
     event.preventDefault();
     if (!renaming) return;
     const name = renaming.name.trim();
-    if (!name) return;
+    if (!name) {
+      setNameMissing(true);
+      return;
+    }
+    setNameMissing(false);
+    const id = renaming.id;
     const renamed = await act(
       () =>
-        apiCall(`/v1/me/passkeys/${renaming.id}`, {
+        apiCall(`/v1/me/passkeys/${id}`, {
           method: "PATCH",
           body: JSON.stringify({ name }),
         }),
       t("renamed"),
     );
-    if (renamed) setRenaming(null);
+    if (renamed) {
+      setRenaming(null);
+      focusRow(id);
+    }
   }
 
   async function remove() {
     if (!deleting) return;
     const id = deleting.id;
     setDeleting(null);
-    await act(
+    const removed = await act(
       () => stepUp(() => apiCall(`/v1/me/passkeys/${id}`, { method: "DELETE" })),
       t("deleted"),
     );
+    // Its row is gone: focus goes to the section title.
+    if (removed) heading.current?.focus();
   }
 
   return (
@@ -113,7 +143,7 @@ export function PasskeysSection({
       aria-labelledby="passkeys-title"
       className="flex flex-col gap-3 border-t border-line pt-6"
     >
-      <h2 id="passkeys-title" className="text-xl font-semibold">
+      <h2 id="passkeys-title" ref={heading} tabIndex={-1} className="text-xl font-semibold">
         {t("title")}
       </h2>
       <p className="text-sm text-ink-2">{t("intro")}</p>
@@ -127,9 +157,13 @@ export function PasskeysSection({
       )}
       {passkeys?.length === 0 && <p className="text-ink-2">{t("none")}</p>}
       {passkeys && passkeys.length > 0 && (
-        <ul className="divide-y divide-line rounded-xl border border-line">
+        <ul ref={list} className="divide-y divide-line rounded-xl border border-line">
           {passkeys.map((passkey) => (
-            <li key={passkey.id} className="flex flex-col gap-2 px-4 py-3">
+            <li
+              key={passkey.id}
+              data-passkey={passkey.id}
+              className="flex flex-col gap-2 px-4 py-3"
+            >
               {renaming?.id === passkey.id ? (
                 <form onSubmit={(event) => void rename(event)} className="flex flex-col gap-2">
                   <Input
@@ -140,6 +174,7 @@ export function PasskeysSection({
                     onChange={(event) => {
                       setRenaming({ id: passkey.id, name: event.target.value });
                     }}
+                    {...(nameMissing ? { error: t("nameRequired") } : {})}
                   />
                   <div className="flex gap-2">
                     <Button type="submit" size="sm" disabled={busy}>
@@ -150,6 +185,8 @@ export function PasskeysSection({
                       size="sm"
                       onClick={() => {
                         setRenaming(null);
+                        setNameMissing(false);
+                        focusRow(passkey.id);
                       }}
                     >
                       {t("cancel")}

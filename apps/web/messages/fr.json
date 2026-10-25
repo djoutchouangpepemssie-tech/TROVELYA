@@ -342,7 +342,6 @@
         "current": "Cet appareil",
         "unknownDevice": "Appareil inconnu",
         "lastUsed": "Dernière activité : {date}",
-        "since": "Connecté depuis le {date}",
         "revoke": "Déconnecter",
         "revokeLabel": "Déconnecter {device}",
         "revokeOthers": "Se déconnecter de tous les autres appareils",
@@ -378,7 +377,9 @@
         "deleted": "Passkey supprimée.",
         "error": "L'action n'a pas abouti. Réessayez dans un instant.",
         "loadError": "La liste des passkeys n'a pas pu être chargée.",
-        "unsupported": "Ce navigateur ne gère pas les passkeys."
+        "unsupported": "Ce navigateur ne gère pas les passkeys.",
+        "confirmedClickAgain": "Identité confirmée. Cliquez de nouveau sur « Ajouter une passkey » pour la créer.",
+        "nameRequired": "Indiquez un nom pour la passkey."
       }
     },
     "emailConfirm": {

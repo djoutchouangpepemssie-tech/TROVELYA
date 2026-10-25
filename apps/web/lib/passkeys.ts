@@ -39,11 +39,13 @@ const browser: PasskeyDependencies = {
   supported: browserSupportsWebAuthn,
 };
 
-function failure<T>(error: PasskeyError): PasskeyResult<T> {
+type PasskeyFailure = { ok: false; error: PasskeyError };
+
+function failure(error: PasskeyError): PasskeyFailure {
   return { ok: false, error };
 }
 
-async function apiError<T>(response: Response): Promise<PasskeyResult<T>> {
+async function apiError(response: Response): Promise<PasskeyFailure> {
   if (response.status === 429) return failure("rate_limited");
   const body = (await response.json().catch(() => ({}))) as { code?: string };
   if (body.code === "passkey_invalid") return failure("refused");
@@ -52,13 +54,28 @@ async function apiError<T>(response: Response): Promise<PasskeyResult<T>> {
   return failure("unavailable");
 }
 
-function post(deps: PasskeyDependencies, path: `/v1/${string}`, body?: unknown) {
-  if (body === undefined) return deps.api(path, { method: "POST" });
-  return deps.api(path, {
-    method: "POST",
-    headers: { "content-type": "application/json" },
-    body: JSON.stringify(body),
-  });
+/** POST to the API; `null` when the network is down (the screens say « unavailable »). */
+async function post(
+  deps: PasskeyDependencies,
+  path: `/v1/${string}`,
+  body?: unknown,
+): Promise<Response | null> {
+  try {
+    if (body === undefined) return await deps.api(path, { method: "POST" });
+    return await deps.api(path, {
+      method: "POST",
+      headers: { "content-type": "application/json" },
+      body: JSON.stringify(body),
+    });
+  } catch {
+    return null;
+  }
+}
+
+/** The answer of a `post`, or the failure to report when there was none or it is an error. */
+async function failed(response: Response | null): Promise<PasskeyFailure | null> {
+  if (!response) return failure("unavailable");
+  return response.ok ? null : apiError(response);
 }
 
 /** Options from the API, then the browser prompt; the credential to send back. */
@@ -70,8 +87,14 @@ async function ceremony<T>(
 ): Promise<PasskeyResult<T>> {
   if (!deps.supported()) return failure("unsupported");
   const response = await post(deps, optionsPath, optionsBody);
-  if (!response.ok) return apiError(response);
-  const options = (await response.json()) as never;
+  const refused = await failed(response);
+  if (refused || !response) return refused ?? failure("unavailable");
+  let options: never;
+  try {
+    options = (await response.json()) as never;
+  } catch {
+    return failure("unavailable");
+  }
   try {
     return { ok: true, value: await run(options) };
   } catch (error) {
@@ -82,6 +105,7 @@ async function ceremony<T>(
   }
 }
 
+/** `name` empty: the API keeps none, and the screens show a translated default. */
 export async function registerPasskey(
   name: string,
   deps: PasskeyDependencies = browser,
@@ -92,9 +116,10 @@ export async function registerPasskey(
   if (!created.ok) return created;
   const response = await post(deps, "/v1/auth/passkeys/register/verify", {
     credential: created.value,
-    name,
+    ...(name ? { name } : {}),
   });
-  if (!response.ok) return apiError(response);
+  const refused = await failed(response);
+  if (refused || !response) return refused ?? failure("unavailable");
   return { ok: true, value: (await response.json()) as { id: string; name: string | null } };
 }
 
@@ -108,7 +133,8 @@ export async function signInWithPasskey(
   const response = await post(deps, "/v1/auth/passkeys/login/verify", {
     credential: asserted.value,
   });
-  if (!response.ok) return apiError(response);
+  const refused = await failed(response);
+  if (refused || !response) return refused ?? failure("unavailable");
   const body = (await response.json()) as { user_id: string; profile_completed: boolean };
   return { ok: true, value: { userId: body.user_id, profileCompleted: body.profile_completed } };
 }
@@ -125,7 +151,7 @@ export async function stepUpWithPasskey(
     method: "passkey",
     credential: asserted.value,
   });
-  return response.ok ? { ok: true, value: undefined } : apiError(response);
+  return (await failed(response)) ?? { ok: true, value: undefined };
 }
 
 /** Without a passkey: a confirmation link is e-mailed to the account's address. */
@@ -133,7 +159,7 @@ export async function requestStepUpLink(
   deps: PasskeyDependencies = browser,
 ): Promise<PasskeyResult<void>> {
   const response = await post(deps, "/v1/auth/step-up", { method: "magic_link" });
-  return response.ok ? { ok: true, value: undefined } : apiError(response);
+  return (await failed(response)) ?? { ok: true, value: undefined };
 }
 
 /** Staff enrolment (ADR-0018): the first passkey of a staff account, from the script's link. */
@@ -152,7 +178,8 @@ export async function enrolStaffPasskey(
     enrolment_token: enrolmentToken,
     credential: created.value,
   });
-  if (!response.ok) return apiError(response);
+  const refused = await failed(response);
+  if (refused || !response) return refused ?? failure("unavailable");
   const body = (await response.json()) as { user_id: string };
   return { ok: true, value: { userId: body.user_id } };
 }
