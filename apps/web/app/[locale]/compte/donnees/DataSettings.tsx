@@ -24,12 +24,18 @@ export function DataSettings() {
   const [erased, setErased] = useState<string | null>(null);
   const stepUp = useStepUp();
 
+  // Loads overlap (opening, back on the tab, after a request): only the latest one is shown.
+  const latest = useRef(0);
   const load = useCallback(async () => {
+    const call = ++latest.current;
     setLoadFailed(false);
     const result = await apiCall<DataRequests>("/v1/me/data-requests");
+    if (call !== latest.current) return;
     if (result.ok) setRequests(result.data);
-    else if (result.status !== 401) setLoadFailed(true);
-  }, []);
+    else if (result.status === 401)
+      await refresh(); // signed out elsewhere: to the sign-in page
+    else setLoadFailed(true);
+  }, [refresh]);
 
   useEffect(() => {
     void load();
@@ -70,6 +76,7 @@ export function DataSettings() {
             requests={requests.data}
             stepUp={stepUp.run}
             onChanged={load}
+            onSignedOut={refresh}
             onDone={setNotice}
           />
           <ErasureSection
@@ -77,6 +84,7 @@ export function DataSettings() {
             eraseAt={me?.erase_at ?? null}
             stepUp={stepUp.run}
             onErased={setErased}
+            onSignedOut={refresh}
             onDone={setNotice}
           />
         </>

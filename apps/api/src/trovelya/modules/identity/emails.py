@@ -192,10 +192,11 @@ def erasure_requested_message(*, to: str, erase_on: str, signin_link: str) -> Em
         "Vous avez demandé la suppression de votre compte TROVÉLYA. Vous avez été déconnecté "
         "de tous vos appareils.\n\n"
         f"Votre compte et vos données seront effacés le {erase_on}.\n"
-        "D'ici là, vous pouvez annuler en vous reconnectant :\n"
+        "D'ici là, vous pouvez l'annuler : reconnectez-vous, puis cliquez sur "
+        "« Annuler la suppression ».\n"
         f"{signin_link}\n\n"
-        "Si vous n'êtes pas à l'origine de cette demande, reconnectez-vous pour l'annuler, "
-        "puis sécurisez votre compte.\n\n"
+        "Si vous n'êtes pas à l'origine de cette demande, reconnectez-vous pour l'annuler de la "
+        "même façon, puis sécurisez votre compte.\n\n"
         "TROVÉLYA — La belle trouvaille"
     )
     safe = escape(signin_link, quote=True)
@@ -205,10 +206,11 @@ def erasure_requested_message(*, to: str, erase_on: str, signin_link: str) -> Em
         "de tous vos appareils.</p>"
         f"<p>Votre compte et vos données seront effacés le <strong>{escape(erase_on)}"
         "</strong>.</p>"
-        "<p>D'ici là, vous pouvez annuler en vous reconnectant :</p>"
+        "<p>D'ici là, vous pouvez l'annuler : reconnectez-vous, puis cliquez sur "
+        "« Annuler la suppression ».</p>"
         f'<p><a href="{safe}">Me reconnecter</a></p>'
-        "<p>Si vous n'êtes pas à l'origine de cette demande, reconnectez-vous pour l'annuler, "
-        "puis sécurisez votre compte.</p>"
+        "<p>Si vous n'êtes pas à l'origine de cette demande, reconnectez-vous pour l'annuler de la "
+        "même façon, puis sécurisez votre compte.</p>"
         "<p>TROVÉLYA — La belle trouvaille</p>"
     )
     return EmailMessage(to=to, subject="Suppression de votre compte TROVÉLYA", text=text, html=html)

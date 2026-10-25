@@ -11,5 +11,7 @@ export default getRequestConfig(async ({ locale }) => {
   const messages = (await import(`../messages/${resolved}.json`)) as {
     default: Record<string, unknown>;
   };
-  return { locale: resolved, messages: messages.default };
+  // Dates as the member reads them in France, and as the e-mails write them (Europe/Paris),
+  // whatever the server's own time zone.
+  return { locale: resolved, messages: messages.default, timeZone: "Europe/Paris" };
 });

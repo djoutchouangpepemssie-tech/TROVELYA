@@ -148,6 +148,9 @@ async def test_erasure_revokes_sessions_and_hides_profile(
     assert confirmation.to == account.email
     assert "23 novembre 2026" in confirmation.text
     assert f"{WEB}/fr/connexion" in confirmation.text
+    # Signing in is not enough: the cancellation is a click (POST /v1/me/erasure/cancel).
+    assert "« Annuler la suppression »" in confirmation.text
+    assert "« Annuler la suppression »" in confirmation.html
 
 
 async def test_cancel_during_grace(

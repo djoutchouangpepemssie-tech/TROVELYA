@@ -120,9 +120,56 @@ test("request the erasure, then sign in again and cancel it", async ({ page }) =
   await expectNoAxeViolations(page);
   await banner.getByRole("button", { name: notice.cancel }).click();
   await expect(page.getByRole("status").filter({ hasText: notice.cancelled })).toBeFocused();
-  await expect(page.getByRole("region", { name: notice.label })).toHaveCount(0);
+  await expectNoAxeViolations(page);
+  await page.goto("/fr/compte");
+  await expect(page.getByText(notice.cancelled)).toHaveCount(0); // said once, not on every page
   const me = await page.evaluate(
     async () => (await (await fetch("/api/v1/me")).json()) as { erase_at: string | null },
   );
   expect(me.erase_at).toBeNull();
+});
+
+async function signInAgain(page: Page, email: string): Promise<void> {
+  const response = await page.request.post("/api/v1/_test/magic-link", { data: { email } });
+  const { link } = (await response.json()) as { link: string };
+  await page.goto(sitePath(link));
+  await page.getByRole("button", { name: messages.Auth.verifySubmit }).click();
+  await expect(page).not.toHaveURL(/verifier/);
+}
+
+test("during the grace period, the data page itself cancels the erasure", async ({ page }) => {
+  const { email } = await signIn(page, { completed: true });
+  await page.goto("/fr");
+  await postAsMember(page, "/v1/me/erasure");
+  await signInAgain(page, email);
+  await page.goto("/fr/compte/donnees");
+  await expect(page.getByText(/^Votre compte sera supprimé le /)).toBeVisible();
+  // The page's own button (the notice above offers the same).
+  await page.getByRole("main").getByRole("button", { name: data.erasureCancel }).click();
+  await expect(page.getByRole("status").filter({ hasText: notice.cancelled })).toBeVisible();
+  await expect(page.getByRole("button", { name: data.erasureRequest })).toBeFocused();
+  await expect(page.getByRole("region", { name: notice.label })).toHaveCount(0);
+});
+
+test("the erasure's strong proof, closed, gives the focus back", async ({ page }) => {
+  await signIn(page, { completed: true, strong: false });
+  await page.goto("/fr/compte/donnees");
+  await page.getByRole("button", { name: data.erasureRequest }).click();
+  await page
+    .getByRole("dialog", { name: data.erasureConfirmTitle })
+    .getByRole("button", { name: data.erasureConfirm })
+    .click();
+  await expect(page.getByRole("dialog", { name: step.title })).toBeVisible();
+  await page.keyboard.press("Escape");
+  await expect(page.getByRole("button", { name: data.erasureRequest })).toBeFocused();
+  expect(await meStatus(page)).toBe(200); // nothing was asked for
+});
+
+test("signed out elsewhere: the next action goes to the sign-in page", async ({ page }) => {
+  await signIn(page, { completed: true });
+  await page.goto("/fr/compte/donnees");
+  await expect(page.getByRole("button", { name: data.exportRequest })).toBeVisible();
+  await page.context().clearCookies();
+  await page.getByRole("button", { name: data.exportRequest }).click();
+  await expect(page).toHaveURL(/\/fr\/connexion\?suivant=%2Ffr%2Fcompte%2Fdonnees$/);
 });

@@ -2,6 +2,7 @@
 
 import { Button } from "@trovelya/ui";
 import { useFormatter, useTranslations } from "next-intl";
+import { useState } from "react";
 
 import { apiCall, apiFetch, type ApiResult } from "@/lib/api";
 
@@ -12,13 +13,16 @@ export function ExportSection({
   requests,
   stepUp,
   onChanged,
+  onSignedOut,
   onDone,
 }: {
   requests: DataRequest[];
   stepUp: StepUp;
   onChanged: () => Promise<void>;
+  onSignedOut: () => Promise<void>;
   onDone: (message: string) => void;
 }) {
+  const [busy, setBusy] = useState(false);
   const t = useTranslations("Account.data");
   const format = useFormatter();
   const exports = requests.filter((request) => request.kind === "export");
@@ -27,13 +31,16 @@ export function ExportSection({
 
   async function ask() {
     onDone("");
+    setBusy(true);
     const result = await stepUp(() =>
       apiCall<{ request_id: string }>("/v1/me/data-export", { method: "POST" }),
     );
+    setBusy(false);
     if (result.ok) {
       onDone(t("exportRequested"));
       await onChanged();
-    } else if (!result.code.startsWith("step_up_")) onDone(t("error"));
+    } else if (result.status === 401) await onSignedOut();
+    else if (!result.code.startsWith("step_up_")) onDone(t("error"));
   }
 
   async function download(request: DataRequest) {
@@ -43,9 +50,10 @@ export function ExportSection({
       save(result.data, `trovelya-export-${request.created_at.slice(0, 10)}.zip`);
       onDone(t("downloaded"));
     } else if (result.status === 404) {
-      onDone(t("error"));
+      onDone(t("exportExpiredNow"));
       await onChanged(); // expired in the meantime: the list says so
-    } else if (!result.code.startsWith("step_up_")) onDone(t("error"));
+    } else if (result.status === 401) await onSignedOut();
+    else if (!result.code.startsWith("step_up_")) onDone(t("error"));
   }
 
   function line(request: DataRequest): string {
@@ -89,7 +97,12 @@ export function ExportSection({
         </ul>
       )}
       {!pending && (
-        <Button variant="secondary" className="self-start" onClick={() => void ask()}>
+        <Button
+          variant="secondary"
+          className="self-start"
+          disabled={busy}
+          onClick={() => void ask()}
+        >
           {t("exportRequest")}
         </Button>
       )}

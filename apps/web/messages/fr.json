@@ -425,21 +425,23 @@
       "downloadLabel": "Télécharger l'export du {date}",
       "downloaded": "Téléchargement lancé.",
       "erasureTitle": "Supprimer mon compte",
-      "erasureIntro": "Votre compte sera supprimé définitivement {days, plural, one {# jour} other {# jours}} après votre demande. Dès la demande, vous êtes déconnecté de tous vos appareils et votre profil public est masqué. Pour annuler, il suffit de vous reconnecter avant la date prévue.",
+      "erasureIntro": "Votre compte sera supprimé définitivement {days, plural, one {# jour} other {# jours}} après votre demande. Dès la demande, vous êtes déconnecté de tous vos appareils et votre profil public est masqué. D'ici là, vous pourrez l'annuler : reconnectez-vous, puis cliquez sur « Annuler la suppression ».",
       "erasureExportFirst": "Pensez à exporter vos données avant : après la suppression, elles ne pourront plus être récupérées.",
       "erasureRequest": "Supprimer mon compte",
       "erasureConfirmTitle": "Supprimer votre compte ?",
-      "erasureConfirmText": "Vous serez déconnecté de tous vos appareils et votre profil sera masqué. Le compte sera supprimé définitivement dans {days, plural, one {# jour} other {# jours}}, sauf si vous vous reconnectez pour annuler.",
+      "erasureConfirmText": "Vous serez déconnecté de tous vos appareils et votre profil sera masqué. Le compte sera supprimé définitivement dans {days, plural, one {# jour} other {# jours}}, sauf si vous annulez avant : en vous reconnectant, puis en cliquant sur « Annuler la suppression ».",
       "erasureConfirm": "Oui, supprimer mon compte",
       "cancel": "Annuler",
       "close": "Fermer",
       "erasurePending": "Votre compte sera supprimé le {date}.",
       "erasureDoneTitle": "Suppression demandée",
       "erasureDone": "Votre compte sera supprimé définitivement le {date}. Vous avez été déconnecté de tous vos appareils et un e-mail de confirmation vous a été envoyé.",
-      "erasureDoneCancel": "Vous changez d'avis ? Reconnectez-vous avant cette date pour annuler la suppression.",
+      "erasureDoneCancel": "Vous changez d'avis ? Avant cette date, reconnectez-vous puis cliquez sur « Annuler la suppression ».",
       "home": "Retour à l'accueil",
       "error": "Une erreur est survenue. Réessayez.",
-      "loadError": "Vos demandes n'ont pas pu être chargées."
+      "loadError": "Vos demandes n'ont pas pu être chargées.",
+      "erasureCancel": "Annuler la suppression",
+      "exportExpiredNow": "Cet export a expiré. Vous pouvez en demander un nouveau."
     }
   },
   "PublicProfile": {

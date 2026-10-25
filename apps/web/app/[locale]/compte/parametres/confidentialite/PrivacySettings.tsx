@@ -2,7 +2,7 @@
 
 import { Button, Switch } from "@trovelya/ui";
 import { useFormatter, useLocale, useTranslations } from "next-intl";
-import { useCallback, useEffect, useState } from "react";
+import { useCallback, useEffect, useRef, useState } from "react";
 
 import {
   type ConsentPurpose,
@@ -30,6 +30,10 @@ export function PrivacySettings() {
   const [state, setState] = useState<ConsentState | null>(null);
   const [loadFailed, setLoadFailed] = useState(false);
   const [notice, setNotice] = useState<"saved" | "failed" | null>(null);
+  // Choices are sent one after the other: each answer is the whole state, so the last one
+  // shown is always the latest (switches stay usable, and keep the focus, meanwhile).
+  const queue = useRef<Promise<void>>(Promise.resolve());
+  const waiting = useRef(0);
 
   const load = useCallback(async () => {
     setLoadFailed(false);
@@ -42,17 +46,25 @@ export function PrivacySettings() {
     void load();
   }, [load]);
 
-  async function change(purpose: ConsentPurpose, granted: boolean) {
+  function change(purpose: ConsentPurpose, granted: boolean) {
     setNotice(null);
-    // The location consent is given under the privacy policy, the others under the cookie one.
-    const version = purpose === "location" ? PRIVACY_POLICY_VERSION : COOKIE_POLICY_VERSION;
-    const saved = await recordConsents({ [purpose]: granted }, version);
-    if (saved === null) {
-      setNotice("failed");
-      return;
-    }
-    setState(saved);
-    setNotice("saved");
+    // Shown at once; the answer then replaces it with what is stored.
+    setState((current) => current && withChoice(current, purpose, granted));
+    waiting.current += 1;
+    queue.current = queue.current.then(async () => {
+      // The location consent is given under the privacy policy, the others under the cookies one.
+      const version = purpose === "location" ? PRIVACY_POLICY_VERSION : COOKIE_POLICY_VERSION;
+      const saved = await recordConsents({ [purpose]: granted }, version);
+      waiting.current -= 1;
+      if (saved === null) {
+        setNotice("failed");
+        await load(); // show what is really stored
+        return;
+      }
+      // An answer while other choices wait would undo them on screen: only the last one counts.
+      if (waiting.current === 0) setState(saved);
+      setNotice("saved");
+    });
   }
 
   const latest = (purpose: ConsentPurpose): ConsentRecord | undefined =>
@@ -90,7 +102,9 @@ export function PrivacySettings() {
             <Switch
               label={tLegal(`purposes.${purpose}`)}
               checked={latest(purpose)?.granted ?? false}
-              onCheckedChange={(granted) => void change(purpose, granted)}
+              onCheckedChange={(granted) => {
+                change(purpose, granted);
+              }}
             />
             <p className="text-sm text-ink-2">{answered(latest(purpose))}</p>
           </div>
@@ -126,4 +140,15 @@ export function PrivacySettings() {
       </section>
     </AccountShell>
   );
+}
+
+function withChoice(state: ConsentState, purpose: ConsentPurpose, granted: boolean): ConsentState {
+  const others = state.consents.filter((record) => record.purpose !== purpose);
+  const previous = state.consents.find((record) => record.purpose === purpose);
+  const created_at = new Date().toISOString();
+  const version = previous?.policy_version ?? "";
+  return {
+    ...state,
+    consents: [...others, { purpose, granted, policy_version: version, created_at }],
+  };
 }

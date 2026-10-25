@@ -2,6 +2,7 @@
 
 import { Button } from "@trovelya/ui";
 import { useFormatter, useTranslations } from "next-intl";
+import { usePathname } from "next/navigation";
 import { useEffect, useRef, useState } from "react";
 
 import { useSession } from "@/components/SessionProvider";
@@ -19,12 +20,23 @@ export function ErasureNotice() {
   const [failed, setFailed] = useState(false);
   const [cancelled, setCancelled] = useState(false);
   const status = useRef<HTMLParagraphElement>(null);
+  const pathname = usePathname();
+
+  // The confirmation is for the page where the member cancelled, not every page after it.
+  useEffect(() => {
+    setCancelled(false);
+  }, [pathname]);
 
   async function cancel() {
     setBusy(true);
     setFailed(false);
     const result = await apiCall<null>("/v1/me/erasure/cancel", { method: "POST" });
     setBusy(false);
+    // 401: the session is over; the header and the page follow the refreshed session.
+    if (!result.ok && result.status === 401) {
+      await refresh();
+      return;
+    }
     // 409: already cancelled (another tab); the notice goes away all the same.
     if (!result.ok && result.code !== "no_erasure_pending") {
       setFailed(true);
@@ -39,9 +51,9 @@ export function ErasureNotice() {
     if (cancelled) status.current?.focus();
   }, [cancelled]);
 
-  if (cancelled) {
+  if (cancelled && me) {
     return (
-      <div className="border-b border-line bg-surface-2">
+      <section aria-label={t("label")} className="border-b border-line bg-surface-2">
         <p
           ref={status}
           role="status"
@@ -50,7 +62,7 @@ export function ErasureNotice() {
         >
           {t("cancelled")}
         </p>
-      </div>
+      </section>
     );
   }
   if (!me?.erase_at) return null;
