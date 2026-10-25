@@ -71,6 +71,7 @@ async def test_session_route_absent_outside_test_and_local(
                 "/v1/_test/step-up-link",
                 "/v1/_test/email-change-link",
                 "/v1/_test/flag-allow",
+                "/v1/_test/build-export",
             ):
                 answer = await client.post(path, json={"new_email": "b@example.org"})
                 assert answer.status_code == 404, (env, path)
@@ -174,3 +175,23 @@ async def test_flag_allow_keeps_the_default_and_lists_a_member_once(
                 await db.execute(text("DELETE FROM feature_flags WHERE key = :key"), {"key": key})
                 await db.commit()
             await redis_client.delete("flag:" + key)
+
+
+async def test_build_export_route_builds_the_pending_export(
+    sessionmaker: async_sessionmaker[AsyncSession], redis_client: Redis
+) -> None:
+    """No worker in the end-to-end stack: this route does its job for the signed-in member."""
+    async with _client(sessionmaker, redis_client, "test") as client:
+        await client.post("/v1/_test/session", json={"completed": True})
+        await _with_csrf(client)
+        nothing = await client.post("/v1/_test/build-export")
+        assert nothing.status_code == 404
+        requested = await client.post("/v1/me/data-export")
+        assert requested.status_code == 202
+        built = await client.post("/v1/_test/build-export")
+        assert built.status_code == 204
+        [export] = (await client.get("/v1/me/data-requests")).json()["data"]
+        assert export["status"] == "completed" and export["expires_at"] is not None
+        archive = await client.get(f"/v1/me/data-export/{export['id']}/download")
+        assert archive.status_code == 200
+        assert archive.headers["content-type"] == "application/zip"

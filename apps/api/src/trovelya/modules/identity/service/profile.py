@@ -9,6 +9,7 @@ kept: the not-yet-completed account is erased and its sessions with it.
 import re
 import unicodedata
 from dataclasses import dataclass
+from datetime import timedelta
 from typing import Any
 from zoneinfo import ZoneInfo
 
@@ -19,6 +20,7 @@ from sqlalchemy.ext.asyncio import AsyncSession
 from trovelya.core.errors import AppError, ErrorCode
 from trovelya.core.flags import FlagService
 from trovelya.modules.identity import repository
+from trovelya.modules.identity.service.gdpr import erasure_grace_days
 from trovelya.modules.identity.service.sessions import CurrentUser
 from trovelya.shared.clock import Clock
 
@@ -51,6 +53,11 @@ async def me(
     db: AsyncSession, *, user: CurrentUser, flags: FlagService, clock: Clock
 ) -> dict[str, Any]:
     row = await repository.me(db, user.id)
+    erase_at = (
+        row.erasure_requested_at + timedelta(days=await erasure_grace_days(db))
+        if row.erasure_requested_at
+        else None
+    )
     return {
         "id": row.id,
         "email": row.email,
@@ -64,6 +71,7 @@ async def me(
         "flags": {key: await flags.is_enabled(key, user_id=user.id) for key in CLIENT_FLAGS},
         "is_minor": await is_minor(db, row.birth_year, clock=clock),
         "erasure_requested_at": row.erasure_requested_at,
+        "erase_at": erase_at,
         "counters": {"unread_messages": 0, "notifications": 0},  # P3 and P6
         "version": row.version,
     }

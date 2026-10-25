@@ -9,10 +9,11 @@ import { initials } from "@/lib/initials";
 
 import { useAccount } from "./useAccount";
 
-// Each group appears with its page (privacy and data arrive with P1-T12b3).
 const SECTIONS = [
   ["profile", "parametres"],
   ["security", "parametres/securite"],
+  ["privacy", "parametres/confidentialite"],
+  ["data", "donnees"],
 ] as const;
 
 /** W20: the account hub, then one page per group of settings. */

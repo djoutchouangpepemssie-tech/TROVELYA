@@ -257,11 +257,15 @@ def french_date(moment: datetime) -> str:
     return f"{local.day} {_MONTHS[local.month - 1]} {local.year}"
 
 
-async def _grace(db: AsyncSession) -> timedelta:
-    days = await repository.setting_int(
+async def erasure_grace_days(db: AsyncSession) -> int:
+    """Days between the erasure request and the erasure itself (Q10)."""
+    return await repository.setting_int(
         db, "retention.erasure_grace_days", default=DEFAULT_GRACE_DAYS
     )
-    return timedelta(days=days)
+
+
+async def _grace(db: AsyncSession) -> timedelta:
+    return timedelta(days=await erasure_grace_days(db))
 
 
 async def request_erasure(

@@ -148,6 +148,9 @@ async def test_erasure_revokes_sessions_and_hides_profile(
     assert confirmation.to == account.email
     assert "23 novembre 2026" in confirmation.text
     assert f"{WEB}/fr/connexion" in confirmation.text
+    # Signing in is not enough: the cancellation is a click (POST /v1/me/erasure/cancel).
+    assert "« Annuler la suppression »" in confirmation.text
+    assert "« Annuler la suppression »" in confirmation.html
 
 
 async def test_cancel_during_grace(
@@ -162,12 +165,14 @@ async def test_cancel_during_grace(
     again = await _sign_in_again(sessionmaker, account, clock)
     me = (await client.get("/v1/me", headers=again.headers)).json()
     assert me["erasure_requested_at"] is not None  # the client offers to cancel
+    assert me["erase_at"] == (T0 + GRACE).isoformat().replace("+00:00", "Z")
+    listed = (await client.get("/v1/me/data-requests", headers=again.headers)).json()
+    assert listed["erasure_grace_days"] == 30
 
     cancelled = await client.post("/v1/me/erasure/cancel", headers=again.headers)
     assert cancelled.status_code == 204, cancelled.text
-    assert (await client.get("/v1/me", headers=again.headers)).json()[
-        "erasure_requested_at"
-    ] is None
+    after = (await client.get("/v1/me", headers=again.headers)).json()
+    assert after["erasure_requested_at"] is None and after["erase_at"] is None
     assert (await client.get(f"/v1/users/{username}")).status_code == 200
 
     # Nothing to cancel any more.

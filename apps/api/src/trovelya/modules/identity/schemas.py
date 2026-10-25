@@ -113,6 +113,7 @@ class MeOut(BaseModel):
     flags: dict[str, bool]
     is_minor: bool | None  # None until the birth year is known
     erasure_requested_at: datetime | None
+    erase_at: datetime | None  # end of the grace period: erased then unless cancelled
     counters: Counters
     version: int  # If-Match value of PATCH /v1/me
 
@@ -429,6 +430,7 @@ class DataRequestOut(BaseModel):
 
 class DataRequestList(BaseModel):
     data: list[DataRequestOut]
+    erasure_grace_days: int  # told before the erasure is asked for
 
 
 class ErasureAccepted(BaseModel):

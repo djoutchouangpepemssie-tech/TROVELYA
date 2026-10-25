@@ -262,7 +262,8 @@ async def post_data_export(
 async def get_data_requests(db: Uow, user: Me) -> DataRequestList:
     rows = await gdpr.list_requests(db, user.id)
     return DataRequestList(
-        data=[DataRequestOut.model_validate(row, from_attributes=True) for row in rows]
+        data=[DataRequestOut.model_validate(row, from_attributes=True) for row in rows],
+        erasure_grace_days=await gdpr.erasure_grace_days(db),
     )
 
 

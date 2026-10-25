@@ -15,6 +15,8 @@ export type Me = {
   username: string;
   display_name: string;
   profile_completed: boolean;
+  /** Erasure asked for (Q10): the account is erased then, unless the member cancels. */
+  erase_at: string | null;
 };
 
 const NEXT_KEY = "trv_next";

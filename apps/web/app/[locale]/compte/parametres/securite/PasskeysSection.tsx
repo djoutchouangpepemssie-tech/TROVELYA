@@ -38,11 +38,20 @@ export function PasskeysSection({
   const list = useRef<HTMLUListElement>(null);
 
   // After a change that removes the focused control, focus goes to a stable place: the
-  // row's first button (rename), or the section title once the row is gone.
+  // row's first button (rename), or the section title once the row is gone. The row's buttons
+  // exist only once React has drawn it again, hence an effect after each render.
+  const focusAfter = useRef<string | null>(null);
+  useEffect(() => {
+    const id = focusAfter.current;
+    if (id === null || renaming) return;
+    const button = list.current?.querySelector<HTMLButtonElement>(`[data-passkey="${id}"] button`);
+    if (!button) return;
+    focusAfter.current = null;
+    button.focus();
+  });
+
   function focusRow(id: string) {
-    requestAnimationFrame(() => {
-      list.current?.querySelector<HTMLButtonElement>(`[data-passkey="${id}"] button`)?.focus();
-    });
+    focusAfter.current = id;
   }
 
   const load = useCallback(async () => {

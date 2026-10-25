@@ -11,6 +11,7 @@ import type { ReactNode } from "react";
 
 import { BottomTabs } from "@/components/BottomTabs";
 import { ConsentBanner } from "@/components/ConsentBanner";
+import { ErasureNotice } from "@/components/ErasureNotice";
 import { ServiceWorkerRegistration } from "@/components/ServiceWorkerRegistration";
 import { SessionProvider } from "@/components/SessionProvider";
 import { SiteChrome } from "@/components/SiteChrome";
@@ -50,6 +51,7 @@ export default async function LocaleLayout({ children, params }: Props) {
           <SessionProvider>
             <SiteChrome>
               <SiteHeader />
+              <ErasureNotice />
             </SiteChrome>
             {children}
             <SiteChrome>
