@@ -170,7 +170,8 @@ async def client(
     lines = Lines()
     root.addHandler(lines)
 
-    # Traces: production's instrumentation and redaction, exported into memory.
+    # Traces: production's instrumentation and redaction, exported into memory. Nothing may
+    # be instrumented already: a test that forgets to uninstrument would make this one fail.
     assert not RedisInstrumentor().is_instrumented_by_opentelemetry
     assert not SQLAlchemyInstrumentor().is_instrumented_by_opentelemetry
     provider = TracerProvider()

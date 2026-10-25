@@ -10,7 +10,7 @@ from typing import Any
 
 from fastapi import FastAPI
 from fastapi.dependencies.models import Dependant
-from fastapi.routing import APIRoute
+from fastapi.routing import APIRoute, APIWebSocketRoute
 
 
 @dataclass(frozen=True, slots=True)
@@ -45,9 +45,12 @@ def _walk(app: FastAPI) -> Iterator[ApiRoute]:
         found: list[Any] = list(contexts()) if contexts else []
         if isinstance(route, APIRoute):
             found.append(route)
+        # WebSocket routes (live shopping, later) have no methods, path or dependencies here,
+        # and a top-level one is not an included router: the walk must learn them first.
+        assert not isinstance(route, APIWebSocketRoute), f"WebSocket route: {route.path}"
         for context in found:
-            # A WebSocket route has no HTTP methods (live shopping, later).
-            for method in sorted(getattr(context, "methods", None) or {"WEBSOCKET"}):
+            assert context.methods and context.dependant is not None, f"unsupported: {context}"
+            for method in sorted(context.methods):
                 yield ApiRoute(
                     method=method,
                     path=context.path,

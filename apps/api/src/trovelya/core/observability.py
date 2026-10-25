@@ -21,7 +21,7 @@ from opentelemetry.sdk.metrics.export import PeriodicExportingMetricReader
 from opentelemetry.sdk.resources import Resource
 from opentelemetry.sdk.trace import Event, ReadableSpan, TracerProvider
 from opentelemetry.sdk.trace.export import BatchSpanProcessor, SpanExporter, SpanExportResult
-from opentelemetry.trace import Status
+from opentelemetry.trace import Link, Status
 from sqlalchemy.ext.asyncio import AsyncEngine
 
 from trovelya.core.config import Settings
@@ -145,7 +145,7 @@ def _redacted(span: ReadableSpan) -> ReadableSpan:
         events=[
             Event(event.name, _event_attributes(event), event.timestamp) for event in span.events
         ],
-        links=span.links,
+        links=[Link(link.context, _attributes(link.attributes)) for link in span.links],
         kind=span.kind,
         status=Status(status.status_code, REDACTED) if description else status,
         start_time=span.start_time,

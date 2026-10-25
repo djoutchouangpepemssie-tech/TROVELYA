@@ -235,6 +235,12 @@ async def _owned_resources(
     address = await client.post("/v1/me/addresses", headers=owner.headers, json=ADDRESS)
     zone = await client.post("/v1/me/zones", headers=owner.headers, json=ZONE)
     export = await client.post("/v1/me/data-export", headers=owner.headers)
+    consent = await client.post(
+        "/v1/me/consents",
+        headers=owner.headers,
+        json={"purpose": "location", "granted": True, "policy_version": "v1"},
+    )
+    assert consent.status_code == 201
     assert (address.status_code, zone.status_code, export.status_code) == (201, 201, 202)
     request_id = UUID(export.json()["request_id"])
     built = await build_data_export(
@@ -268,11 +274,13 @@ async def test_someone_elses_resources_answer_404(
         "/v1/me/passkeys",
         "/v1/me/addresses",
         "/v1/me/zones",
-        "/v1/me/consents",
     ):
         answer = await client.get(listing, headers=intruder.headers)
         assert answer.status_code == 200, listing
         assert not [value for value in owned if value in answer.text], listing
+    # Consents carry no identifier: the owner's choice must simply not show up.
+    consents = (await client.get("/v1/me/consents", headers=intruder.headers)).json()
+    assert consents["consents"] == []
 
     # Nothing was touched, and the routes do work for the owner (a 404 for all proves nothing).
     for key in sorted(OWNED_ROUTES, key=lambda k: k.startswith("DELETE")):  # deletions last

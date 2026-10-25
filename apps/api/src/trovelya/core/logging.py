@@ -88,9 +88,34 @@ def is_database_error(exc_type: type[BaseException] | str) -> bool:
     return name.startswith(_DATABASE_MODULES)
 
 
+# Fields of a database error that help to debug and never hold a member's data (unlike its
+# message or `detail`, which quote values).
+_DIAGNOSTICS = (
+    ("sqlstate", "sqlstate"),
+    ("constraint_name", "constraint"),
+    ("table_name", "table"),
+    ("column_name", "column"),
+)
+
+
+def _withheld(error: BaseException) -> str:
+    diagnostics = " ".join(
+        f"{label}={value}"
+        for attribute, label in _DIAGNOSTICS
+        if (value := getattr(error, attribute, None))
+    )
+    statement = getattr(error, "statement", None)
+    return (
+        REDACTED
+        + (f" [{diagnostics}]" if diagnostics else "")
+        + (f" (SQL: {statement})" if statement else "")
+    )
+
+
 def format_exception(exc: BaseException) -> str:
-    """The traceback, chained exceptions included, with the message of every database error
-    withheld (its type and SQL statement, which holds placeholders only, are kept)."""
+    """The traceback, chained and grouped exceptions included, with the message of every
+    database error withheld (its type, diagnostics and SQL statement, which holds
+    placeholders only, are kept)."""
     rendered = traceback.TracebackException.from_exception(exc)
     pending = [(rendered, exc)]
     seen: set[int] = set()
@@ -100,15 +125,16 @@ def format_exception(exc: BaseException) -> str:
             continue
         seen.add(id(error))
         if is_database_error(type(error)):
-            statement = getattr(error, "statement", None)
             # The message TracebackException renders (no public way to replace it).
-            setattr(current, "_str", f"{REDACTED} (SQL: {statement})" if statement else REDACTED)  # noqa: B010
-        for chained, cause in (
+            setattr(current, "_str", _withheld(error))  # noqa: B010
+        related = [
             (current.__cause__, error.__cause__),
             (current.__context__, error.__context__),
-        ):
-            if chained is not None and cause is not None:
-                pending.append((chained, cause))
+        ]
+        if isinstance(error, BaseExceptionGroup):
+            grouped = cast("BaseExceptionGroup[BaseException]", error).exceptions
+            related += zip(current.exceptions or [], grouped, strict=False)
+        pending += [(view, cause) for view, cause in related if view is not None and cause]
     return "".join(rendered.format())
 
 

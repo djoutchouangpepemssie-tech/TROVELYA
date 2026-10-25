@@ -115,6 +115,9 @@ def test_access_log_lines_have_no_query_string(capsys: pytest.CaptureFixture[str
     assert "Capucins" not in json.dumps(line)
 
 
+_FAILED_QUERY = "invalid input for query argument $1: " + repr("Ambroisine Quintal")
+
+
 def _database_error(message: str) -> Exception:
     """An exception from a database driver's module, as asyncpg raises them."""
     error_type = type("DataError", (Exception,), {"__module__": "asyncpg.exceptions"})
@@ -137,3 +140,40 @@ def test_database_error_messages_are_withheld(capsys: pytest.CaptureFixture[str]
     assert "Ambroisine" not in rendered
     assert "asyncpg.exceptions.DataError: [REDACTED]" in rendered
     assert "RuntimeError: the request failed" in rendered  # other messages are kept
+
+
+def test_database_errors_inside_exception_groups_are_withheld(
+    capsys: pytest.CaptureFixture[str],
+) -> None:
+    configure_logging()
+    try:
+        # The value comes from elsewhere: the traceback shows this source line.
+        raise ExceptionGroup("tasks", [_database_error(_FAILED_QUERY)])
+    except ExceptionGroup:
+        structlog.get_logger().exception("unhandled_error")
+    rendered = str(_last_json_line(capsys.readouterr().out)["exception"])
+    assert "Ambroisine" not in rendered
+    assert "asyncpg.exceptions.DataError: [REDACTED]" in rendered
+
+
+def test_database_error_diagnostics_without_values_are_kept(
+    capsys: pytest.CaptureFixture[str],
+) -> None:
+    """What helps to debug and names no member: the SQLSTATE, constraint, table, column."""
+    configure_logging()
+    error = _database_error('duplicate key value violates unique constraint "users_email_key"')
+    for name, value in {
+        "sqlstate": "23505",
+        "constraint_name": "users_email_key",
+        "table_name": "users",
+        "column_name": None,
+        "detail": "Key (email)=(ambroisine@exemple.fr) already exists.",
+    }.items():
+        setattr(error, name, value)
+    try:
+        raise error
+    except type(error):
+        structlog.get_logger().exception("unhandled_error")
+    rendered = str(_last_json_line(capsys.readouterr().out)["exception"])
+    assert "[REDACTED] [sqlstate=23505 constraint=users_email_key table=users]" in rendered
+    assert "ambroisine" not in rendered
