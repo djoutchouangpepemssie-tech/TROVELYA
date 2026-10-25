@@ -26,11 +26,26 @@ export function readCookie(name: string, cookies: string): string | null {
   return null;
 }
 
+// One /v1/csrf call at a time: two concurrent calls would set two different tokens, and the
+// request that went out with the first one would be refused once the cookie holds the second.
+const pendingToken = new WeakMap<Dependencies, Promise<string | null>>();
+
 async function csrfToken(deps: Dependencies): Promise<string | null> {
   const existing = readCookie(CSRF_COOKIE, deps.cookies());
   if (existing) return existing;
-  await deps.fetch("/api/v1/csrf", { credentials: "same-origin" });
-  return readCookie(CSRF_COOKIE, deps.cookies());
+  let pending = pendingToken.get(deps);
+  if (!pending) {
+    pending = (async () => {
+      try {
+        await deps.fetch("/api/v1/csrf", { credentials: "same-origin" });
+        return readCookie(CSRF_COOKIE, deps.cookies());
+      } finally {
+        pendingToken.delete(deps);
+      }
+    })();
+    pendingToken.set(deps, pending);
+  }
+  return pending;
 }
 
 /** Fetch the CSRF token ahead, so a request sent while the page closes needs no extra call. */

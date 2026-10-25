@@ -99,3 +99,29 @@ describe("prepareCsrf", () => {
     expect(fetchImpl).toHaveBeenCalledWith("/api/v1/csrf", { credentials: "same-origin" });
   });
 });
+
+describe("CSRF token fetched once for concurrent requests", () => {
+  it("shares one /v1/csrf call: two tokens would make one request fail", async () => {
+    let cookie = "";
+    let issued = 0;
+    const fetchImpl = vi.fn<(url: string, init?: RequestInit) => Promise<Response>>(async (url) => {
+      if (url === "/api/v1/csrf") {
+        await new Promise((resolve) => setTimeout(resolve, 10));
+        issued += 1;
+        cookie = `__Host-trv_csrf=token${String(issued)}`;
+      }
+      return new Response("{}");
+    });
+    const deps = { fetch: fetchImpl, cookies: () => cookie };
+    await Promise.all([
+      prepareCsrf(deps),
+      apiFetch("/v1/me/preferences", { method: "PUT" }, deps),
+      apiFetch("/v1/me/preferences", { method: "PUT" }, deps),
+    ]);
+    expect(fetchImpl.mock.calls.filter(([url]) => url === "/api/v1/csrf")).toHaveLength(1);
+    const sent = fetchImpl.mock.calls
+      .filter(([url]) => url !== "/api/v1/csrf")
+      .map(([, init]) => new Headers(init?.headers).get("x-csrf-token"));
+    expect(sent).toEqual(["token1", "token1"]);
+  });
+});

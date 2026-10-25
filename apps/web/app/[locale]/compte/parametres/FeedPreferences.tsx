@@ -4,16 +4,16 @@ import { Button, Switch } from "@trovelya/ui";
 import { useTranslations } from "next-intl";
 import { useCallback, useEffect, useRef, useState } from "react";
 
-import { apiCall, apiFetch, prepareCsrf } from "@/lib/api";
+import { apiCall } from "@/lib/api";
 
 import type { Preferences } from "../../bienvenue/api";
-
-const DEBOUNCE_MS = 600;
 
 /**
  * The feed preferences of W20: personalised feed and the share of discovery (0 to 100).
  * Preferences are replaced as a whole (PUT), so one request at a time, always with the latest
  * choices: two quick changes cannot overwrite each other, and a failure reloads what is stored.
+ * The slider saves when it is released (its native `change` event), so the request is already
+ * on its way before the member can leave the page; `keepalive` lets it finish if they do.
  */
 export function FeedPreferences({ onSaved }: { onSaved: (message: string) => void }) {
   const t = useTranslations("Account.feed");
@@ -25,7 +25,7 @@ export function FeedPreferences({ onSaved }: { onSaved: (message: string) => voi
   const wanted = useRef<Preferences | null>(null);
   const saving = useRef(false);
   const dirty = useRef(false);
-  const timer = useRef<ReturnType<typeof setTimeout> | null>(null);
+  const slider = useRef<HTMLInputElement>(null);
   const announce = useRef(onSaved);
   const savedLabel = t("saved");
 
@@ -54,6 +54,7 @@ export function FeedPreferences({ onSaved }: { onSaved: (message: string) => voi
       const result = await apiCall<Preferences>("/v1/me/preferences", {
         method: "PUT",
         body: JSON.stringify(wanted.current),
+        keepalive: true,
       });
       if (!result.ok) {
         saving.current = false;
@@ -72,50 +73,33 @@ export function FeedPreferences({ onSaved }: { onSaved: (message: string) => voi
     void load();
   }, [load]);
 
-  // Leaving with the slider still settling: send it now rather than lose it. A link inside the
-  // app unmounts this component; a full page load or a closed tab only fires `pagehide`, where
-  // a `keepalive` request still goes out.
+  // React's onChange follows every move; the native `change` fires once the thumb is released
+  // (or at each keyboard step): that is when the choice is saved.
   useEffect(() => {
-    function sendNow() {
-      if (!timer.current || !wanted.current) return;
-      clearTimeout(timer.current);
-      timer.current = null;
-      void apiFetch("/v1/me/preferences", {
-        method: "PUT",
-        headers: { "content-type": "application/json" },
-        body: JSON.stringify(wanted.current),
-        keepalive: true,
-      });
+    const input = slider.current;
+    if (!input) return;
+    function commit() {
+      if (input) change({ feed_discovery_level: Number(input.value) });
     }
-    window.addEventListener("pagehide", sendNow);
+    input.addEventListener("change", commit);
     return () => {
-      window.removeEventListener("pagehide", sendNow);
-      if (timer.current) {
-        clearTimeout(timer.current);
-        timer.current = null;
-        void flush();
-      }
+      input.removeEventListener("change", commit);
     };
-  }, [flush]);
+  });
 
-  function change(changes: Partial<Preferences>, debounce: boolean) {
+  function change(changes: Partial<Preferences>) {
     if (!wanted.current) return;
     wanted.current = { ...wanted.current, ...changes };
     setPreferences(wanted.current);
     dirty.current = true;
     setFailed(false);
     onSaved("");
-    if (timer.current) clearTimeout(timer.current);
-    timer.current = null;
-    if (debounce) {
-      void prepareCsrf(); // Ready in case the page closes before the save.
-      timer.current = setTimeout(() => {
-        timer.current = null;
-        void flush();
-      }, DEBOUNCE_MS);
-    } else {
-      void flush();
-    }
+    void flush();
+  }
+
+  // While the thumb moves: shown on screen, not saved yet.
+  function show(level: number) {
+    setPreferences((current) => (current ? { ...current, feed_discovery_level: level } : current));
   }
 
   return (
@@ -138,7 +122,7 @@ export function FeedPreferences({ onSaved }: { onSaved: (message: string) => voi
               label={t("personalised")}
               checked={preferences.personalised_feed}
               onCheckedChange={(checked) => {
-                change({ personalised_feed: checked }, false);
+                change({ personalised_feed: checked });
               }}
             />
             <p className="text-sm text-ink-2">{t("personalisedHint")}</p>
@@ -153,6 +137,7 @@ export function FeedPreferences({ onSaved }: { onSaved: (message: string) => voi
               </span>
             </div>
             <input
+              ref={slider}
               id="feed-discovery"
               type="range"
               min={0}
@@ -163,8 +148,7 @@ export function FeedPreferences({ onSaved }: { onSaved: (message: string) => voi
               aria-valuetext={t("discoveryValue", { value: preferences.feed_discovery_level })}
               className="trv-range"
               onChange={(event) => {
-                // Saved once the thumb stops moving.
-                change({ feed_discovery_level: Number(event.target.value) }, true);
+                show(Number(event.target.value));
               }}
             />
             <div aria-hidden="true" className="flex justify-between text-xs text-ink-2">
