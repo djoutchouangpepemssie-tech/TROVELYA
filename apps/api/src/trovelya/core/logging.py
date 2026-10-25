@@ -112,6 +112,10 @@ def configure_logging(level: int = logging.INFO) -> None:
         library_logger = logging.getLogger(name)
         library_logger.handlers = []
         library_logger.propagate = True
+    # httpx logs every outgoing request at INFO with its full address, query string included
+    # (a geocoded street, an e-mail…): keep its warnings only.
+    for name in ("httpx", "httpcore"):
+        logging.getLogger(name).setLevel(logging.WARNING)
     # arq logs every cron run at INFO (the outbox relay runs every second): keep warnings
     # and failures only; our jobs log what they actually did.
     logging.getLogger("arq").setLevel(logging.WARNING)

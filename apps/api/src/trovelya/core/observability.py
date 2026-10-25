@@ -20,9 +20,11 @@ from opentelemetry.sdk.metrics.export import PeriodicExportingMetricReader
 from opentelemetry.sdk.resources import Resource
 from opentelemetry.sdk.trace import TracerProvider
 from opentelemetry.sdk.trace.export import BatchSpanProcessor
+from opentelemetry.trace import Span
+from sqlalchemy.ext.asyncio import AsyncEngine
 
 from trovelya.core.config import Settings
-from trovelya.core.logging import redact_value
+from trovelya.core.logging import REDACTED, redact_value
 
 meter = metrics.get_meter("trovelya")
 # Updated by the outbox relay; a growing value means events are not being published.
@@ -47,6 +49,28 @@ def scrub_breadcrumb(crumb: dict[str, Any], _hint: dict[str, Any]) -> dict[str, 
 def scrub_event(event: dict[str, Any], _hint: dict[str, Any]) -> dict[str, Any]:
     """Same redaction as the logs, applied to errors and transactions (span descriptions too)."""
     return cast("dict[str, Any]", redact_value(event))
+
+
+# Span attributes holding the request address: its query string can carry personal data
+# (an address searched, an e-mail), so it never leaves the process.
+_URL_ATTRIBUTES = frozenset({"http.url", "http.target", "url.full"})
+_QUERY_ATTRIBUTES = frozenset({"url.query"})
+
+
+def scrub_server_span(span: Span, _scope: dict[str, Any]) -> None:
+    """Request spans: no query string, and the logs' redaction (e-mails, IP addresses…)."""
+    attributes = getattr(span, "attributes", None)
+    if not span.is_recording() or not attributes:
+        return
+    for key, value in list(cast("dict[str, object]", dict(attributes)).items()):
+        if not isinstance(value, str):
+            continue
+        if key in _QUERY_ATTRIBUTES:
+            clean = REDACTED
+        else:
+            clean = str(redact_value(value.split("?", 1)[0] if key in _URL_ATTRIBUTES else value))
+        if clean != value:
+            span.set_attribute(key, clean)
 
 
 def _init_sentry(settings: Settings) -> None:
@@ -97,10 +121,31 @@ def _init_opentelemetry(app: FastAPI | None, settings: Settings, service_name: s
             ],
         )
     )
+    instrument(app)
+
+
+def instrument(
+    app: FastAPI | None,
+    *,
+    tracer_provider: TracerProvider | None = None,
+    engine: AsyncEngine | None = None,
+) -> None:
+    """What is traced: requests, SQL and Redis. Without `tracer_provider`, the global one;
+    without `engine`, every engine created afterwards (the telemetry test passes its own)."""
     if app is not None:
-        FastAPIInstrumentor.instrument_app(app, excluded_urls="health,ready")
-    SQLAlchemyInstrumentor().instrument()  # pyright: ignore[reportUnknownMemberType]
-    RedisInstrumentor().instrument()  # pyright: ignore[reportUnknownMemberType]
+        FastAPIInstrumentor.instrument_app(
+            app,
+            excluded_urls="health,ready",
+            tracer_provider=tracer_provider,
+            server_request_hook=scrub_server_span,
+        )
+    SQLAlchemyInstrumentor().instrument(  # pyright: ignore[reportUnknownMemberType]
+        tracer_provider=tracer_provider,
+        **({"engine": engine.sync_engine} if engine is not None else {}),
+    )
+    RedisInstrumentor().instrument(  # pyright: ignore[reportUnknownMemberType]
+        tracer_provider=tracer_provider
+    )
 
 
 def configure_observability(
