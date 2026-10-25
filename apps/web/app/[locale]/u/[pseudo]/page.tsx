@@ -26,6 +26,7 @@ type Props = { params: Promise<{ locale: string; pseudo: string }> };
 const USERNAME = /^[a-z0-9._]{3,30}$/i;
 
 /** One API call per request, shared by the metadata and the page. */
+// Next.js gives the segment decoded; a malformed escape never gets here (proxy.ts answers 400).
 const loadProfile = cache(async (pseudo: string): Promise<PublicProfile | null> => {
   if (!USERNAME.test(pseudo)) return null;
   const response = await serverGet(["users", pseudo]);
@@ -36,7 +37,7 @@ const loadProfile = cache(async (pseudo: string): Promise<PublicProfile | null> 
 
 export async function generateMetadata({ params }: Props): Promise<Metadata> {
   const { pseudo } = await params;
-  const profile = await loadProfile(decodeURIComponent(pseudo));
+  const profile = await loadProfile(pseudo);
   const t = await getTranslations("PublicProfile");
   return {
     // Q13 (P1): no listing and no review yet, so no profile is worth indexing.
@@ -50,7 +51,7 @@ export async function generateMetadata({ params }: Props): Promise<Metadata> {
 /** W08 (P1 part, Q13): pseudo, name, initials, bio, member since and counters. No place. */
 export default async function PublicProfilePage({ params }: Props) {
   const { locale, pseudo } = await params;
-  const profile = await loadProfile(decodeURIComponent(pseudo));
+  const profile = await loadProfile(pseudo);
   if (!profile) notFound();
   const t = await getTranslations("PublicProfile");
   const format = await getFormatter();

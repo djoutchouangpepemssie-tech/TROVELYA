@@ -9,12 +9,8 @@ import { initials } from "@/lib/initials";
 
 import { useAccount } from "./useAccount";
 
-const SECTIONS = [
-  ["profile", "parametres"],
-  ["security", "parametres/securite"],
-  ["privacy", "parametres/confidentialite"],
-  ["data", "donnees"],
-] as const;
+// Each group appears with its page (security, privacy and data arrive with P1-T12b2 and b3).
+const SECTIONS = [["profile", "parametres"]] as const;
 
 /** W20: the account hub, then one page per group of settings. */
 export function AccountSummary() {

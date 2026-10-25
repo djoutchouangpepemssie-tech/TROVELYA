@@ -24,7 +24,7 @@ test("account hub lists the settings pages", async ({ page }) => {
   await page.goto("/fr/compte");
   await expect(page.getByRole("heading", { level: 1, name: a.title })).toBeVisible();
   const nav = page.getByRole("navigation", { name: a.navLabel });
-  for (const name of [a.nav.profile, a.nav.security, a.nav.privacy, a.nav.data]) {
+  for (const name of [a.nav.profile]) {
     await expect(nav.getByRole("link", { name: new RegExp(`^${name}`) })).toBeVisible();
   }
   await expectNoAxeViolations(page);
@@ -104,6 +104,8 @@ test("public profile shows no location and can be followed", async ({ page, brow
 test("unknown member gives a 404 page", async ({ page }) => {
   const response = await page.goto("/fr/u/personne_inconnue_42");
   expect(response?.status()).toBe(404);
+  // A malformed escape is refused cleanly, never a server error.
+  expect((await page.goto("/fr/u/%E0"))?.status()).toBe(400);
 });
 
 test("settings send signed-out visitors to the sign-in page", async ({ page }) => {
