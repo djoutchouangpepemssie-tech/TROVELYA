@@ -10,7 +10,8 @@
     "lint": "next typegen && eslint .",
     "typecheck": "next typegen && tsc --noEmit",
     "test": "vitest run --passWithNoTests",
-    "test:e2e": "playwright test"
+    "test:e2e": "playwright test",
+    "test:e2e:full": "playwright test --config playwright.full.config.ts"
   },
   "dependencies": {
     "@sentry/nextjs": "11.9.0",

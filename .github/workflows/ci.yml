@@ -97,6 +97,44 @@ jobs:
         run: pnpm --filter @trovelya/web exec playwright install-deps chromium
       - run: pnpm --filter @trovelya/web test:e2e
 
+  # Journey 1 on the stack as deployed (P1 gate, G1): the API and the arq worker from the image
+  # Railway runs, PostgreSQL, Redis and Mailpit in containers, the production web build in front.
+  # The sign-up e-mail really leaves the worker by SMTP; the test reads it from Mailpit.
+  e2e-full:
+    name: e2e-full
+    needs: changes
+    if: needs.changes.outputs.web == 'true' || needs.changes.outputs.api == 'true'
+    runs-on: ubuntu-24.04
+    timeout-minutes: 30
+    steps:
+      - uses: actions/checkout@v7
+      - uses: pnpm/action-setup@v6
+      - uses: actions/setup-node@v7
+        with:
+          node-version-file: .nvmrc
+          cache: pnpm
+      - run: pnpm install --frozen-lockfile
+      - name: API, worker, database, cache and Mailpit (images built from this commit)
+        run: bash apps/web/tests/e2e-full/stack.sh
+      - run: pnpm turbo run build --filter=@trovelya/web
+      - id: playwright
+        run: echo "version=$(pnpm --filter @trovelya/web exec playwright --version)" >> "$GITHUB_OUTPUT"
+      - uses: actions/cache@v4
+        id: browsers
+        with:
+          path: ~/.cache/ms-playwright
+          key: playwright-${{ runner.os }}-${{ steps.playwright.outputs.version }}
+      - if: steps.browsers.outputs.cache-hit != 'true'
+        run: pnpm --filter @trovelya/web exec playwright install --with-deps chromium
+      - if: steps.browsers.outputs.cache-hit == 'true'
+        run: pnpm --filter @trovelya/web exec playwright install-deps chromium
+      - run: pnpm --filter @trovelya/web test:e2e:full
+      - name: API and worker logs (redacted JSON lines), on failure
+        if: failure()
+        run: |
+          docker logs trovelya-full-api 2>&1 | tail -n 200
+          docker logs trovelya-full-worker 2>&1 | tail -n 200
+
   py:
     name: py
     needs: changes
