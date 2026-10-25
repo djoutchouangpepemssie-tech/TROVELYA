@@ -28,7 +28,7 @@
 | Q7 | Turnstile | Oui, derrière un adaptateur et le flag `auth.turnstile` (désactivé tant qu'il n'y a pas de compte Cloudflare). Base légale : intérêt légitime (sécurité). |
 | Q8 | Lien magique | **Non lié au navigateur** (les applis mail ouvrent les liens dans leur propre navigateur). Parades : confirmation par bouton (POST), usage unique, 15 min, jeton dans le fragment d'URL, limites de débit, notification de nouvelle connexion. |
 | Q9 | Sessions | Absolue **30 jours** (`SESSION_TTL_DAYS`), inactivité **14 jours** (`SESSION_IDLE_DAYS`), `last_used_at` écrit au plus toutes les **5 minutes**. |
-| Q10 | Effacement | Délai de grâce **30 jours** [PARAM `retention.erasure_grace_days`], annulable en se reconnectant ; sessions révoquées et profil masqué pendant la grâce. |
+| Q10 | Effacement | Délai de grâce **30 jours** [PARAM `retention.erasure_grace_days`], annulable en se reconnectant ; sessions révoquées et profil masqué pendant la grâce. Précision d'Arcel (25/10/2026) : se reconnecter ne suffit pas, l'annulation est un clic sur « Annuler la suppression » (volonté claire, et la personne qui revient une dernière fois ne perd pas sa demande). |
 | Q11 | Inscription | Première étape de `/bienvenue` obligatoire : **pseudo** (proposé, modifiable), **nom affiché**, **année de naissance** (moins de 15 ans → refus, rien conservé), acceptation des CGU. |
 | Q12 | Onboarding | 1. profil (obligatoire) ; 2. intérêts (16 univers) ; 3. zone 5 km + tailles (facultatives) ; 4. notifications. Les étapes 2 à 4 peuvent être passées. |
 | Q13 | Profil public | Pseudo, nom affiché, avatar à initiales, bio, « membre depuis », nombre d'abonnés et d'abonnements. **Aucune ville.** |

@@ -50,7 +50,7 @@ Légende : ✅ prouvé par les tests (CI verte sur `main`) ; 🟡 prouvé par le
 ## Écarts au plan de P1, et pourquoi
 
 - **Anti-robot** : Turnstile (Cloudflare, hors UE) écarté ; Friendly Captcha (UE) retenu par Arcel le 25 octobre 2026, à brancher avant la production. D'ici là, ne pas poser `TURNSTILE_SECRET_KEY`.
-- **Annulation de l'effacement** : se reconnecter pendant le délai de grâce donne accès à « Annuler la suppression » (bandeau sur chaque page et page Mes données) ; l'annulation est un clic, pas un effet de la seule reconnexion. Question posée à Arcel.
+- **Annulation de l'effacement** : se reconnecter pendant le délai de grâce donne accès à « Annuler la suppression » (bandeau sur chaque page et page Mes données) ; l'annulation est un clic, pas un effet de la seule reconnexion. Choix confirmé par Arcel le 25 octobre 2026.
 - **Démonstration de la maquette** (`/fr/demo`) : gardée pour visualiser le design, à supprimer plus tard (demande d'Arcel).
 - **Traçage SQL** : l'instrumentation OpenTelemetry déclare SQLAlchemy < 2.1 ; son contrôle de version est sauté, et le test de télémétrie prouve qu'elle fonctionne.
 - **Tests de l'API** : rangés par type puis par module (`tests/integration/identity/…`), et non `tests/identity/integration/…` comme écrit dans le plan.
@@ -58,7 +58,7 @@ Légende : ✅ prouvé par les tests (CI verte sur `main`) ; 🟡 prouvé par le
 ## Actions qui reviennent à Arcel
 
 1. Faire les démonstrations G3, G4, G5 et G8 ci-dessus sur staging, puis valider la porte P1 (ce document).
-2. Dire si l'effacement doit s'annuler de lui-même à la reconnexion, ou rester un clic explicite (comportement actuel).
+2. ~~Dire si l'effacement doit s'annuler de lui-même à la reconnexion.~~ Fait le 25 octobre 2026 : un clic explicite (comportement actuel).
 3. Toujours en attente depuis P0 (à la fin complète du projet, décision du 24 octobre 2026) : acheter `trovelya.com` (puis passkeys, Apple et e-mails sur ce domaine), double authentification sur GitHub, Railway, Vercel et Sentry, sauvegardes planifiées en production, nettoyage de la branche `test/P0-T13-ci-must-fail` et du service `ops-drill`, choix du prestataire de paiement avant P4.
 
 ## Points d'attention pour P2
