@@ -1,6 +1,6 @@
 # Passation — fin de P1 (Identité et comptes)
 
-**Date :** 25 octobre 2026. **Phase suivante :** P2, après validation de la porte P1 par Arcel. Plan de la phase : `docs/plans/P1-identite-comptes.md` (chaque tâche y a son paragraphe « réalisé »).
+**Date :** 25 octobre 2026. **Porte P1 validée par Arcel le 25 octobre 2026.** **Phase suivante :** P2 (catalogue et annonces). Plan de la phase : `docs/plans/P1-identite-comptes.md` (chaque tâche y a son paragraphe « réalisé »).
 
 ## Ce que P1 a ajouté
 
@@ -59,7 +59,7 @@ Légende : ✅ prouvé par les tests (CI verte sur `main`) ; 🟡 prouvé par le
 
 ## Actions qui reviennent à Arcel
 
-1. ~~Faire les démonstrations G3, G4, G5 et G8 sur staging.~~ Faites le 25 octobre 2026. Reste : valider la porte P1 (ce document).
+1. ~~Faire les démonstrations G3, G4, G5 et G8 sur staging, puis valider la porte P1.~~ Fait le 25 octobre 2026.
 2. ~~Dire si l'effacement doit s'annuler de lui-même à la reconnexion.~~ Fait le 25 octobre 2026 : un clic explicite (comportement actuel).
 3. Toujours en attente depuis P0 (à la fin complète du projet, décision du 24 octobre 2026) : acheter `trovelya.com` (puis passkeys, Apple et e-mails sur ce domaine), double authentification sur GitHub, Railway, Vercel et Sentry, sauvegardes planifiées en production, nettoyage de la branche `test/P0-T13-ci-must-fail` et du service `ops-drill`, choix du prestataire de paiement avant P4.
 
