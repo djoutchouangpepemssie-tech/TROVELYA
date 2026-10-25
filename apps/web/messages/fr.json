@@ -208,7 +208,6 @@
     "verifyMeta": "Connexion · TROVÉLYA",
     "signInTitle": "Se connecter",
     "signUpTitle": "Créer un compte",
-    "intro": "Achetez, vendez et trouvez la belle pièce près de chez vous.",
     "apple": "Continuer avec Apple",
     "google": "Continuer avec Google",
     "passkey": "Utiliser une passkey",
@@ -247,7 +246,12 @@
       "rate_limited": "Trop de tentatives. Patientez une minute.",
       "error": "Une erreur est survenue. Réessayez dans un instant."
     },
-    "logo": "TROVÉLYA"
+    "logo": "TROVÉLYA",
+    "welcomeTagline": "La belle trouvaille.",
+    "welcomeSubline": "Vends, enchéris et diffuse en direct.",
+    "welcomeLive": "En direct · 1 284",
+    "welcomeAuction": "Enchère · 02:14",
+    "welcomeFootnote": "Paiements protégés par séquestre · données hébergées dans l'Union européenne"
   },
   "Header": {
     "home": "Accueil",

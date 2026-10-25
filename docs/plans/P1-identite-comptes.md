@@ -420,7 +420,9 @@ Parallélisables : T03 et T04 après T02c ; T06, T09a et T10 après T05 ; T08 d�
 
 **Réalisé (écarts assumés) :** fichiers `app/[locale]/{connexion,inscription,verifier}/`, `components/{AuthScreen,SiteHeader,BottomTabs,SessionProvider}.tsx` (le menu du compte est dans `SiteHeader`) ; une page `/compte` minimale (nom, adresse, déconnexion) arrive dès T12a pour que l'onglet Profil ne soit pas un lien mort, T12b la complète. `GET /v1/auth/methods` dit quelles méthodes afficher et la durée du lien (`auth.magic_link_ttl_min`). Les jetons `token=` sont retirés de tout ce qui part vers Sentry. Nouveau jeton de couleur `danger-ink` pour les messages d'erreur (contraste ≥ 4,5:1).
 
-**Avant la production (question ouverte pour Arcel) :** le formulaire n'envoie pas encore de jeton anti-robot. Si `TURNSTILE_SECRET_KEY` est posé côté API, toute demande de lien répondra `captcha_failed`. Cloudflare Turnstile est un service hors UE : à valider (ou choisir un autre anti-robot) avant de l'activer, puis ajouter le widget et la CSP correspondante.
+**Avant la production (décision d'Arcel du 25 octobre 2026 : « je te laisse choisir la meilleure option ») :** le formulaire n'envoie pas encore de jeton anti-robot. Turnstile (Cloudflare, hors UE) est écarté : l'anti-robot sera **Friendly Captcha** (société allemande, hébergement UE, sans cookie). À faire avant la production : ADR, adaptateur côté API à la place de `TurnstileVerifier`, widget et CSP côté web. D'ici là, ne pas poser `TURNSTILE_SECRET_KEY` (toute demande de lien répondrait `captcha_failed`).
+
+**Écran « Welcome » (25 octobre 2026) :** connexion et inscription reprennent le design de la maquette (fond sombre, photos en verre, « TROVÉLYA », « La belle trouvaille. »). Les boutons Apple et Google ne s'affichent que lorsque ces connexions sont configurées (accord d'Arcel) ; les pastilles « En direct · 1 284 » et « Enchère · 02:14 » sont la décoration de la maquette, à remplacer par des données réelles quand les lives et enchères existeront.
 
 ### P1-T12b — Profil public (W08 partiel) et paramètres (W20)
 

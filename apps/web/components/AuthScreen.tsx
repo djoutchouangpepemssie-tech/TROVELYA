@@ -1,9 +1,11 @@
 "use client";
 
-import { Button, Input, Logo } from "@trovelya/ui";
+import Image from "next/image";
 import { useLocale, useTranslations } from "next-intl";
 import { useRouter, useSearchParams } from "next/navigation";
-import { type SyntheticEvent, useEffect, useRef, useState } from "react";
+import { type CSSProperties, type SyntheticEvent, useEffect, useRef, useState } from "react";
+
+import "./welcome.css";
 
 import {
   type AuthMethods,
@@ -91,104 +93,181 @@ export function AuthScreen({ mode }: { mode: Mode }) {
     : [];
 
   return (
-    <main className="mx-auto flex min-h-[calc(100dvh-3.5rem)] w-full max-w-md flex-col justify-center gap-6 px-4 py-10">
-      <div className="flex flex-col items-center gap-3 text-center">
-        <Logo label={t("logo")} size={56} />
-        <h1 className="text-3xl font-semibold tracking-tight">{title}</h1>
-        <p className="text-ink-2">{t("intro")}</p>
-      </div>
+    <main className="trv-welcome relative min-h-dvh overflow-hidden bg-[#07070C] text-white antialiased">
+      <div className="relative mx-auto flex min-h-dvh w-full max-w-[390px] flex-col px-5 pb-10">
+        {/* The « Welcome » mock-up: three photos in glass frames over two blurred lights. */}
+        <div aria-hidden="true" className="relative -mx-5 h-[456px] shrink-0">
+          <div className="absolute top-[120px] left-[40px] h-[320px] w-[320px] rounded-full bg-[#1D2BFF] opacity-75 blur-[90px]" />
+          <div className="absolute top-[300px] left-[210px] h-[200px] w-[200px] rounded-full bg-[#E05C38] opacity-35 blur-[90px]" />
+          {WELCOME_TILES.map((tile) => (
+            <div
+              key={tile.src}
+              className="trv-glass absolute overflow-hidden rounded-[28px] p-1.5"
+              style={tile.style}
+            >
+              <Image
+                src={tile.src}
+                alt=""
+                width={360}
+                height={450}
+                priority
+                className="h-full w-full rounded-[22px] object-cover"
+              />
+            </div>
+          ))}
+          <div className="trv-glass absolute top-[380px] left-[230px] flex items-center gap-1.5 rounded-full px-3 py-2 text-[13px] font-semibold">
+            <span className="h-[7px] w-[7px] rounded-full bg-[#E0352B]" />
+            {t("welcomeLive")}
+          </div>
+          <div className="trv-glass absolute top-[306px] left-[16px] rounded-full px-3 py-2 font-mono text-[13px] font-semibold">
+            {t("welcomeAuction")}
+          </div>
+        </div>
 
-      {oauthError && (
-        <p role="alert" className="text-danger-ink">
-          {t("oauthFailed")}
-        </p>
-      )}
+        <div className="mt-[22px]">
+          <p className="text-[52px] leading-none font-bold tracking-[-0.05em]">{t("logo")}</p>
+          <h1 className="sr-only">{title}</h1>
+          <p className="mt-2.5 text-[22px] leading-tight font-medium tracking-[-0.02em] text-white/85">
+            {t("welcomeTagline")}
+            <br />
+            <span className="text-base font-normal text-white/70">{t("welcomeSubline")}</span>
+          </p>
+        </div>
 
-      {(providers.length > 0 || methods?.passkey) && (
-        <div className="flex flex-col gap-3">
+        <div className="mt-auto flex flex-col gap-2.5 pt-8">
+          {oauthError && (
+            <p role="alert" className="text-sm text-[#FF8A8F]">
+              {t("oauthFailed")}
+            </p>
+          )}
+          {/* A full page load: the API starts the OAuth redirect (not a page of this app). */}
           {providers.map((provider) => (
             <a
               key={provider}
               href={`/api/v1/auth/oauth/${provider}/start`}
-              className="trv-button"
-              data-variant="secondary"
-              data-size="lg"
+              className={`trv-welcome-button ${provider === "apple" ? "bg-white text-[#0B0B0F]" : "trv-glass relative text-white"}`}
             >
+              {provider === "apple" && <AppleLogo />}
               {t(provider)}
             </a>
           ))}
           {methods?.passkey && (
-            <Button variant="secondary" size="lg" onClick={() => void passkey()}>
+            <button
+              type="button"
+              className="trv-welcome-button trv-glass relative text-white"
+              onClick={() => void passkey()}
+            >
               {t("passkey")}
-            </Button>
+            </button>
           )}
           {passkeyError && (
-            <p role="alert" className="text-sm text-danger-ink">
+            <p role="alert" className="text-sm text-[#FF8A8F]">
               {t(`passkeyErrors.${passkeyError}`)}
             </p>
           )}
-          <p className="text-center text-sm text-ink-2">{t("or")}</p>
-        </div>
-      )}
 
-      {/* Mounted from the start (empty), so screen readers announce what appears in it. */}
-      <div role="status" className="empty:-mt-6">
-        {result === "sent" && (
-          <div className="flex flex-col gap-3 rounded-lg bg-surface-2 p-4">
-            <p ref={sentRef} tabIndex={-1} className="font-medium">
-              {t("sent")}
-            </p>
-            <p className="text-sm text-ink-2">
-              {methods
-                ? t("sentHint", { minutes: methods.magic_link_ttl_min })
-                : t("sentHintShort")}
-            </p>
-            <Button
-              variant="ghost"
-              onClick={() => {
-                setResult(null);
-                setEmail("");
-                requestAnimationFrame(() => emailRef.current?.focus());
-              }}
-            >
-              {t("otherEmail")}
-            </Button>
+          {/* Mounted from the start (empty), so screen readers announce what appears in it. */}
+          <div role="status" className="empty:-mt-2.5">
+            {result === "sent" && (
+              <div className="trv-glass relative flex flex-col gap-2 rounded-3xl p-4">
+                <p ref={sentRef} tabIndex={-1} className="font-semibold">
+                  {t("sent")}
+                </p>
+                <p className="text-sm text-white/75">
+                  {methods
+                    ? t("sentHint", { minutes: methods.magic_link_ttl_min })
+                    : t("sentHintShort")}
+                </p>
+                <button
+                  type="button"
+                  className="self-start text-sm font-semibold text-white underline underline-offset-2"
+                  onClick={() => {
+                    setResult(null);
+                    setEmail("");
+                    requestAnimationFrame(() => emailRef.current?.focus());
+                  }}
+                >
+                  {t("otherEmail")}
+                </button>
+              </div>
+            )}
           </div>
-        )}
-      </div>
-      {result !== "sent" && (
-        <form onSubmit={(event) => void submit(event)} noValidate className="flex flex-col gap-3">
-          <Input
-            ref={emailRef}
-            label={t("emailLabel")}
-            type="email"
-            autoComplete="email"
-            inputMode="email"
-            value={email}
-            onChange={(event) => {
-              setEmail(event.target.value);
-            }}
-            {...(invalid ? { error: t("emailInvalid") } : {})}
-          />
-          {result && (
-            <p role="alert" className="text-sm text-danger-ink">
-              {t(`requestErrors.${result}`)}
-            </p>
+          {result !== "sent" && (
+            <form
+              onSubmit={(event) => void submit(event)}
+              noValidate
+              className="flex flex-col gap-2.5"
+            >
+              <label htmlFor="auth-email" className="text-sm font-medium text-white/80">
+                {t("emailLabel")}
+              </label>
+              <input
+                ref={emailRef}
+                id="auth-email"
+                type="email"
+                autoComplete="email"
+                inputMode="email"
+                value={email}
+                aria-invalid={invalid}
+                aria-describedby={invalid ? "auth-email-error" : undefined}
+                onChange={(event) => {
+                  setEmail(event.target.value);
+                }}
+                className="trv-glass relative h-[54px] rounded-full px-5 text-[17px] text-white placeholder:text-white/50 aria-[invalid=true]:outline aria-[invalid=true]:outline-2 aria-[invalid=true]:outline-[#FF8A8F]"
+              />
+              {invalid && (
+                <p id="auth-email-error" role="alert" className="text-sm text-[#FF8A8F]">
+                  {t("emailInvalid")}
+                </p>
+              )}
+              {result && (
+                <p role="alert" className="text-sm text-[#FF8A8F]">
+                  {t(`requestErrors.${result}`)}
+                </p>
+              )}
+              <button
+                type="submit"
+                disabled={sending}
+                className="trv-welcome-button bg-white text-[#0B0B0F] disabled:opacity-60"
+              >
+                {submitLabel}
+              </button>
+            </form>
           )}
-          <Button type="submit" size="lg" disabled={sending}>
-            {submitLabel}
-          </Button>
-        </form>
-      )}
 
-      <p className="text-center text-sm">
-        <a
-          className="font-medium text-ink underline underline-offset-2"
-          href={`/${locale}/${mode === "signIn" ? "inscription" : "connexion"}${next ? `?suivant=${encodeURIComponent(next)}` : ""}`}
-        >
-          {mode === "signIn" ? t("switchToSignUp") : t("switchToSignIn")}
-        </a>
-      </p>
+          <a
+            className="py-2.5 text-center text-[15px] font-medium text-white/80 hover:text-white"
+            href={`/${locale}/${mode === "signIn" ? "inscription" : "connexion"}${next ? `?suivant=${encodeURIComponent(next)}` : ""}`}
+          >
+            {mode === "signIn" ? t("switchToSignUp") : t("switchToSignIn")}
+          </a>
+          <p className="text-center text-[11px] text-white/55">{t("welcomeFootnote")}</p>
+        </div>
+      </div>
     </main>
+  );
+}
+
+// Positions and tilts of the mock-up's photo frames (390 px wide screen).
+const WELCOME_TILES: { src: string; style: CSSProperties }[] = [
+  {
+    src: "/welcome/montre.jpg",
+    style: { left: 26, top: 70, width: 168, height: 210, transform: "rotate(-6deg)" },
+  },
+  {
+    src: "/welcome/fleurs-du-mal.jpg",
+    style: { left: 196, top: 50, width: 168, height: 210, transform: "rotate(5deg)" },
+  },
+  {
+    src: "/welcome/lampe-opaline.jpg",
+    style: { left: 110, top: 224, width: 176, height: 220, transform: "rotate(-1deg)" },
+  },
+];
+
+function AppleLogo() {
+  return (
+    <svg aria-hidden="true" width="18" height="18" viewBox="0 0 24 24" fill="currentColor">
+      <path d="M16.4 12.6c0-2.3 1.9-3.4 2-3.5-1.1-1.6-2.8-1.8-3.4-1.8-1.4-.1-2.8.9-3.5.9-.7 0-1.8-.8-3-.8-1.6 0-3 .9-3.8 2.3-1.6 2.8-.4 6.9 1.2 9.2.8 1.1 1.7 2.4 2.9 2.3 1.2 0 1.6-.7 3-.7s1.8.7 3 .7c1.3 0 2.1-1.1 2.8-2.3.9-1.3 1.3-2.6 1.3-2.6s-2.5-1-2.5-3.7zM14.1 5.8c.6-.8 1.1-1.8 1-2.8-.9 0-2 .6-2.7 1.4-.6.7-1.1 1.7-1 2.7 1 .1 2-.5 2.7-1.3z" />
+    </svg>
   );
 }
