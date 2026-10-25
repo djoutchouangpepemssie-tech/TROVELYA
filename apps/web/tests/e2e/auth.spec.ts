@@ -160,9 +160,15 @@ test("mobile tabs: home and profile, no dead link", async ({ page }) => {
   await expect(page).toHaveURL(/\/fr\/connexion/);
 
   await signIn(page, { completed: true });
+  // Tapped before the session request answers (slowed down here): still the account page.
+  await page.route("**/api/v1/me", async (route) => {
+    await new Promise((resolve) => setTimeout(resolve, 1500));
+    await route.continue();
+  });
   await page.goto("/fr");
   await tabs.getByRole("link", { name: h.profile }).click();
   await expect(page).toHaveURL(/\/fr\/compte$/);
+  await page.unroute("**/api/v1/me");
   await expect(page.getByRole("heading", { level: 1, name: messages.Account.title })).toBeVisible();
 });
 
