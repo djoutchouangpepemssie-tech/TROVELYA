@@ -738,10 +738,15 @@
             },
             "title": "Data",
             "type": "array"
+          },
+          "erasure_grace_days": {
+            "title": "Erasure Grace Days",
+            "type": "integer"
           }
         },
         "required": [
-          "data"
+          "data",
+          "erasure_grace_days"
         ],
         "title": "DataRequestList",
         "type": "object"
@@ -940,6 +945,18 @@
             "title": "Email",
             "type": "string"
           },
+          "erase_at": {
+            "anyOf": [
+              {
+                "format": "date-time",
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Erase At"
+          },
           "erasure_requested_at": {
             "anyOf": [
               {
@@ -1012,6 +1029,7 @@
           "flags",
           "is_minor",
           "erasure_requested_at",
+          "erase_at",
           "counters",
           "version"
         ],

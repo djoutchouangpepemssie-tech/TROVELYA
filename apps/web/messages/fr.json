@@ -392,6 +392,54 @@
       "taken": "Cette adresse est désormais utilisée par un autre compte.",
       "error": "Une erreur est survenue. Réessayez dans un instant.",
       "toAccount": "Aller à mon compte"
+    },
+    "privacy": {
+      "metaTitle": "Confidentialité · TROVÉLYA",
+      "title": "Confidentialité",
+      "consentsTitle": "Vos consentements",
+      "consentsIntro": "Les usages facultatifs de vos données n'ont lieu qu'avec votre accord. Vous pouvez le retirer ici à tout moment, aussi simplement que vous l'avez donné.",
+      "none": "Aucun usage facultatif de vos données ne vous est proposé aujourd'hui : il n'y a rien à accepter ni à retirer.",
+      "granted": "Accordé le {date}",
+      "refused": "Refusé le {date}",
+      "never": "Jamais demandé",
+      "saved": "Choix enregistré.",
+      "error": "Votre choix n'a pas pu être enregistré. Réessayez.",
+      "loadError": "Vos consentements n'ont pas pu être chargés.",
+      "linksTitle": "En savoir plus",
+      "policy": "Politique de confidentialité",
+      "cookies": "Gestion des cookies",
+      "data": "Exporter mes données ou supprimer mon compte"
+    },
+    "data": {
+      "metaTitle": "Mes données · TROVÉLYA",
+      "title": "Mes données",
+      "exportTitle": "Exporter mes données",
+      "exportIntro": "Une archive ZIP de toutes les données de votre compte. Elle est préparée en quelques minutes et un e-mail vous prévient quand elle est prête. Elle reste téléchargeable pendant une durée limitée.",
+      "exportRequest": "Demander l'export",
+      "exportRequested": "Export demandé. Un e-mail vous préviendra quand il sera prêt.",
+      "exportPending": "Export en préparation, demandé le {date}.",
+      "exportReady": "Export du {date}, téléchargeable jusqu'au {until}.",
+      "exportExpired": "Export du {date}, expiré.",
+      "exportRefused": "Export du {date}, non abouti. Vous pouvez en demander un nouveau.",
+      "download": "Télécharger",
+      "downloadLabel": "Télécharger l'export du {date}",
+      "downloaded": "Téléchargement lancé.",
+      "erasureTitle": "Supprimer mon compte",
+      "erasureIntro": "Votre compte sera supprimé définitivement {days, plural, one {# jour} other {# jours}} après votre demande. Dès la demande, vous êtes déconnecté de tous vos appareils et votre profil public est masqué. Pour annuler, il suffit de vous reconnecter avant la date prévue.",
+      "erasureExportFirst": "Pensez à exporter vos données avant : après la suppression, elles ne pourront plus être récupérées.",
+      "erasureRequest": "Supprimer mon compte",
+      "erasureConfirmTitle": "Supprimer votre compte ?",
+      "erasureConfirmText": "Vous serez déconnecté de tous vos appareils et votre profil sera masqué. Le compte sera supprimé définitivement dans {days, plural, one {# jour} other {# jours}}, sauf si vous vous reconnectez pour annuler.",
+      "erasureConfirm": "Oui, supprimer mon compte",
+      "cancel": "Annuler",
+      "close": "Fermer",
+      "erasurePending": "Votre compte sera supprimé le {date}.",
+      "erasureDoneTitle": "Suppression demandée",
+      "erasureDone": "Votre compte sera supprimé définitivement le {date}. Vous avez été déconnecté de tous vos appareils et un e-mail de confirmation vous a été envoyé.",
+      "erasureDoneCancel": "Vous changez d'avis ? Reconnectez-vous avant cette date pour annuler la suppression.",
+      "home": "Retour à l'accueil",
+      "error": "Une erreur est survenue. Réessayez.",
+      "loadError": "Vos demandes n'ont pas pu être chargées."
     }
   },
   "PublicProfile": {
@@ -454,5 +502,12 @@
     "confirmInvalid": "Ce lien n'est plus valable : il a déjà servi ou il a expiré.",
     "confirmOtherDevice": "Ouvrez ce lien sur l'appareil où vous êtes connecté, avec le même navigateur.",
     "confirmError": "Une erreur est survenue. Réessayez dans un instant."
+  },
+  "ErasureNotice": {
+    "label": "Suppression du compte",
+    "pending": "Votre compte sera supprimé définitivement le {date}.",
+    "cancel": "Annuler la suppression",
+    "cancelled": "La suppression de votre compte est annulée. Bon retour parmi nous !",
+    "error": "L'annulation n'a pas abouti. Réessayez."
   }
 }

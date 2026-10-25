@@ -162,12 +162,14 @@ async def test_cancel_during_grace(
     again = await _sign_in_again(sessionmaker, account, clock)
     me = (await client.get("/v1/me", headers=again.headers)).json()
     assert me["erasure_requested_at"] is not None  # the client offers to cancel
+    assert me["erase_at"] == (T0 + GRACE).isoformat().replace("+00:00", "Z")
+    listed = (await client.get("/v1/me/data-requests", headers=again.headers)).json()
+    assert listed["erasure_grace_days"] == 30
 
     cancelled = await client.post("/v1/me/erasure/cancel", headers=again.headers)
     assert cancelled.status_code == 204, cancelled.text
-    assert (await client.get("/v1/me", headers=again.headers)).json()[
-        "erasure_requested_at"
-    ] is None
+    after = (await client.get("/v1/me", headers=again.headers)).json()
+    assert after["erasure_requested_at"] is None and after["erase_at"] is None
     assert (await client.get(f"/v1/users/{username}")).status_code == 200
 
     # Nothing to cancel any more.

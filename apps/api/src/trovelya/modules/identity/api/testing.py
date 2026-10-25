@@ -5,6 +5,8 @@ go through e-mails; `POST /v1/_test/staff-enrolment` creates a staff account and
 enrolment link, as the creation script prints it; `POST /v1/_test/magic-link` returns the
 sign-in link the e-mail would carry (or an already expired one); `POST /v1/_test/step-up-link`
 and `POST /v1/_test/email-change-link` return the links e-mailed to the signed-in member;
+`POST /v1/_test/build-export` builds the member's pending export, as the worker would (there is
+no worker in the end-to-end stack).
 `POST /v1/_test/flag-allow` adds the signed-in member to a flag's allow list (one test's account,
 never the others running in parallel).
 Nothing here exists on staging or in production.
@@ -30,6 +32,7 @@ from trovelya.modules.identity.service import (
 )
 from trovelya.modules.identity.service.auth import Uow
 from trovelya.modules.identity.service.email_change import issue_email_change_link
+from trovelya.modules.identity.service.gdpr import build_data_export
 from trovelya.modules.identity.service.magic_links import issue_magic_link, provisional_username
 from trovelya.modules.identity.service.staff_accounts import issue_staff_enrolment
 from trovelya.modules.identity.service.step_up import issue_step_up_link
@@ -202,3 +205,22 @@ async def test_flag_allow(
     enabled = request.app.state.settings.feature_flags_default.get(body.key, False)
     await db.execute(_ALLOW, {"key": body.key, "id": user.id, "enabled": enabled})
     await request.app.state.redis.delete(CACHE_PREFIX + body.key)
+
+
+@router.post("/build-export", operation_id="test_build_export", status_code=204)
+async def test_build_export(
+    request: Request,
+    db: Uow,
+    user: Annotated[CurrentUser, Depends(current_user)],
+    clock: Annotated[Clock, Depends(get_clock)],
+) -> None:
+    pending = await repository.pending_data_request(db, user.id, "export")
+    if pending is None:
+        raise HTTPException(status_code=404, detail="no pending export")
+    await build_data_export(
+        request.app.state.sessionmaker,
+        pending,
+        settings=request.app.state.settings,
+        clock=clock,
+        queue=request.app.state.queue,
+    )

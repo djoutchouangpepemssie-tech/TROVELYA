@@ -1214,6 +1214,8 @@ export interface components {
         DataRequestList: {
             /** Data */
             data: components["schemas"]["DataRequestOut"][];
+            /** Erasure Grace Days */
+            erasure_grace_days: number;
         };
         /** DataRequestOut */
         DataRequestOut: {
@@ -1291,6 +1293,8 @@ export interface components {
             display_name: string;
             /** Email */
             email: string;
+            /** Erase At */
+            erase_at: string | null;
             /** Erasure Requested At */
             erasure_requested_at: string | null;
             /** Flags */
