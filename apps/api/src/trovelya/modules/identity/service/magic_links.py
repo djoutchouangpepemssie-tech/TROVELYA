@@ -72,6 +72,37 @@ async def limit_requests(redis: Redis, *, email: str, ip: str, secret: str) -> N
             raise AppError(ErrorCode.RATE_LIMITED, 429, headers={"Retry-After": str(retry_after)})
 
 
+async def magic_link_ttl_min(db: AsyncSession) -> int:
+    """Lifetime of a sign-in link, in minutes [PARAM `auth.magic_link_ttl_min`]."""
+    return await repository.setting_int(db, "auth.magic_link_ttl_min", default=DEFAULT_TTL_MIN)
+
+
+async def issue_magic_link(
+    db: AsyncSession,
+    *,
+    email: str,
+    ip: str | None,
+    settings: Settings,
+    clock: Clock,
+    ttl: timedelta | None = None,
+) -> tuple[str, int]:
+    """Stores a new sign-in link; answers the link and its lifetime in minutes."""
+    now = clock.now()
+    ttl_min = await magic_link_ttl_min(db)
+    token = secrets.token_urlsafe(TOKEN_BYTES)
+    await repository.insert_magic_link(
+        db,
+        link_id=new_id(),
+        email=email,
+        token_hash=hash_token(token),
+        purpose="login",
+        expires_at=now + (ttl if ttl is not None else timedelta(minutes=ttl_min)),
+        ip=ip if ip != "unknown" else None,
+        now=now,
+    )
+    return f"{settings.web_origin.rstrip('/')}/fr/verifier#token={token}", ttl_min
+
+
 async def request_magic_link(
     db: AsyncSession,
     queue: JobQueue,
@@ -81,20 +112,7 @@ async def request_magic_link(
     settings: Settings,
     clock: Clock,
 ) -> None:
-    now = clock.now()
-    ttl_min = await repository.setting_int(db, "auth.magic_link_ttl_min", default=DEFAULT_TTL_MIN)
-    token = secrets.token_urlsafe(TOKEN_BYTES)
-    await repository.insert_magic_link(
-        db,
-        link_id=new_id(),
-        email=email,
-        token_hash=hash_token(token),
-        purpose="login",
-        expires_at=now + timedelta(minutes=ttl_min),
-        ip=ip if ip != "unknown" else None,
-        now=now,
-    )
-    link = f"{settings.web_origin.rstrip('/')}/fr/verifier#token={token}"
+    link, ttl_min = await issue_magic_link(db, email=email, ip=ip, settings=settings, clock=clock)
     await enqueue_email(
         db, queue, magic_link_message(to=email, link=link, ttl_minutes=ttl_min), settings=settings
     )

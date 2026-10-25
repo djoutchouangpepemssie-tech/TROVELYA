@@ -8,6 +8,7 @@ from trovelya.core.client_ip import client_country, client_ip
 from trovelya.core.config import Settings
 from trovelya.core.errors import AppError, ErrorCode
 from trovelya.modules.identity.schemas import (
+    AuthMethods,
     EmailChangeVerify,
     MagicLinkRequest,
     MagicLinkVerify,
@@ -22,6 +23,7 @@ from trovelya.modules.identity.service import (
     get_clock,
     get_session_policy,
     limit_magic_link_requests,
+    magic_link_ttl_min,
     request_magic_link,
     revoke_session,
     set_session_cookie,
@@ -39,6 +41,20 @@ ClockDep = Annotated[Clock, Depends(get_clock)]
 def _settings(request: Request) -> Settings:
     settings: Settings = request.app.state.settings
     return settings
+
+
+@router.get("/methods", operation_id="auth_methods")
+async def get_methods(request: Request, db: Uow) -> AuthMethods:
+    """Sign-in methods to show; the screens hide the others (no dead buttons)."""
+    flags = request.app.state.flags
+    oidc = request.app.state.oidc
+    return AuthMethods(
+        magic_link=True,
+        magic_link_ttl_min=await magic_link_ttl_min(db),
+        passkey=await flags.is_enabled("auth.passkeys"),
+        google="google" in oidc and await flags.is_enabled("auth.oauth_google"),
+        apple="apple" in oidc and await flags.is_enabled("auth.oauth_apple"),
+    )
 
 
 @router.post(

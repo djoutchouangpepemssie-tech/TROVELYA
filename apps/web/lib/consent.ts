@@ -18,7 +18,9 @@ type Fetch = typeof apiFetch;
 export async function fetchConsents(fetcher: Fetch = apiFetch): Promise<ConsentState | null> {
   try {
     const response = await fetcher("/v1/me/consents");
-    return response.ok ? ((await response.json()) as ConsentState) : null;
+    if (response.ok) return (await response.json()) as ConsentState;
+    await response.body?.cancel(); // an unread error body keeps the request open
+    return null;
   } catch {
     return null;
   }

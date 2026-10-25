@@ -201,5 +201,70 @@
       "rate_limited": "Trop de tentatives. Patientez une minute.",
       "unavailable": "Le service est momentanément indisponible. Réessayez dans un instant."
     }
+  },
+  "Auth": {
+    "signInMeta": "Se connecter · TROVÉLYA",
+    "signUpMeta": "Créer un compte · TROVÉLYA",
+    "verifyMeta": "Connexion · TROVÉLYA",
+    "signInTitle": "Se connecter",
+    "signUpTitle": "Créer un compte",
+    "intro": "Achetez, vendez et trouvez la belle pièce près de chez vous.",
+    "apple": "Continuer avec Apple",
+    "google": "Continuer avec Google",
+    "passkey": "Utiliser une passkey",
+    "or": "ou",
+    "emailLabel": "Adresse e-mail",
+    "emailSubmitSignIn": "Recevoir un lien de connexion",
+    "emailSubmitSignUp": "Créer un compte avec un e-mail",
+    "emailInvalid": "Indiquez une adresse e-mail valide.",
+    "sent": "Si cette adresse est valide, un lien vient de partir.",
+    "sentHintShort": "Ouvrez-le sur cet appareil. Il expire vite et ne sert qu'une fois. Pensez à regarder vos courriers indésirables.",
+    "sentHint": "Ouvrez-le sur cet appareil. Il expire dans {minutes} minutes et ne sert qu'une fois. Pensez à regarder vos courriers indésirables.",
+    "otherEmail": "Utiliser une autre adresse",
+    "switchToSignUp": "Pas encore de compte ? Créer un compte",
+    "switchToSignIn": "Déjà un compte ? Se connecter",
+    "oauthFailed": "La connexion avec ce service n'a pas abouti. Réessayez ou utilisez votre adresse e-mail.",
+    "requestErrors": {
+      "rate_limited": "Trop de demandes. Réessayez dans un moment.",
+      "captcha_failed": "La vérification anti-robot a échoué. Rechargez la page.",
+      "error": "Une erreur est survenue. Réessayez dans un instant."
+    },
+    "passkeyErrors": {
+      "unsupported": "Ce navigateur ne gère pas les passkeys.",
+      "cancelled": "Connexion annulée.",
+      "refused": "Cette passkey n'a pas été reconnue.",
+      "step_up_required": "Une confirmation est nécessaire.",
+      "rate_limited": "Trop de tentatives. Patientez une minute.",
+      "link_invalid": "Lien invalide.",
+      "unavailable": "Le service est momentanément indisponible."
+    },
+    "verifyTitle": "Connexion à TROVÉLYA",
+    "verifyIntro": "Cliquez sur le bouton pour terminer votre connexion.",
+    "verifySubmit": "Me connecter",
+    "verifyInvalid": "Ce lien n'est plus valable : il a déjà servi ou il a expiré.",
+    "verifyResend": "Recevoir un nouveau lien",
+    "verifyErrors": {
+      "rate_limited": "Trop de tentatives. Patientez une minute.",
+      "error": "Une erreur est survenue. Réessayez dans un instant."
+    },
+    "logo": "TROVÉLYA"
+  },
+  "Header": {
+    "home": "Accueil",
+    "signIn": "Se connecter",
+    "accountMenu": "Menu du compte",
+    "account": "Mon compte",
+    "signOut": "Se déconnecter",
+    "signOutFailed": "La déconnexion n'a pas abouti. Réessayez dans un instant.",
+    "tabsLabel": "Navigation principale",
+    "profile": "Profil",
+    "brand": "TROVÉLYA"
+  },
+  "Account": {
+    "metaTitle": "Mon compte · TROVÉLYA",
+    "title": "Mon compte",
+    "loading": "Chargement…",
+    "signedInAs": "Connecté avec {email}",
+    "signOut": "Se déconnecter"
   }
 }

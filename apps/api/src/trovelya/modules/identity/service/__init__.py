@@ -18,6 +18,7 @@ from trovelya.modules.identity.service.gdpr import (
 )
 from trovelya.modules.identity.service.magic_links import (
     SignIn,
+    magic_link_ttl_min,
     purge_expired_magic_links,
     request_magic_link,
     verify_magic_link,
@@ -55,6 +56,7 @@ __all__ = [
     "identity_subscriptions",
     "limit_magic_link_requests",
     "list_sessions",
+    "magic_link_ttl_min",
     "optional_user",
     "process_erasures",
     "purge_expired_exports",

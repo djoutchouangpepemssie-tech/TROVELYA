@@ -9,8 +9,11 @@ import { hasLocale, NextIntlClientProvider } from "next-intl";
 import { getTranslations } from "next-intl/server";
 import type { ReactNode } from "react";
 
+import { BottomTabs } from "@/components/BottomTabs";
 import { ConsentBanner } from "@/components/ConsentBanner";
 import { ServiceWorkerRegistration } from "@/components/ServiceWorkerRegistration";
+import { SessionProvider } from "@/components/SessionProvider";
+import { SiteHeader } from "@/components/SiteHeader";
 import { SiteFooter } from "@/components/SiteFooter";
 import { routing } from "@/i18n/routing";
 
@@ -43,9 +46,13 @@ export default async function LocaleLayout({ children, params }: Props) {
     <html lang={locale} className={`${GeistSans.variable} ${GeistMono.variable}`}>
       <body>
         <NextIntlClientProvider>
-          {children}
-          <SiteFooter locale={locale} />
-          <ConsentBanner />
+          <SessionProvider>
+            <SiteHeader />
+            {children}
+            <SiteFooter locale={locale} />
+            <BottomTabs />
+            <ConsentBanner />
+          </SessionProvider>
         </NextIntlClientProvider>
         <ServiceWorkerRegistration />
       </body>

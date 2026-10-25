@@ -402,7 +402,7 @@ Parallélisables : T03 et T04 après T02c ; T06, T09a et T10 après T05 ; T08 d�
 
 - [ ] Tests d'abord : `test_enrolment_token_single_use_and_expires` ; `test_require_permission_403` ; `test_member_calling_staff_route_403` ; `test_staff_route_requires_admin_session_and_recent_mfa` ; `test_approval_by_requester_forbidden`, `test_expired_approval_rejected`, `test_concurrent_approvals_execute_once` (point de revue 4) ; `test_approver_must_hold_permission` ; `test_both_identities_audited` ; `test_create_staff_script_enrolment_link_single_use` ; `test_create_staff_refuses_client_email`.
 - [ ] ÉCHEC → implémenter → vert.
-- [ ] Sur staging, avec Arcel : `railway run` du script, enrôlement de sa passkey staff, connexion staff vérifiée.
+- [x] Sur staging, avec Arcel (25/10/2026) : script lancé par `railway ssh` (`/app/.venv/bin/python -m trovelya.scripts.create_staff`), passkey staff enrôlée (`POST /v1/auth/passkeys/enrol/verify` → 200).
 - [ ] Commit `feat(identity): named permission guard, generic dual approval and staff accounts (ADR-0018)`.
 
 **Réalisation (24/10/2026) :** découpée en T11a (permissions et double validation) et T11b (compte staff : script, enrôlement de passkey, page web, ADR-0018).
@@ -415,8 +415,12 @@ Parallélisables : T03 et T04 après T02c ; T06, T09a et T10 après T05 ; T08 d�
 
 **Contenu :** connexion et inscription = même parcours (la maquette `Welcome` : « Continuer avec Apple », « Continuer avec Google », « Créer un compte avec un e-mail », + « Utiliser une passkey » si le flag est actif ; boutons masqués quand leur flag est éteint) ; message après envoi : « Si cette adresse est valide, un lien vient de partir. » ; `/verifier` lit le fragment, affiche « Me connecter » (POST), puis redirige vers `/bienvenue` ou la page d'origine. En-tête (6.5) avec les seuls éléments qui fonctionnent en P1 : logo, « Se connecter » ou menu du compte ; barre d'onglets mobile : Accueil et Profil (les autres onglets arrivent avec leurs phases, aucun lien mort).
 
-- [ ] Tests e2e d'abord : `magic link request shows neutral message` ; `verify page requires click` (ouvrir le lien sans cliquer ne crée pas de session) ; `expired link shows error and resend` ; `header shows account menu when signed in` ; axe 0 violation ; navigation clavier.
-- [ ] ÉCHEC → implémenter → vert. Commit `feat(web): sign-in, sign-up and verify screens with site header and mobile tabs`.
+- [x] Tests e2e d'abord : `magic link request shows neutral message` ; `verify page requires click` (ouvrir le lien sans cliquer ne crée pas de session) ; `expired link shows error and resend` ; `header shows account menu when signed in` ; axe 0 violation ; navigation clavier.
+- [x] ÉCHEC → implémenter → vert. Commit `feat(web): sign-in, sign-up and verify screens with site header and mobile tabs`.
+
+**Réalisé (écarts assumés) :** fichiers `app/[locale]/{connexion,inscription,verifier}/`, `components/{AuthScreen,SiteHeader,BottomTabs,SessionProvider}.tsx` (le menu du compte est dans `SiteHeader`) ; une page `/compte` minimale (nom, adresse, déconnexion) arrive dès T12a pour que l'onglet Profil ne soit pas un lien mort, T12b la complète. `GET /v1/auth/methods` dit quelles méthodes afficher et la durée du lien (`auth.magic_link_ttl_min`). Les jetons `token=` sont retirés de tout ce qui part vers Sentry. Nouveau jeton de couleur `danger-ink` pour les messages d'erreur (contraste ≥ 4,5:1).
+
+**Avant la production (question ouverte pour Arcel) :** le formulaire n'envoie pas encore de jeton anti-robot. Si `TURNSTILE_SECRET_KEY` est posé côté API, toute demande de lien répondra `captcha_failed`. Cloudflare Turnstile est un service hors UE : à valider (ou choisir un autre anti-robot) avant de l'activer, puis ajouter le widget et la CSP correspondante.
 
 ### P1-T12b — Profil public (W08 partiel) et paramètres (W20)
 

@@ -202,7 +202,7 @@ export function ZoneStep({ error, onError, onSkip, onSave }: ZoneStepProps) {
                 {t("zone.useLocation")}
               </Button>
               {locationError && (
-                <p role="alert" className="mt-2 text-sm text-danger">
+                <p role="alert" className="mt-2 text-sm text-danger-ink">
                   {t("zone.locationDenied")}
                 </p>
               )}
