@@ -33,7 +33,9 @@ export function BottomTabs() {
   const tabs = [
     { href: `/${locale}`, label: t("home"), icon: <HomeIcon /> },
     {
-      href: me ? `/${locale}/compte` : `/${locale}/connexion`,
+      // Signed out only once the session is known; the account page sends signed-out
+      // visitors to the sign-in page itself, so the tab never depends on a pending request.
+      href: me === null ? `/${locale}/connexion` : `/${locale}/compte`,
       label: t("profile"),
       icon: <UserIcon size={22} />,
     },
