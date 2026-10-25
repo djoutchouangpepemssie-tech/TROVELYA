@@ -1,4 +1,5 @@
 import { render, screen } from "@testing-library/react";
+import { createRef } from "react";
 import { describe, expect, it } from "vitest";
 
 import { SearchIcon } from "../icons";
@@ -25,5 +26,13 @@ describe("<IconButton>", () => {
   it("requires a label (type check)", () => {
     // @ts-expect-error label is mandatory: an icon alone is not accessible.
     render(<IconButton icon={<SearchIcon />} />);
+  });
+});
+
+describe("Button ref", () => {
+  it("reaches the native button (focus after an action)", () => {
+    const ref = createRef<HTMLButtonElement>();
+    render(<Button ref={ref}>Suivre</Button>);
+    expect(ref.current).toBe(screen.getByRole("button"));
   });
 });

@@ -304,9 +304,10 @@
         "usernameFormat": "Le pseudo doit faire 3 à 30 caractères : lettres minuscules, chiffres, point et tiret bas.",
         "usernameTaken": "Ce pseudo est déjà pris.",
         "displayNameRequired": "Indiquez un nom affiché.",
-        "stale": "Votre profil a changé ailleurs : la page a été rechargée, vérifiez puis enregistrez à nouveau.",
+        "stale": "Votre profil a été modifié ailleurs entre-temps. Vos changements sont conservés : vérifiez-les puis enregistrez à nouveau.",
         "error": "L'enregistrement n'a pas abouti. Réessayez dans un instant."
-      }
+      },
+      "loadError": "Votre profil n'a pas pu être chargé."
     },
     "feed": {
       "title": "Votre fil",
@@ -317,8 +318,11 @@
       "discoveryLow": "Mes goûts",
       "discoveryHigh": "Nouveautés",
       "saved": "Préférences du fil enregistrées.",
-      "error": "Les préférences n'ont pas été enregistrées. Réessayez dans un instant."
-    }
+      "error": "Les préférences n'ont pas été enregistrées. Réessayez dans un instant.",
+      "loadError": "Les préférences du fil n'ont pas pu être chargées.",
+      "discoveryValue": "{value} %"
+    },
+    "retry": "Réessayer"
   },
   "PublicProfile": {
     "metaTitle": "{name} (@{username}) · TROVÉLYA",
@@ -327,7 +331,6 @@
     "following": "Abonné",
     "followingCount": "{count, plural, one {# abonnement} other {# abonnements}}",
     "follow": "Suivre",
-    "unfollowHint": "Ne plus suivre",
     "block": "Bloquer",
     "unblock": "Débloquer",
     "blockTitle": "Bloquer {name} ?",
@@ -338,6 +341,22 @@
     "edit": "Modifier mon profil",
     "signInToFollow": "Se connecter pour suivre",
     "error": "L'action n'a pas abouti. Réessayez dans un instant.",
-    "statsLabel": "Abonnés et abonnements"
+    "statsLabel": "Abonnés et abonnements",
+    "unfollowLabel": "Abonné, ne plus suivre",
+    "done": {
+      "followed": "Vous suivez {name}.",
+      "unfollowed": "Vous ne suivez plus {name}.",
+      "blocked": "{name} est bloqué.",
+      "unblocked": "{name} est débloqué."
+    }
+  },
+  "Errors": {
+    "notFoundMeta": "Page introuvable · TROVÉLYA",
+    "notFoundTitle": "Page introuvable",
+    "notFoundText": "Cette adresse ne mène à rien, ou la page a été retirée.",
+    "errorTitle": "Un problème est survenu",
+    "errorText": "La page n'a pas pu s'afficher. Réessayez dans un instant.",
+    "retry": "Réessayer",
+    "home": "Retour à l'accueil"
   }
 }

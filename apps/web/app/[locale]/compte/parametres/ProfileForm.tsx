@@ -24,6 +24,7 @@ const BIO_MAX = 500;
 /** Pseudo, name, bio and language; saved with `If-Match` on the version that was read. */
 export function ProfileForm({ onSaved }: { onSaved: (message: string) => void }) {
   const t = useTranslations("Account.profile");
+  const tAccount = useTranslations("Account");
   const { refresh } = useSession();
   const [profile, setProfile] = useState<Profile | null>(null);
   const [username, setUsername] = useState("");
@@ -34,16 +35,20 @@ export function ProfileForm({ onSaved }: { onSaved: (message: string) => void })
   const usernameRef = useRef<HTMLInputElement>(null);
   const displayNameRef = useRef<HTMLInputElement>(null);
 
+  const [loadFailed, setLoadFailed] = useState(false);
+
+  function show(stored: Profile) {
+    setProfile(stored);
+    setUsername(stored.username);
+    setDisplayName(stored.display_name);
+    setBio(stored.bio ?? "");
+  }
+
   async function load(): Promise<void> {
+    setLoadFailed(false);
     const result = await apiCall<Profile>("/v1/me");
-    if (!result.ok) {
-      setProblem({ field: null, key: "error" });
-      return;
-    }
-    setProfile(result.data);
-    setUsername(result.data.username);
-    setDisplayName(result.data.display_name);
-    setBio(result.data.bio ?? "");
+    if (result.ok) show(result.data);
+    else setLoadFailed(true);
   }
 
   useEffect(() => {
@@ -78,8 +83,7 @@ export function ProfileForm({ onSaved }: { onSaved: (message: string) => void })
     });
     setSaving(false);
     if (result.ok) {
-      setProfile(result.data);
-      setDisplayName(result.data.display_name);
+      show(result.data); // What the API stored (the bio trimmed, for instance).
       onSaved(t("saved"));
       // The header and the account hub show the new name.
       await refresh();
@@ -90,8 +94,10 @@ export function ProfileForm({ onSaved }: { onSaved: (message: string) => void })
       return;
     }
     if (result.status === 412) {
-      // Changed elsewhere (another tab or device): show what is stored now.
-      await load();
+      // Changed elsewhere (another tab or device): keep what the member typed, take the new
+      // version, and let them save again knowingly.
+      const fresh = await apiCall<Profile>("/v1/me");
+      if (fresh.ok) setProfile(fresh.data);
       fail({ field: null, key: "stale" });
       return;
     }
@@ -100,6 +106,17 @@ export function ProfileForm({ onSaved }: { onSaved: (message: string) => void })
 
   const error = (field: Field) =>
     problem?.field === field ? { error: t(`errors.${problem.key}`) } : {};
+
+  if (loadFailed) {
+    return (
+      <div role="alert" className="flex flex-col items-start gap-2">
+        <p className="text-danger-ink">{t("loadError")}</p>
+        <Button variant="secondary" onClick={() => void load()}>
+          {tAccount("retry")}
+        </Button>
+      </div>
+    );
+  }
 
   return (
     <form onSubmit={(event) => void submit(event)} noValidate className="flex flex-col gap-4">

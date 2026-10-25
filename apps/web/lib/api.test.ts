@@ -1,6 +1,6 @@
 import { describe, expect, it, vi } from "vitest";
 
-import { apiCall, apiFetch, readCookie } from "./api";
+import { apiCall, apiFetch, prepareCsrf, readCookie } from "./api";
 
 describe("readCookie", () => {
   it("finds a cookie by its exact name", () => {
@@ -87,5 +87,15 @@ describe("apiCall", () => {
       status: 0,
       code: "network",
     });
+  });
+});
+
+describe("prepareCsrf", () => {
+  it("fetches the token only when the page has none", async () => {
+    const fetchImpl = vi.fn(() => Promise.resolve(new Response("{}")));
+    await prepareCsrf({ fetch: fetchImpl, cookies: () => "__Host-trv_csrf=t" });
+    expect(fetchImpl).not.toHaveBeenCalled();
+    await prepareCsrf({ fetch: fetchImpl, cookies: () => "" });
+    expect(fetchImpl).toHaveBeenCalledWith("/api/v1/csrf", { credentials: "same-origin" });
   });
 });

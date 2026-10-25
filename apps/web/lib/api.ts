@@ -33,6 +33,11 @@ async function csrfToken(deps: Dependencies): Promise<string | null> {
   return readCookie(CSRF_COOKIE, deps.cookies());
 }
 
+/** Fetch the CSRF token ahead, so a request sent while the page closes needs no extra call. */
+export async function prepareCsrf(deps: Dependencies = browser): Promise<void> {
+  await csrfToken(deps);
+}
+
 export async function apiFetch(
   path: `/v1/${string}`,
   init: RequestInit = {},

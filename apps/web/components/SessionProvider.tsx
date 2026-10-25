@@ -42,7 +42,10 @@ export function SessionProvider({ children }: { children: ReactNode }) {
     // the one asked right after signing in.
     const request = ++latest.current;
     const answer = await authApi.me();
-    if (request === latest.current) setMe(answer);
+    if (request !== latest.current) return;
+    // A failed request (network, 5xx, 429) says nothing about the session: keep what we know,
+    // so a passing error never sends a signed-in member to the sign-in page.
+    setMe((known) => (answer === undefined ? known : answer));
   }, []);
   useEffect(() => {
     void refresh();

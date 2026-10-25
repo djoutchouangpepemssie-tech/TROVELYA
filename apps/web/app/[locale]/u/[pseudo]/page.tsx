@@ -1,6 +1,6 @@
 import { Avatar } from "@trovelya/ui";
 import type { Metadata } from "next";
-import { notFound } from "next/navigation";
+import { notFound, redirect } from "next/navigation";
 import { getFormatter, getTranslations } from "next-intl/server";
 import { cache } from "react";
 
@@ -26,12 +26,16 @@ type Props = { params: Promise<{ locale: string; pseudo: string }> };
 const USERNAME = /^[a-z0-9._]{3,30}$/i;
 
 /** One API call per request, shared by the metadata and the page. */
-// Next.js gives the segment decoded; a malformed escape never gets here (proxy.ts answers 400).
+// A pseudo is plain ASCII: a segment with an escape or another character is not a member.
 const loadProfile = cache(async (pseudo: string): Promise<PublicProfile | null> => {
   if (!USERNAME.test(pseudo)) return null;
   const response = await serverGet(["users", pseudo]);
-  if (response.status === 404) return null;
-  if (!response.ok) throw new Error(`public profile: ${String(response.status)}`);
+  if (!response.ok) {
+    await response.body?.cancel();
+    if (response.status === 404) return null;
+    // Rate limit or API down: the French error page (error.tsx) offers to try again.
+    throw new Error(`public profile: ${String(response.status)}`);
+  }
   return (await response.json()) as PublicProfile;
 });
 
@@ -53,6 +57,8 @@ export default async function PublicProfilePage({ params }: Props) {
   const { locale, pseudo } = await params;
   const profile = await loadProfile(pseudo);
   if (!profile) notFound();
+  // One address per member: /u/Lucie leads to /u/lucie.
+  if (pseudo !== profile.username) redirect(`/${locale}/u/${profile.username}`);
   const t = await getTranslations("PublicProfile");
   const format = await getFormatter();
   const since = format.dateTime(new Date(profile.member_since), { month: "long", year: "numeric" });
@@ -68,10 +74,10 @@ export default async function PublicProfilePage({ params }: Props) {
         </div>
       </div>
       {profile.bio && <p className="whitespace-pre-line">{profile.bio}</p>}
-      <p className="flex gap-4 text-sm text-ink-2" aria-label={t("statsLabel")}>
-        <span>{t("followers", { count: profile.followers_count })}</span>
-        <span>{t("followingCount", { count: profile.following_count })}</span>
-      </p>
+      <ul className="flex gap-4 text-sm text-ink-2" aria-label={t("statsLabel")}>
+        <li>{t("followers", { count: profile.followers_count })}</li>
+        <li>{t("followingCount", { count: profile.following_count })}</li>
+      </ul>
       <ProfileActions
         locale={locale}
         userId={profile.id}

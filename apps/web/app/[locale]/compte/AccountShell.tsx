@@ -16,7 +16,8 @@ export function AccountShell({ title, children }: { title: string; children: Rea
         href={`/${locale}/compte`}
         className="self-start text-sm font-medium text-ink-2 hover:text-ink"
       >
-        ‹ {t("back")}
+        <span aria-hidden="true">‹ </span>
+        {t("back")}
       </a>
       <h1 className="text-3xl font-semibold tracking-tight">{title}</h1>
       {me ? children : <p className="text-ink-2">{t("loading")}</p>}

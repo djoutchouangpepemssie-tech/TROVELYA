@@ -3,17 +3,27 @@
 import { Button, Dialog } from "@trovelya/ui";
 import { useTranslations } from "next-intl";
 import { useRouter } from "next/navigation";
-import { useState, useTransition } from "react";
+import { useEffect, useRef, useState, useTransition } from "react";
 
 import { useSession } from "@/components/SessionProvider";
 import { apiFetch } from "@/lib/api";
+
+type Viewer = { following: boolean; blocking: boolean };
+type Action = "followed" | "unfollowed" | "blocked" | "unblocked";
 
 type Props = {
   locale: string;
   userId: string;
   username: string;
   displayName: string;
-  viewer: { following: boolean; blocking: boolean } | null;
+  viewer: Viewer | null;
+};
+
+const REQUESTS: Record<Action, { path: "follow" | "block"; method: "POST" | "DELETE" }> = {
+  followed: { path: "follow", method: "POST" },
+  unfollowed: { path: "follow", method: "DELETE" },
+  blocked: { path: "block", method: "POST" },
+  unblocked: { path: "block", method: "DELETE" },
 };
 
 /** Follow and block (P1-T10) from the public profile; the page re-renders with the new counts. */
@@ -24,6 +34,13 @@ export function ProfileActions({ locale, userId, username, displayName, viewer }
   const [pending, startTransition] = useTransition();
   const [failed, setFailed] = useState(false);
   const [confirming, setConfirming] = useState(false);
+  const [done, setDone] = useState<Action | null>(null);
+  const primary = useRef<HTMLButtonElement>(null);
+
+  // The buttons change once the page re-renders: focus goes to the one now in place.
+  useEffect(() => {
+    if (done && !pending) primary.current?.focus();
+  }, [done, pending, viewer?.blocking, viewer?.following]);
 
   if (me === undefined) return null;
   if (me?.username === username) {
@@ -37,6 +54,8 @@ export function ProfileActions({ locale, userId, username, displayName, viewer }
       </a>
     );
   }
+  // The page was rendered for a visitor; the session says otherwise until the next load.
+  if (me && !viewer) return null;
   if (!me || !viewer) {
     return (
       <a
@@ -49,86 +68,105 @@ export function ProfileActions({ locale, userId, username, displayName, viewer }
     );
   }
 
-  function act(path: "follow" | "block", method: "POST" | "DELETE") {
+  function act(action: Action) {
     setFailed(false);
+    setDone(null);
+    const { path, method } = REQUESTS[action];
     startTransition(async () => {
-      const response = await apiFetch(`/v1/users/${userId}/${path}`, { method });
-      await response.body?.cancel();
-      if (!response.ok) {
-        setFailed(true);
+      try {
+        const response = await apiFetch(`/v1/users/${userId}/${path}`, { method });
+        await response.body?.cancel();
+        if (!response.ok) {
+          setFailed(true);
+          return;
+        }
+      } catch {
+        setFailed(true); // Offline: a message, never the error page.
         return;
       }
       setConfirming(false);
-      router.refresh();
+      // Part of the transition: the buttons stay disabled until the new counts are shown.
+      startTransition(() => {
+        setDone(action);
+        router.refresh();
+      });
     });
   }
 
   return (
     <div className="flex flex-col gap-3">
       <div className="flex flex-wrap gap-2">
-        {!viewer.blocking &&
-          (viewer.following ? (
-            <Button
-              variant="secondary"
-              disabled={pending}
-              title={t("unfollowHint")}
-              onClick={() => {
-                act("follow", "DELETE");
-              }}
-            >
-              {t("following")}
-            </Button>
-          ) : (
-            <Button
-              disabled={pending}
-              onClick={() => {
-                act("follow", "POST");
-              }}
-            >
-              {t("follow")}
-            </Button>
-          ))}
         {viewer.blocking ? (
           <Button
-            variant="ghost"
+            ref={primary}
+            variant="secondary"
             disabled={pending}
             onClick={() => {
-              act("block", "DELETE");
+              act("unblocked");
             }}
           >
             {t("unblock")}
           </Button>
         ) : (
-          <Dialog
-            open={confirming}
-            onOpenChange={setConfirming}
-            title={t("blockTitle", { name: displayName })}
-            description={t("blockDescription")}
-            closeLabel={t("close")}
-            trigger={<Button variant="ghost">{t("block")}</Button>}
-          >
-            <div className="mt-4 flex justify-end gap-2">
+          <>
+            {viewer.following ? (
               <Button
+                ref={primary}
                 variant="secondary"
+                disabled={pending}
+                aria-label={t("unfollowLabel")}
                 onClick={() => {
-                  setConfirming(false);
+                  act("unfollowed");
                 }}
               >
-                {t("cancel")}
+                {t("following")}
               </Button>
+            ) : (
               <Button
-                variant="danger"
+                ref={primary}
                 disabled={pending}
                 onClick={() => {
-                  act("block", "POST");
+                  act("followed");
                 }}
               >
-                {t("blockConfirm")}
+                {t("follow")}
               </Button>
-            </div>
-          </Dialog>
+            )}
+            <Dialog
+              open={confirming}
+              onOpenChange={setConfirming}
+              title={t("blockTitle", { name: displayName })}
+              description={t("blockDescription")}
+              closeLabel={t("close")}
+              trigger={<Button variant="ghost">{t("block")}</Button>}
+            >
+              <div className="mt-4 flex justify-end gap-2">
+                <Button
+                  variant="secondary"
+                  onClick={() => {
+                    setConfirming(false);
+                  }}
+                >
+                  {t("cancel")}
+                </Button>
+                <Button
+                  variant="danger"
+                  disabled={pending}
+                  onClick={() => {
+                    act("blocked");
+                  }}
+                >
+                  {t("blockConfirm")}
+                </Button>
+              </div>
+            </Dialog>
+          </>
         )}
       </div>
+      {/* Always mounted: the result of each action is announced. */}
+      <p role="status" className="text-sm text-ink-2">
+        {done && !pending ? t(`done.${done}`, { name: displayName }) : ""}
+      </p>
       {failed && (
         <p role="alert" className="text-sm text-danger-ink">
           {t("error")}
