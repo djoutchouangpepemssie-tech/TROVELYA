@@ -24,7 +24,7 @@ test("account hub lists the settings pages", async ({ page }) => {
   await page.goto("/fr/compte");
   await expect(page.getByRole("heading", { level: 1, name: a.title })).toBeVisible();
   const nav = page.getByRole("navigation", { name: a.navLabel });
-  for (const name of [a.nav.profile]) {
+  for (const name of [a.nav.profile, a.nav.security]) {
     await expect(nav.getByRole("link", { name: new RegExp(`^${name}`) })).toBeVisible();
   }
   await expectNoAxeViolations(page);

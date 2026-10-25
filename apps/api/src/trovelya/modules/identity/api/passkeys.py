@@ -34,12 +34,21 @@ from trovelya.modules.identity.service import (
     staff_accounts,
 )
 from trovelya.modules.identity.service import passkeys as service
-from trovelya.modules.identity.service.auth import Uow, completed_user, recent_mfa_user
+from trovelya.modules.identity.service.auth import (
+    Uow,
+    completed_user,
+    optional_user,
+    recent_mfa_user,
+)
 from trovelya.shared.clock import Clock
 
 
-async def _enabled(request: Request) -> None:
-    if not await request.app.state.flags.is_enabled("auth.passkeys"):
+async def _enabled(
+    request: Request, user: Annotated[CurrentUser | None, Depends(optional_user)]
+) -> None:
+    # The signed-in member counts: the flag's allow list opens passkeys to beta testers.
+    member = user.id if user else None
+    if not await request.app.state.flags.is_enabled("auth.passkeys", user_id=member):
         raise AppError(ErrorCode.NOT_FOUND, 404)
 
 

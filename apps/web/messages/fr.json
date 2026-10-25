@@ -322,7 +322,77 @@
       "loadError": "Les préférences du fil n'ont pas pu être chargées.",
       "discoveryValue": "{value} %"
     },
-    "retry": "Réessayer"
+    "retry": "Réessayer",
+    "security": {
+      "metaTitle": "Sécurité · TROVÉLYA",
+      "title": "Sécurité",
+      "email": {
+        "title": "Adresse e-mail",
+        "current": "Adresse actuelle : {email}",
+        "new": "Nouvelle adresse",
+        "submit": "Changer d'adresse",
+        "invalid": "Indiquez une adresse e-mail valide.",
+        "same": "C'est déjà votre adresse.",
+        "sent": "Si cette adresse est libre, un lien de confirmation vient de lui être envoyé. Votre adresse actuelle reste valable jusqu'à la confirmation.",
+        "error": "La demande n'a pas abouti. Réessayez dans un instant."
+      },
+      "sessions": {
+        "title": "Appareils connectés",
+        "intro": "Les appareils et navigateurs où votre compte est ouvert.",
+        "current": "Cet appareil",
+        "unknownDevice": "Appareil inconnu",
+        "lastUsed": "Dernière activité : {date}",
+        "revoke": "Déconnecter",
+        "revokeLabel": "Déconnecter {device}",
+        "revokeOthers": "Se déconnecter de tous les autres appareils",
+        "revoked": "Appareil déconnecté.",
+        "revokedOthers": "Tous les autres appareils sont déconnectés.",
+        "error": "L'action n'a pas abouti. Réessayez dans un instant.",
+        "loadError": "La liste des appareils n'a pas pu être chargée."
+      },
+      "passkeys": {
+        "title": "Passkeys",
+        "intro": "Une passkey vous connecte avec l'empreinte, le visage ou le code de votre appareil, sans mot de passe ni e-mail.",
+        "none": "Vous n'avez pas encore de passkey.",
+        "created": "Créée le {date}",
+        "lastUsed": "Utilisée le {date}",
+        "neverUsed": "Jamais utilisée",
+        "name": "Nom de la passkey",
+        "defaultName": "Passkey",
+        "rename": "Renommer",
+        "renameLabel": "Renommer {name}",
+        "save": "Enregistrer",
+        "cancel": "Annuler",
+        "delete": "Supprimer",
+        "deleteLabel": "Supprimer {name}",
+        "deleteTitle": "Supprimer « {name} » ?",
+        "deleteDescription": "Vous ne pourrez plus vous connecter avec elle. Vos autres moyens de connexion restent valables.",
+        "deleteConfirm": "Supprimer",
+        "close": "Fermer",
+        "add": "Ajouter une passkey",
+        "addName": "Nom de la nouvelle passkey",
+        "addHint": "Par exemple : « Téléphone de Lucie ».",
+        "added": "Passkey ajoutée.",
+        "renamed": "Passkey renommée.",
+        "deleted": "Passkey supprimée.",
+        "error": "L'action n'a pas abouti. Réessayez dans un instant.",
+        "loadError": "La liste des passkeys n'a pas pu être chargée.",
+        "unsupported": "Ce navigateur ne gère pas les passkeys.",
+        "confirmedClickAgain": "Identité confirmée. Cliquez de nouveau sur « Ajouter une passkey » pour la créer.",
+        "nameRequired": "Indiquez un nom pour la passkey."
+      }
+    },
+    "emailConfirm": {
+      "metaTitle": "Nouvelle adresse e-mail · TROVÉLYA",
+      "title": "Confirmer votre nouvelle adresse",
+      "intro": "Cliquez sur le bouton pour utiliser cette adresse pour votre compte TROVÉLYA.",
+      "submit": "Confirmer ma nouvelle adresse",
+      "done": "Votre adresse e-mail a été changée. Votre ancienne adresse a été prévenue.",
+      "invalid": "Ce lien n'est plus valable : il a déjà servi ou il a expiré.",
+      "taken": "Cette adresse est désormais utilisée par un autre compte.",
+      "error": "Une erreur est survenue. Réessayez dans un instant.",
+      "toAccount": "Aller à mon compte"
+    }
   },
   "PublicProfile": {
     "metaTitle": "{name} (@{username}) · TROVÉLYA",
@@ -358,5 +428,31 @@
     "errorText": "La page n'a pas pu s'afficher. Réessayez dans un instant.",
     "retry": "Réessayer",
     "home": "Retour à l'accueil"
+  },
+  "StepUp": {
+    "title": "Confirmez qu'il s'agit bien de vous",
+    "description": "Cette action est sensible : nous vérifions votre identité avant de la faire.",
+    "passkey": "Utiliser ma passkey",
+    "link": "Recevoir un lien par e-mail",
+    "linkSent": "Un lien vient de partir vers votre adresse e-mail. Ouvrez-le sur cet appareil : vous reviendrez ici pour terminer.",
+    "close": "Fermer",
+    "errors": {
+      "cancelled": "Confirmation annulée.",
+      "refused": "Cette passkey n'a pas été reconnue.",
+      "unsupported": "Ce navigateur ne gère pas les passkeys : utilisez le lien par e-mail.",
+      "rate_limited": "Trop de tentatives. Patientez une minute.",
+      "unavailable": "La confirmation n'a pas abouti. Réessayez dans un instant.",
+      "step_up_required": "La confirmation n'a pas abouti. Réessayez dans un instant.",
+      "link_invalid": "La confirmation n'a pas abouti. Réessayez dans un instant."
+    },
+    "confirmMeta": "Confirmation · TROVÉLYA",
+    "confirmTitle": "Confirmer votre identité",
+    "confirmIntro": "Cliquez sur le bouton pour confirmer qu'il s'agit bien de vous.",
+    "confirmSubmit": "Confirmer",
+    "confirmed": "C'est confirmé. Vous pouvez reprendre là où vous en étiez.",
+    "back": "Reprendre",
+    "confirmInvalid": "Ce lien n'est plus valable : il a déjà servi ou il a expiré.",
+    "confirmOtherDevice": "Ouvrez ce lien sur l'appareil où vous êtes connecté, avec le même navigateur.",
+    "confirmError": "Une erreur est survenue. Réessayez dans un instant."
   }
 }

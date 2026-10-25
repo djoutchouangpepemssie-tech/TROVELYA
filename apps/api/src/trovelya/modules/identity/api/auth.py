@@ -24,6 +24,7 @@ from trovelya.modules.identity.service import (
     get_session_policy,
     limit_magic_link_requests,
     magic_link_ttl_min,
+    optional_user,
     request_magic_link,
     revoke_session,
     set_session_cookie,
@@ -44,14 +45,17 @@ def _settings(request: Request) -> Settings:
 
 
 @router.get("/methods", operation_id="auth_methods")
-async def get_methods(request: Request, db: Uow) -> AuthMethods:
+async def get_methods(
+    request: Request, db: Uow, user: Annotated[CurrentUser | None, Depends(optional_user)]
+) -> AuthMethods:
     """Sign-in methods to show; the screens hide the others (no dead buttons)."""
     flags = request.app.state.flags
     oidc = request.app.state.oidc
     return AuthMethods(
         magic_link=True,
         magic_link_ttl_min=await magic_link_ttl_min(db),
-        passkey=await flags.is_enabled("auth.passkeys"),
+        # A signed-in beta tester (flag allow list) is offered passkeys before everyone else.
+        passkey=await flags.is_enabled("auth.passkeys", user_id=user.id if user else None),
         google="google" in oidc and await flags.is_enabled("auth.oauth_google"),
         apple="apple" in oidc and await flags.is_enabled("auth.oauth_apple"),
     )

@@ -1,11 +1,14 @@
+"use client";
+
 import { Dialog as Primitive } from "radix-ui";
-import type { ReactNode } from "react";
+import { type ReactNode, useRef } from "react";
 
 import { CloseIcon } from "../icons";
 import { IconButton } from "./Button";
 
 type DialogProps = {
-  trigger: ReactNode;
+  /** Omitted for a dialog opened by code (`open`): focus then returns where it was. */
+  trigger?: ReactNode;
   title: string;
   description?: string;
   closeLabel: string;
@@ -26,14 +29,29 @@ export function Dialog({
   presentation = "dialog",
   ...state
 }: DialogProps) {
+  // Without a trigger, Radix would give focus back to <body>: remember where it was instead.
+  const returnTo = useRef<HTMLElement | null>(null);
   return (
     <Primitive.Root {...state}>
-      <Primitive.Trigger asChild>{trigger}</Primitive.Trigger>
+      {trigger ? <Primitive.Trigger asChild>{trigger}</Primitive.Trigger> : null}
       <Primitive.Portal>
         <Primitive.Overlay className="trv-dialog-overlay" />
         <Primitive.Content
           className="trv-dialog"
           data-presentation={presentation}
+          onOpenAutoFocus={() => {
+            if (!trigger && document.activeElement instanceof HTMLElement) {
+              returnTo.current = document.activeElement;
+            }
+          }}
+          onCloseAutoFocus={(event) => {
+            const target = returnTo.current;
+            returnTo.current = null;
+            // Gone from the page (its row was deleted): the caller places focus itself.
+            if (trigger || !target?.isConnected) return;
+            event.preventDefault();
+            target.focus();
+          }}
           {...(description ? {} : { "aria-describedby": undefined })}
         >
           <div className="trv-dialog-header">
