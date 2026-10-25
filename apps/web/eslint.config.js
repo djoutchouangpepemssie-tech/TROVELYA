@@ -34,4 +34,10 @@ export default [
     },
   },
   noLiteralText,
+  // Temporary mock-up demo (app/[locale]/demo/README.md): its text is the mock-up's fictitious
+  // copy, kept next to the screens so the whole demo is removed by deleting one folder.
+  {
+    files: ["app/[[]locale]/demo/**/*.tsx"],
+    rules: { "no-restricted-syntax": "off", "@next/next/no-img-element": "off" },
+  },
 ];

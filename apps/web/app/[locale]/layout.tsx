@@ -13,6 +13,7 @@ import { BottomTabs } from "@/components/BottomTabs";
 import { ConsentBanner } from "@/components/ConsentBanner";
 import { ServiceWorkerRegistration } from "@/components/ServiceWorkerRegistration";
 import { SessionProvider } from "@/components/SessionProvider";
+import { SiteChrome } from "@/components/SiteChrome";
 import { SiteHeader } from "@/components/SiteHeader";
 import { SiteFooter } from "@/components/SiteFooter";
 import { routing } from "@/i18n/routing";
@@ -47,10 +48,14 @@ export default async function LocaleLayout({ children, params }: Props) {
       <body>
         <NextIntlClientProvider>
           <SessionProvider>
-            <SiteHeader />
+            <SiteChrome>
+              <SiteHeader />
+            </SiteChrome>
             {children}
-            <SiteFooter locale={locale} />
-            <BottomTabs />
+            <SiteChrome>
+              <SiteFooter locale={locale} />
+              <BottomTabs />
+            </SiteChrome>
             <ConsentBanner />
           </SessionProvider>
         </NextIntlClientProvider>

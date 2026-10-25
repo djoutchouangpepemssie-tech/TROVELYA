@@ -1,0 +1,135 @@
+/* Temporary mock-up demo: the seller back office's own styles (WebStudio), scoped to the page. */
+.demo-studio {
+  & .nav {
+    display: flex;
+    align-items: center;
+    gap: 12px;
+    height: 40px;
+    padding: 0 12px;
+    border-radius: 10px;
+    color: rgba(255, 255, 255, 0.72);
+    text-decoration: none;
+    font-size: 14px;
+    font-weight: 500;
+  }
+  & .nav:hover {
+    background: rgba(255, 255, 255, 0.06);
+    color: #ffffff;
+  }
+  & .nav.on {
+    background: rgba(255, 255, 255, 0.1);
+    color: #ffffff;
+  }
+  & .nav .n {
+    margin-left: auto;
+    min-width: 20px;
+    height: 20px;
+    padding: 0 6px;
+    border-radius: 10px;
+    background: #1d2bff;
+    color: #ffffff;
+    font-size: 11px;
+    font-weight: 600;
+    display: grid;
+    place-items: center;
+    box-sizing: border-box;
+  }
+  & .card {
+    background: #ffffff;
+    border-radius: 18px;
+    padding: 20px;
+    box-shadow:
+      0 1px 2px rgba(0, 0, 0, 0.04),
+      0 0 0 0.5px rgba(60, 60, 67, 0.1);
+    min-width: 0;
+  }
+  & .kl {
+    font-size: 13px;
+    color: #6e6e73;
+    font-weight: 500;
+  }
+  & .kv {
+    font-family: var(--demo-mono);
+    font-size: 28px;
+    font-weight: 600;
+    letter-spacing: -0.035em;
+    margin-top: 6px;
+  }
+  & .kd {
+    font-size: 13px;
+    font-weight: 600;
+    color: #1e7a45;
+    margin-top: 2px;
+  }
+  & .sg {
+    height: 32px;
+    padding: 0 14px;
+    border: 0;
+    border-radius: 999px;
+    background: transparent;
+    font: 500 13px var(--demo-sans);
+    color: #1c1c22;
+    cursor: pointer;
+  }
+  & .sg.on {
+    background: #ffffff;
+    font-weight: 600;
+    box-shadow: 0 2px 8px rgba(0, 0, 0, 0.12);
+  }
+  & table {
+    width: 100%;
+    border-collapse: collapse;
+    font-size: 14px;
+  }
+  & th {
+    text-align: left;
+    font-size: 12px;
+    font-weight: 600;
+    color: #6e6e73;
+    padding: 0 10px 10px;
+    border-bottom: 0.5px solid rgba(60, 60, 67, 0.18);
+  }
+  & td {
+    padding: 12px 10px;
+    border-bottom: 0.5px solid rgba(60, 60, 67, 0.12);
+    white-space: nowrap;
+  }
+  & .st {
+    display: inline-flex;
+    align-items: center;
+    gap: 6px;
+    font-size: 12px;
+    font-weight: 600;
+    padding: 4px 9px;
+    border-radius: 999px;
+  }
+  & .btn {
+    height: 40px;
+    padding: 0 16px;
+    border-radius: 999px;
+    border: 0;
+    font: 600 14px var(--demo-sans);
+    display: inline-flex;
+    align-items: center;
+    gap: 8px;
+    text-decoration: none;
+    cursor: pointer;
+  }
+  & .bar {
+    height: 8px;
+    border-radius: 4px;
+    background: rgba(118, 118, 128, 0.14);
+    overflow: hidden;
+  }
+  & .bar div {
+    height: 100%;
+    border-radius: 4px;
+  }
+}
+
+/* Below 1024 px the mock-up already wraps the sidebar above the content; only the gutters shrink. */
+@media (max-width: 1023px) {
+  .demo-studio .demo-studio-main {
+    padding: 24px 16px 32px !important;
+  }
+}

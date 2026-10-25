@@ -1,0 +1,176 @@
+/* Temporary mock-up demo: the mock-up's own styles, copied as they are and scoped to .trv-demo
+   so nothing leaks into the real site. The mock-up is light only. */
+.trv-demo {
+  --demo-sans: var(--font-geist-sans), -apple-system, "Helvetica Neue", Arial, sans-serif;
+  --demo-mono: var(--font-geist-mono), ui-monospace, monospace;
+  min-height: 100dvh;
+  background: #ffffff;
+  color: #0b0b0f;
+  color-scheme: light;
+  font-family: var(--demo-sans);
+  -webkit-font-smoothing: antialiased;
+
+  & a {
+    color: #1d2bff;
+    text-decoration: none;
+  }
+  & a:hover {
+    color: #1420c8;
+  }
+  /* A mock-up link to a screen not in the demo keeps the link colour (low specificity, so
+     classes and inline colours still win). */
+  & :where(span.demo-nolink) {
+    color: #1d2bff;
+  }
+  & button {
+    font-family: var(--demo-sans);
+  }
+  & .m {
+    font-family: var(--demo-mono);
+    font-weight: 600;
+    font-variant-numeric: tabular-nums;
+  }
+  & .wrap {
+    max-width: 1376px;
+    margin: 0 auto;
+    padding: 0 32px;
+    box-sizing: border-box;
+  }
+  & .hi {
+    width: 42px;
+    height: 42px;
+    border-radius: 50%;
+    display: grid;
+    place-items: center;
+    color: #1c1c22;
+    position: relative;
+    flex: none;
+  }
+  & .hi:hover {
+    background: #f2f2f7;
+    color: #0b0b0f;
+  }
+  & .hi .d {
+    position: absolute;
+    top: 8px;
+    right: 9px;
+    width: 8px;
+    height: 8px;
+    border-radius: 50%;
+    background: #d93026;
+    box-shadow: 0 0 0 2px #ffffff;
+  }
+  & .cat {
+    height: 44px;
+    padding: 0 14px;
+    border: 0;
+    background: transparent;
+    font: 500 14px var(--demo-sans);
+    color: #1c1c22;
+    cursor: pointer;
+    border-bottom: 2px solid transparent;
+    white-space: nowrap;
+  }
+  & .cat:hover {
+    color: #0b0b0f;
+  }
+  & .cat.on {
+    color: #1d2bff;
+    border-bottom-color: #1d2bff;
+    font-weight: 600;
+  }
+  & .btnp {
+    display: inline-flex;
+    align-items: center;
+    gap: 8px;
+    height: 42px;
+    padding: 0 18px;
+    border-radius: 999px;
+    background: #1d2bff;
+    color: #ffffff;
+    font: 600 14px var(--demo-sans);
+    border: 0;
+    cursor: pointer;
+    white-space: nowrap;
+  }
+  & .btnp:hover {
+    background: #1420c8;
+    color: #ffffff;
+  }
+  & .lg {
+    position: relative;
+    isolation: isolate;
+    background: rgba(255, 255, 255, 0.22);
+    backdrop-filter: blur(14px) saturate(200%);
+    -webkit-backdrop-filter: blur(14px) saturate(200%);
+    box-shadow:
+      inset 0 0.5px 0 rgba(255, 255, 255, 0.9),
+      0 8px 24px rgba(0, 0, 0, 0.12);
+  }
+  & .lg-dark {
+    background: rgba(20, 20, 28, 0.32);
+    color: #ffffff;
+  }
+  & .mega a {
+    display: block;
+    padding: 6px 0;
+    color: #3a3a3f;
+    font-size: 14px;
+  }
+  & .mega a:hover {
+    color: #1d2bff;
+  }
+  & .sr-only {
+    position: absolute;
+    width: 1px;
+    height: 1px;
+    overflow: hidden;
+    clip: rect(0 0 0 0);
+    white-space: nowrap;
+  }
+}
+
+/* The strip that says the whole page is fictitious. */
+.trv-demo-strip {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  justify-content: center;
+  gap: 4px 16px;
+  padding: 7px 16px;
+  background: #0b0b0f;
+  color: #ffffff;
+  font: 500 12.5px var(--demo-sans);
+
+  & strong {
+    font-weight: 600;
+  }
+  & a,
+  & a:hover {
+    color: #ffffff;
+    text-decoration: underline;
+    text-underline-offset: 2px;
+  }
+}
+
+/* The mock-up is drawn at 1440 px; narrower screens keep its look with fewer columns. */
+@media (max-width: 1023px) {
+  .trv-demo .wrap {
+    padding: 0 16px;
+  }
+  .trv-demo .demo-header-row {
+    flex-wrap: wrap;
+    height: auto !important;
+    padding-top: 12px;
+    padding-bottom: 12px;
+    row-gap: 12px;
+  }
+  .trv-demo .demo-header-search {
+    order: 10;
+    flex-basis: 100% !important;
+    min-width: 0 !important;
+  }
+  .trv-demo .demo-hide-narrow {
+    display: none !important;
+  }
+}
