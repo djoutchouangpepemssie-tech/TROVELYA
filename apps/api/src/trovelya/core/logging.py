@@ -8,6 +8,7 @@ import ipaddress
 import logging
 import re
 import sys
+import traceback
 from collections.abc import Mapping
 from typing import Any, cast
 
@@ -77,12 +78,102 @@ def redact_pii(_logger: Any, _method: str, event_dict: EventDict) -> EventDict:
     }
 
 
+# Database drivers put the values of a failed query in their messages ("invalid input for query
+# argument $1: 'Jean Dupont'"), and SQLAlchemy repeats the driver's message in its own.
+_DATABASE_MODULES = ("asyncpg", "sqlalchemy", "psycopg")
+
+
+def is_database_error(exc_type: type[BaseException] | str) -> bool:
+    name = exc_type if isinstance(exc_type, str) else exc_type.__module__
+    return name.startswith(_DATABASE_MODULES)
+
+
+# Fields of a database error that help to debug and never hold a member's data (unlike its
+# message or `detail`, which quote values).
+_DIAGNOSTICS = (
+    ("sqlstate", "sqlstate"),
+    ("constraint_name", "constraint"),
+    ("table_name", "table"),
+    ("column_name", "column"),
+)
+
+
+def _withheld(error: BaseException) -> str:
+    diagnostics = " ".join(
+        f"{label}={value}"
+        for attribute, label in _DIAGNOSTICS
+        if (value := getattr(error, attribute, None))
+    )
+    statement = getattr(error, "statement", None)
+    return (
+        REDACTED
+        + (f" [{diagnostics}]" if diagnostics else "")
+        + (f" (SQL: {statement})" if statement else "")
+    )
+
+
+def format_exception(exc: BaseException) -> str:
+    """The traceback, chained and grouped exceptions included, with the message of every
+    database error withheld (its type, diagnostics and SQL statement, which holds
+    placeholders only, are kept)."""
+    rendered = traceback.TracebackException.from_exception(exc)
+    pending = [(rendered, exc)]
+    seen: set[int] = set()
+    while pending:
+        current, error = pending.pop()
+        if id(error) in seen:
+            continue
+        seen.add(id(error))
+        if is_database_error(type(error)):
+            # The message TracebackException renders (no public way to replace it).
+            setattr(current, "_str", _withheld(error))  # noqa: B010
+        related = [
+            (current.__cause__, error.__cause__),
+            (current.__context__, error.__context__),
+        ]
+        if isinstance(error, BaseExceptionGroup):
+            grouped = cast("BaseExceptionGroup[BaseException]", error).exceptions
+            related += zip(current.exceptions or [], grouped, strict=False)
+        pending += [(view, cause) for view, cause in related if view is not None and cause]
+    return "".join(rendered.format())
+
+
+def format_exc_info(_logger: Any, _method: str, event_dict: EventDict) -> EventDict:
+    """structlog's `format_exc_info`, through `format_exception`."""
+    exc_info = event_dict.pop("exc_info", None)
+    if exc_info is True:
+        exc_info = sys.exc_info()
+    error: object = (
+        exc_info
+        if isinstance(exc_info, BaseException)
+        else cast("tuple[object, ...]", exc_info)[1]
+        if isinstance(exc_info, tuple)
+        else None
+    )
+    if isinstance(error, BaseException):
+        event_dict["exception"] = format_exception(error)
+    return event_dict
+
+
 _SHARED_PROCESSORS: list[Processor] = [
     structlog.contextvars.merge_contextvars,
     structlog.processors.add_log_level,
     structlog.processors.TimeStamper(fmt="iso", utc=True),
-    structlog.processors.format_exc_info,
+    format_exc_info,
 ]
+
+
+class _AccessWithoutQuery(logging.Filter):
+    """uvicorn's access lines show the request target with its query string (a searched
+    address, a position): the line keeps the path only."""
+
+    def filter(self, record: logging.LogRecord) -> bool:
+        args = record.args
+        if record.name == "uvicorn.access" and isinstance(args, tuple) and len(args) >= 3:
+            target = args[2]
+            if isinstance(target, str) and "?" in target:
+                record.args = (*args[:2], target.split("?", 1)[0], *args[3:])
+        return True
 
 
 def configure_logging(level: int = logging.INFO) -> None:
@@ -105,6 +196,7 @@ def configure_logging(level: int = logging.INFO) -> None:
             ],
         )
     )
+    handler.addFilter(_AccessWithoutQuery())
     root = logging.getLogger()
     root.handlers = [handler]
     root.setLevel(level)
@@ -112,6 +204,10 @@ def configure_logging(level: int = logging.INFO) -> None:
         library_logger = logging.getLogger(name)
         library_logger.handlers = []
         library_logger.propagate = True
+    # httpx logs every outgoing request at INFO with its full address, query string included
+    # (a geocoded street, an e-mail…): keep its warnings only.
+    for name in ("httpx", "httpcore"):
+        logging.getLogger(name).setLevel(logging.WARNING)
     # arq logs every cron run at INFO (the outbox relay runs every second): keep warnings
     # and failures only; our jobs log what they actually did.
     logging.getLogger("arq").setLevel(logging.WARNING)

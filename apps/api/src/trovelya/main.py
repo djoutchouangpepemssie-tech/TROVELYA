@@ -18,7 +18,7 @@ from trovelya.core.health import router as health_router
 from trovelya.core.idempotency import IdempotencyMiddleware
 from trovelya.core.logging import configure_logging
 from trovelya.core.middleware import RequestIdMiddleware
-from trovelya.core.observability import configure_observability
+from trovelya.core.observability import configure_observability, trace_engine
 from trovelya.core.ratelimit import AnonymousRateLimitMiddleware
 from trovelya.modules.identity.adapters.geocoder import (
     FakeGeocoder,
@@ -86,6 +86,7 @@ def create_app(
             yield
             return
         engine = db.make_engine(settings.database_url)
+        trace_engine(engine)
         redis_client = redis.make_redis(settings.redis_url)
 
         async def database_check() -> None:

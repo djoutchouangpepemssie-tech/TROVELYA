@@ -18,7 +18,9 @@ from sqlalchemy.ext.asyncio import (
 
 
 def make_engine(url: str) -> AsyncEngine:
-    return create_async_engine(url, pool_pre_ping=True)
+    # `hide_parameters`: an SQL error's message never carries the values (a name, an
+    # address…) into the logs, error reports or traces.
+    return create_async_engine(url, pool_pre_ping=True, hide_parameters=True)
 
 
 def make_sessionmaker(engine: AsyncEngine) -> async_sessionmaker[AsyncSession]:

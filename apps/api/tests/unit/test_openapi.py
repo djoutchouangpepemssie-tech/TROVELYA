@@ -5,9 +5,8 @@ import subprocess
 import sys
 from pathlib import Path
 
-from fastapi.routing import APIRoute
-
 from tests.conftest import make_settings
+from tests.routes import api_routes
 from trovelya.main import create_app
 from trovelya.scripts.export_openapi import export_openapi
 
@@ -15,9 +14,7 @@ from trovelya.scripts.export_openapi import export_openapi
 def test_all_routes_have_explicit_operation_id() -> None:
     app = create_app(make_settings(env="production"))
     missing = [
-        route.path
-        for route in app.routes
-        if isinstance(route, APIRoute) and route.include_in_schema and not route.operation_id
+        route.key for route in api_routes(app) if route.include_in_schema and not route.operation_id
     ]
     assert missing == []
 
