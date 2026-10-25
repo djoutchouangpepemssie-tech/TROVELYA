@@ -24,6 +24,8 @@ export function SiteHeader() {
   // No member "Se connecter" on the sign-in journey itself, nor in the staff area.
   const onAuthPage = /^\/[a-z]{2}\/(connexion|inscription|verifier|staff)(\/|$)/.test(pathname);
   const [failed, setFailed] = useState(false);
+  // The sign-in screens (« Welcome » mock-up) carry the brand themselves, full screen.
+  const fullScreen = /^\/[a-z]{2}\/(connexion|inscription)(\/|$)/.test(pathname);
   const [open, setOpen] = useState(false);
   const menuId = useId();
   const menuRef = useRef<HTMLDivElement>(null);
@@ -75,6 +77,7 @@ export function SiteHeader() {
     setOpen(false);
   }
 
+  if (fullScreen) return null;
   return (
     <header className="sticky top-0 z-30 border-b border-line bg-surface/95 backdrop-blur">
       <div className="mx-auto flex h-14 max-w-5xl items-center justify-between px-4">
