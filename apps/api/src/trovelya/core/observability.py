@@ -3,6 +3,7 @@
 Both are optional: without SENTRY_DSN or OTEL_EXPORTER_OTLP_ENDPOINT nothing is sent.
 """
 
+from collections.abc import Mapping, Sequence
 from typing import Any, cast
 
 import sentry_sdk
@@ -18,13 +19,13 @@ from opentelemetry.instrumentation.sqlalchemy import (  # pyright: ignore[report
 from opentelemetry.sdk.metrics import MeterProvider
 from opentelemetry.sdk.metrics.export import PeriodicExportingMetricReader
 from opentelemetry.sdk.resources import Resource
-from opentelemetry.sdk.trace import TracerProvider
-from opentelemetry.sdk.trace.export import BatchSpanProcessor
-from opentelemetry.trace import Span
+from opentelemetry.sdk.trace import Event, ReadableSpan, TracerProvider
+from opentelemetry.sdk.trace.export import BatchSpanProcessor, SpanExporter, SpanExportResult
+from opentelemetry.trace import Status
 from sqlalchemy.ext.asyncio import AsyncEngine
 
 from trovelya.core.config import Settings
-from trovelya.core.logging import REDACTED, redact_value
+from trovelya.core.logging import REDACTED, is_database_error, redact_value
 
 meter = metrics.get_meter("trovelya")
 # Updated by the outbox relay; a growing value means events are not being published.
@@ -35,42 +36,122 @@ outbox_oldest_unpublished_seconds = meter.create_gauge(
 )
 
 
+# Set once OpenTelemetry is configured: engines are traced only then.
+_tracing = False
+
 # Access log lines carry the client address and add nothing to an error report.
 _DROPPED_BREADCRUMB_CATEGORIES = frozenset({"uvicorn.access"})
+
+
+# Where a query string travels: it can carry personal data (an address searched, an e-mail),
+# so it never leaves the process. URL values lose it; query values are masked.
+_URL_KEYS = frozenset({"url", "http.url", "http.target", "url.full"})
+_QUERY_KEYS = frozenset({"query_string", "http.query", "http.fragment", "url.query"})
+
+
+def _without_queries(value: object) -> object:
+    if isinstance(value, Mapping):
+        mapping = cast("Mapping[object, object]", value)
+        return {
+            key: REDACTED
+            if key in _QUERY_KEYS
+            else item.split("?", 1)[0]
+            if key in _URL_KEYS and isinstance(item, str)
+            else _without_queries(item)
+            for key, item in mapping.items()
+        }
+    if isinstance(value, list | tuple):
+        return [_without_queries(item) for item in cast("list[object] | tuple[object, ...]", value)]
+    return value
+
+
+def scrub_telemetry(value: object) -> object:
+    """The logs' redaction (sensitive keys, e-mails, IP addresses…), without query strings."""
+    return redact_value(_without_queries(value))
 
 
 def scrub_breadcrumb(crumb: dict[str, Any], _hint: dict[str, Any]) -> dict[str, Any] | None:
     """Same redaction as the logs, applied before a breadcrumb leaves the process."""
     if crumb.get("category") in _DROPPED_BREADCRUMB_CATEGORIES:
         return None
-    return cast("dict[str, Any]", redact_value(crumb))
+    return cast("dict[str, Any]", scrub_telemetry(crumb))
 
 
 def scrub_event(event: dict[str, Any], _hint: dict[str, Any]) -> dict[str, Any]:
-    """Same redaction as the logs, applied to errors and transactions (span descriptions too)."""
-    return cast("dict[str, Any]", redact_value(event))
+    """Same redaction as the logs, applied to errors and transactions (their spans too, such
+    as an outgoing request's `http.query`). A database error's message is withheld: the
+    driver puts the query's values in it."""
+    cleaned = cast("dict[str, Any]", scrub_telemetry(event))
+    exception = cleaned.get("exception")
+    if isinstance(exception, Mapping):
+        values = cast("list[Any]", cast("Mapping[str, Any]", exception).get("values") or [])
+        for value in values:
+            if isinstance(value, dict):
+                entry = cast("dict[str, Any]", value)
+                if is_database_error(str(entry.get("module") or "")):
+                    entry["value"] = REDACTED
+    return cleaned
 
 
-# Span attributes holding the request address: its query string can carry personal data
-# (an address searched, an e-mail), so it never leaves the process.
-_URL_ATTRIBUTES = frozenset({"http.url", "http.target", "url.full"})
-_QUERY_ATTRIBUTES = frozenset({"url.query"})
+class RedactingSpanExporter(SpanExporter):
+    """Every span, once finished, goes out redacted: its name, attributes (those set at the
+    response too, and captured headers such as `cookie`), events and status. A hook at the
+    start of a span would miss what is added afterwards.
+
+    Exceptions keep their type only: a message or a stack trace can carry anything (a
+    database driver quotes the values of a failed query), and Sentry reports errors."""
+
+    def __init__(self, inner: SpanExporter) -> None:
+        self._inner = inner
+
+    def export(self, spans: Sequence[ReadableSpan]) -> SpanExportResult:
+        return self._inner.export([_redacted(span) for span in spans])
+
+    def shutdown(self) -> None:
+        self._inner.shutdown()
+
+    def force_flush(self, timeout_millis: int = 30_000) -> bool:
+        return self._inner.force_flush(timeout_millis)
 
 
-def scrub_server_span(span: Span, _scope: dict[str, Any]) -> None:
-    """Request spans: no query string, and the logs' redaction (e-mails, IP addresses…)."""
-    attributes = getattr(span, "attributes", None)
-    if not span.is_recording() or not attributes:
-        return
-    for key, value in list(cast("dict[str, object]", dict(attributes)).items()):
-        if not isinstance(value, str):
-            continue
-        if key in _QUERY_ATTRIBUTES:
-            clean = REDACTED
-        else:
-            clean = str(redact_value(value.split("?", 1)[0] if key in _URL_ATTRIBUTES else value))
-        if clean != value:
-            span.set_attribute(key, clean)
+def _attributes(attributes: Mapping[str, Any] | None) -> dict[str, Any]:
+    cleaned = cast("dict[str, Any]", scrub_telemetry(dict(attributes or {})))
+    # OpenTelemetry attribute values are scalars or sequences of scalars: keep them so.
+    return {
+        key: tuple(cast("list[object]", value)) if isinstance(value, list) else value
+        for key, value in cleaned.items()
+    }
+
+
+_EXCEPTION_DETAILS = ("exception.message", "exception.stacktrace")
+
+
+def _event_attributes(event: Event) -> dict[str, Any]:
+    attributes = _attributes(event.attributes)
+    if event.name == "exception":
+        attributes.update({key: REDACTED for key in _EXCEPTION_DETAILS if key in attributes})
+    return attributes
+
+
+def _redacted(span: ReadableSpan) -> ReadableSpan:
+    status = span.status
+    description = status.description
+    return ReadableSpan(
+        name=str(redact_value(span.name)),
+        context=span.context,
+        parent=span.parent,
+        resource=span.resource,
+        attributes=_attributes(span.attributes),
+        events=[
+            Event(event.name, _event_attributes(event), event.timestamp) for event in span.events
+        ],
+        links=span.links,
+        kind=span.kind,
+        status=Status(status.status_code, REDACTED) if description else status,
+        start_time=span.start_time,
+        end_time=span.end_time,
+        instrumentation_scope=span.instrumentation_scope,
+    )
 
 
 def _init_sentry(settings: Settings) -> None:
@@ -108,9 +189,13 @@ def _init_opentelemetry(app: FastAPI | None, settings: Settings, service_name: s
     )
     tracer_provider = TracerProvider(resource=resource)
     tracer_provider.add_span_processor(
-        BatchSpanProcessor(OTLPSpanExporter(endpoint=f"{endpoint.rstrip('/')}/v1/traces"))
+        BatchSpanProcessor(
+            RedactingSpanExporter(OTLPSpanExporter(endpoint=f"{endpoint.rstrip('/')}/v1/traces"))
+        )
     )
     trace.set_tracer_provider(tracer_provider)
+    global _tracing  # once per process, at start-up
+    _tracing = True
     metrics.set_meter_provider(
         MeterProvider(
             resource=resource,
@@ -124,27 +209,26 @@ def _init_opentelemetry(app: FastAPI | None, settings: Settings, service_name: s
     instrument(app)
 
 
-def instrument(
-    app: FastAPI | None,
-    *,
-    tracer_provider: TracerProvider | None = None,
-    engine: AsyncEngine | None = None,
-) -> None:
-    """What is traced: requests, SQL and Redis. Without `tracer_provider`, the global one;
-    without `engine`, every engine created afterwards (the telemetry test passes its own)."""
+def instrument(app: FastAPI | None, *, tracer_provider: TracerProvider | None = None) -> None:
+    """What is traced: requests and Redis (SQL through `trace_engine`). Without
+    `tracer_provider`, the global one."""
     if app is not None:
         FastAPIInstrumentor.instrument_app(
-            app,
-            excluded_urls="health,ready",
-            tracer_provider=tracer_provider,
-            server_request_hook=scrub_server_span,
+            app, excluded_urls="health,ready", tracer_provider=tracer_provider
         )
-    SQLAlchemyInstrumentor().instrument(  # pyright: ignore[reportUnknownMemberType]
-        tracer_provider=tracer_provider,
-        **({"engine": engine.sync_engine} if engine is not None else {}),
-    )
     RedisInstrumentor().instrument(  # pyright: ignore[reportUnknownMemberType]
         tracer_provider=tracer_provider
+    )
+
+
+def trace_engine(engine: AsyncEngine, *, tracer_provider: TracerProvider | None = None) -> None:
+    """SQL statements (never their parameters) of this engine, when tracing is on. The
+    instrumentation declares SQLAlchemy below 2.1, but works with it: its check is skipped
+    (the telemetry test proves that statements are traced)."""
+    if tracer_provider is None and not _tracing:
+        return
+    SQLAlchemyInstrumentor().instrument(  # pyright: ignore[reportUnknownMemberType]
+        engine=engine.sync_engine, tracer_provider=tracer_provider, skip_dep_check=True
     )
 
 

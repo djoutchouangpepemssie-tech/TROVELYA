@@ -46,7 +46,8 @@ def _walk(app: FastAPI) -> Iterator[ApiRoute]:
         if isinstance(route, APIRoute):
             found.append(route)
         for context in found:
-            for method in sorted(context.methods):
+            # A WebSocket route has no HTTP methods (live shopping, later).
+            for method in sorted(getattr(context, "methods", None) or {"WEBSOCKET"}):
                 yield ApiRoute(
                     method=method,
                     path=context.path,

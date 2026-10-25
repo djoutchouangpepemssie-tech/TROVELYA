@@ -26,7 +26,7 @@ def _run(connection: Connection) -> None:
 
 
 async def _run_async() -> None:
-    engine = create_async_engine(_database_url())
+    engine = create_async_engine(_database_url(), hide_parameters=True)
     async with engine.connect() as connection:
         await connection.run_sync(_run)
     await engine.dispose()

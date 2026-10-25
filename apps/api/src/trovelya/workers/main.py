@@ -16,7 +16,11 @@ from trovelya.core.db import make_engine, make_sessionmaker
 from trovelya.core.email import make_email_sender
 from trovelya.core.idempotency import purge_idempotency_keys
 from trovelya.core.logging import configure_logging
-from trovelya.core.observability import configure_observability, outbox_oldest_unpublished_seconds
+from trovelya.core.observability import (
+    configure_observability,
+    outbox_oldest_unpublished_seconds,
+    trace_engine,
+)
 from trovelya.core.redis import make_redis
 from trovelya.modules.identity.service import (
     EXPORT_JOB,
@@ -48,6 +52,7 @@ async def startup(ctx: Context) -> None:
     configure_logging()
     configure_observability(None, settings, service_name="trovelya-worker")
     engine = make_engine(settings.database_url)
+    trace_engine(engine)
     ctx["engine"] = engine
     ctx["sessionmaker"] = make_sessionmaker(engine)
     ctx["redis_client"] = make_redis(settings.redis_url)

@@ -97,3 +97,43 @@ def test_redact_ip_addresses(ip: str) -> None:
 @pytest.mark.parametrize("text", ["11:55:25", "CPython 3.12.15", "req_01a16dc406fe7777"])
 def test_times_and_versions_are_not_mistaken_for_ips(text: str) -> None:
     assert redact_pii(None, "info", {"event": text}) == {"event": text}
+
+
+def test_access_log_lines_have_no_query_string(capsys: pytest.CaptureFixture[str]) -> None:
+    """uvicorn writes the full request target; a searched address or a position stays out."""
+    configure_logging()
+    logging.getLogger("uvicorn.access").info(
+        '%s - "%s %s HTTP/%s" %d',
+        "203.0.113.9:5123",
+        "GET",
+        "/v1/geo/search?q=17%20rue%20des%20Capucins",
+        "1.1",
+        200,
+    )
+    line = _last_json_line(capsys.readouterr().out)
+    assert "/v1/geo/search HTTP/1.1" in str(line["event"])
+    assert "Capucins" not in json.dumps(line)
+
+
+def _database_error(message: str) -> Exception:
+    """An exception from a database driver's module, as asyncpg raises them."""
+    error_type = type("DataError", (Exception,), {"__module__": "asyncpg.exceptions"})
+    return error_type(message)
+
+
+def test_database_error_messages_are_withheld(capsys: pytest.CaptureFixture[str]) -> None:
+    """Drivers quote the values of a failed query; the traceback keeps the types only."""
+    configure_logging()
+    driver = _database_error("invalid input for query argument $1: 'Ambroisine Quintal'")
+    try:
+        try:
+            raise driver
+        except Exception as exc:
+            raise RuntimeError("the request failed") from exc
+    except RuntimeError:
+        structlog.get_logger().exception("unhandled_error")
+    line = _last_json_line(capsys.readouterr().out)
+    rendered = str(line["exception"])
+    assert "Ambroisine" not in rendered
+    assert "asyncpg.exceptions.DataError: [REDACTED]" in rendered
+    assert "RuntimeError: the request failed" in rendered  # other messages are kept

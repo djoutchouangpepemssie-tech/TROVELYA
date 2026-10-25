@@ -8,6 +8,7 @@ import ipaddress
 import logging
 import re
 import sys
+import traceback
 from collections.abc import Mapping
 from typing import Any, cast
 
@@ -77,12 +78,76 @@ def redact_pii(_logger: Any, _method: str, event_dict: EventDict) -> EventDict:
     }
 
 
+# Database drivers put the values of a failed query in their messages ("invalid input for query
+# argument $1: 'Jean Dupont'"), and SQLAlchemy repeats the driver's message in its own.
+_DATABASE_MODULES = ("asyncpg", "sqlalchemy", "psycopg")
+
+
+def is_database_error(exc_type: type[BaseException] | str) -> bool:
+    name = exc_type if isinstance(exc_type, str) else exc_type.__module__
+    return name.startswith(_DATABASE_MODULES)
+
+
+def format_exception(exc: BaseException) -> str:
+    """The traceback, chained exceptions included, with the message of every database error
+    withheld (its type and SQL statement, which holds placeholders only, are kept)."""
+    rendered = traceback.TracebackException.from_exception(exc)
+    pending = [(rendered, exc)]
+    seen: set[int] = set()
+    while pending:
+        current, error = pending.pop()
+        if id(error) in seen:
+            continue
+        seen.add(id(error))
+        if is_database_error(type(error)):
+            statement = getattr(error, "statement", None)
+            # The message TracebackException renders (no public way to replace it).
+            setattr(current, "_str", f"{REDACTED} (SQL: {statement})" if statement else REDACTED)  # noqa: B010
+        for chained, cause in (
+            (current.__cause__, error.__cause__),
+            (current.__context__, error.__context__),
+        ):
+            if chained is not None and cause is not None:
+                pending.append((chained, cause))
+    return "".join(rendered.format())
+
+
+def format_exc_info(_logger: Any, _method: str, event_dict: EventDict) -> EventDict:
+    """structlog's `format_exc_info`, through `format_exception`."""
+    exc_info = event_dict.pop("exc_info", None)
+    if exc_info is True:
+        exc_info = sys.exc_info()
+    error: object = (
+        exc_info
+        if isinstance(exc_info, BaseException)
+        else cast("tuple[object, ...]", exc_info)[1]
+        if isinstance(exc_info, tuple)
+        else None
+    )
+    if isinstance(error, BaseException):
+        event_dict["exception"] = format_exception(error)
+    return event_dict
+
+
 _SHARED_PROCESSORS: list[Processor] = [
     structlog.contextvars.merge_contextvars,
     structlog.processors.add_log_level,
     structlog.processors.TimeStamper(fmt="iso", utc=True),
-    structlog.processors.format_exc_info,
+    format_exc_info,
 ]
+
+
+class _AccessWithoutQuery(logging.Filter):
+    """uvicorn's access lines show the request target with its query string (a searched
+    address, a position): the line keeps the path only."""
+
+    def filter(self, record: logging.LogRecord) -> bool:
+        args = record.args
+        if record.name == "uvicorn.access" and isinstance(args, tuple) and len(args) >= 3:
+            target = args[2]
+            if isinstance(target, str) and "?" in target:
+                record.args = (*args[:2], target.split("?", 1)[0], *args[3:])
+        return True
 
 
 def configure_logging(level: int = logging.INFO) -> None:
@@ -105,6 +170,7 @@ def configure_logging(level: int = logging.INFO) -> None:
             ],
         )
     )
+    handler.addFilter(_AccessWithoutQuery())
     root = logging.getLogger()
     root.handlers = [handler]
     root.setLevel(level)
