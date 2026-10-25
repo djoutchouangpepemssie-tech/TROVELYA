@@ -1,6 +1,6 @@
 # Passation — fin de P1 (Identité et comptes)
 
-**Date :** 25 octobre 2026. **Phase suivante :** P2, après validation de la porte P1 par Arcel. Plan de la phase : `docs/plans/P1-identite-comptes.md` (chaque tâche y a son paragraphe « réalisé »).
+**Date :** 25 octobre 2026. **Porte P1 validée par Arcel le 25 octobre 2026.** **Phase suivante :** P2 (catalogue et annonces). Plan de la phase : `docs/plans/P1-identite-comptes.md` (chaque tâche y a son paragraphe « réalisé »).
 
 ## Ce que P1 a ajouté
 
@@ -38,16 +38,18 @@ Légende : ✅ prouvé par les tests (CI verte sur `main`) ; 🟡 prouvé par le
 |---|---|---|---|
 | G1 | Parcours 1 vert | ✅ | Job `e2e-full` : `/fr/inscription` → e-mail envoyé par le worker en SMTP et lu dans Mailpit → « Me connecter » → profil → 2 univers → zone « Lyon 7e » → accueil connecté ; zone par défaut de 5000 m vérifiée par l'API. |
 | G2 | Tiers → 404 sur toutes les routes privées | ✅ | `test_access_matrix.py` : 61 routes déclarées (14 publiques, 4 ouvertes, 31 sur son propre compte, 8 sur une ressource possédée, 4 staff) ; anonyme → 401, tiers → 404 sur les 8 routes de ressource avec contrôle positif du propriétaire, membre → 403 sur les 4 routes staff ; vérifié par mutation. Liste des routes dans la PR #63. |
-| G3 | Export RGPD complet | 🟡 | `test_every_identity_table_exported` et l'e2e « request an export, then download it » ; **à faire par Arcel** : demander l'export sur staging (Mon compte → Mes données), recevoir l'e-mail, télécharger le ZIP et l'ouvrir. |
-| G4 | Aucune donnée personnelle dans les journaux | 🟡 | `test_no_pii_in_telemetry.py` (journaux, Sentry, traces, stdout) ; cinq fuites trouvées et corrigées (PR #63) ; **à faire par Arcel** : après ses connexions sur staging, chercher son adresse e-mail dans les journaux Railway (API et worker) et dans Sentry : 0 résultat attendu. |
-| G5 | Session révoquée inutilisable | 🟡 | `test_revoked_session_rejected_next_request` et l'e2e « revoke another session » ; **démonstration** : se connecter sur deux navigateurs, déconnecter l'autre appareil depuis Sécurité, l'autre navigateur est déconnecté à la requête suivante. |
+| G3 | Export RGPD complet | ✅ | `test_every_identity_table_exported` et l'e2e « request an export, then download it » ; **démontré par Arcel sur staging le 25 octobre 2026** : export demandé, e-mail reçu, ZIP téléchargé et ouvert. |
+| G4 | Aucune donnée personnelle dans les journaux | ✅ | `test_no_pii_in_telemetry.py` (journaux, Sentry, traces, stdout) ; cinq fuites trouvées et corrigées (PR #63) ; **vérifié par Arcel sur staging le 25 octobre 2026** : son adresse e-mail introuvable dans les journaux Railway et dans Sentry. |
+| G5 | Session révoquée inutilisable | ✅ | `test_revoked_session_rejected_next_request` et l'e2e « revoke another session » ; **démontré par Arcel sur staging le 25 octobre 2026** : les autres appareils déconnectés, l'appareil utilisé resté connecté (« Cet appareil » seul dans la liste). |
 | G6 | Énumération impossible | ✅ | `test_request_same_response_known_and_unknown_email` : même statut, même corps, mêmes en-têtes. |
 | G7 | Double validation | ✅ | `test_dual_approval_grants_the_role`, `test_approval_by_requester_forbidden`, `test_approver_must_hold_permission`, `test_expired_approval_rejected`, `test_concurrent_approvals_execute_once` ; la ligne d'audit porte `actor_id` et `approver_id` différents. |
-| G8 | Connexions réelles sur staging | 🟡 | **À faire par Arcel** : lien magique reçu (Resend) ; Google en mode Test s'il est configuré (les boutons Google et Apple ne s'affichent que configurés) ; passkey créée puis utilisée ; compte staff connecté par passkey. |
+| G8 | Connexions réelles sur staging | ✅ | **Démontré par Arcel sur staging le 25 octobre 2026** : lien magique reçu (Resend) et connexion ; passkey créée puis connexion par Face ID ; compte staff connecté par passkey. Google non configuré : bouton absent, comme prévu (à configurer plus tard). |
 | G9 | Accessibilité | ✅ | axe sans violation dans les e2e : connexion et inscription (W06), accueil en 4 étapes (W07), profil public (W08), compte et ses pages (W20), pages légales ; parcours au clavier testés (formulaire de connexion, univers à la barre d'espace, focus à chaque étape et après chaque action). |
 | G10 | Documentation | ✅ | ADR-0015 à 0018, `docs/data/PII.md`, `docs/security/threat-model.md` v3, `docs/GLOSSARY.md` (vocabulaire P1), ce document ; Apple prêt derrière son drapeau. |
 
 ## Écarts au plan de P1, et pourquoi
+
+- **Passkeys sur staging** : ouvertes à tous les comptes de staging par `FEATURE_FLAGS_DEFAULT={"auth.passkeys": true}` sur le service API (réglé par Arcel le 25 octobre 2026, pour la démonstration G8) ; production inchangée.
 
 - **Anti-robot** : Turnstile (Cloudflare, hors UE) écarté ; Friendly Captcha (UE) retenu par Arcel le 25 octobre 2026, à brancher avant la production. D'ici là, ne pas poser `TURNSTILE_SECRET_KEY`.
 - **Annulation de l'effacement** : se reconnecter pendant le délai de grâce donne accès à « Annuler la suppression » (bandeau sur chaque page et page Mes données) ; l'annulation est un clic, pas un effet de la seule reconnexion. Choix confirmé par Arcel le 25 octobre 2026.
@@ -57,7 +59,7 @@ Légende : ✅ prouvé par les tests (CI verte sur `main`) ; 🟡 prouvé par le
 
 ## Actions qui reviennent à Arcel
 
-1. Faire les démonstrations G3, G4, G5 et G8 ci-dessus sur staging, puis valider la porte P1 (ce document).
+1. ~~Faire les démonstrations G3, G4, G5 et G8 sur staging, puis valider la porte P1.~~ Fait le 25 octobre 2026.
 2. ~~Dire si l'effacement doit s'annuler de lui-même à la reconnexion.~~ Fait le 25 octobre 2026 : un clic explicite (comportement actuel).
 3. Toujours en attente depuis P0 (à la fin complète du projet, décision du 24 octobre 2026) : acheter `trovelya.com` (puis passkeys, Apple et e-mails sur ce domaine), double authentification sur GitHub, Railway, Vercel et Sentry, sauvegardes planifiées en production, nettoyage de la branche `test/P0-T13-ci-must-fail` et du service `ops-drill`, choix du prestataire de paiement avant P4.
 

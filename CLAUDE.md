@@ -9,7 +9,7 @@ TROVÉLYA (« La belle trouvaille ») est une marketplace européenne **généra
 - **Web d'abord** : `apps/web` couvre 100 % des fonctionnalités (mobile first, PWA) avant l'app mobile.
 - **Tout le produit est construit, dans l'ordre chronologique** : phases P0 → P21 (section 4 et section 17). Une phase ne commence qu'après la validation de la porte de la précédente par Arcel.
 - L'application mobile Expo est la dernière phase (P21).
-- Phase en cours : **P1 — Identité et comptes** (porte P0 validée par Arcel le 24 octobre 2026).
+- Phase en cours : **P2 — Catalogue et annonces** (porte P1 validée par Arcel le 25 octobre 2026 ; porte P0 le 24 octobre 2026).
 
 ## Pile technique (décidée)
 - Monorepo pnpm + Turborepo : `apps/web` (Next.js, App Router), `apps/mobile` (Expo), `apps/api` (FastAPI, Python géré avec uv), `packages/api-client` (types générés depuis l'OpenAPI de FastAPI), `packages/ui`, `packages/core`.
