@@ -1372,6 +1372,85 @@
         "title": "MeOut",
         "type": "object"
       },
+      "MediaOut": {
+        "properties": {
+          "height": {
+            "anyOf": [
+              {
+                "type": "integer"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Height"
+          },
+          "id": {
+            "format": "uuid",
+            "title": "Id",
+            "type": "string"
+          },
+          "mime_type": {
+            "title": "Mime Type",
+            "type": "string"
+          },
+          "purpose": {
+            "title": "Purpose",
+            "type": "string"
+          },
+          "rejection_reason": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Rejection Reason"
+          },
+          "status": {
+            "enum": [
+              "uploading",
+              "processing",
+              "ready",
+              "rejected"
+            ],
+            "title": "Status",
+            "type": "string"
+          },
+          "variants": {
+            "items": {
+              "$ref": "#/components/schemas/VariantOut"
+            },
+            "title": "Variants",
+            "type": "array"
+          },
+          "width": {
+            "anyOf": [
+              {
+                "type": "integer"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Width"
+          }
+        },
+        "required": [
+          "id",
+          "purpose",
+          "mime_type",
+          "status",
+          "width",
+          "height",
+          "variants",
+          "rejection_reason"
+        ],
+        "title": "MediaOut",
+        "type": "object"
+      },
       "PasskeyList": {
         "properties": {
           "data": {
@@ -2001,6 +2080,70 @@
         "title": "StepUpVerify",
         "type": "object"
       },
+      "UploadIn": {
+        "additionalProperties": false,
+        "properties": {
+          "bytes": {
+            "description": "Exact size of the file: it is part of the signature",
+            "minimum": 1.0,
+            "title": "Bytes",
+            "type": "integer"
+          },
+          "mime_type": {
+            "maxLength": 100,
+            "title": "Mime Type",
+            "type": "string"
+          },
+          "purpose": {
+            "enum": [
+              "listing",
+              "avatar"
+            ],
+            "title": "Purpose",
+            "type": "string"
+          }
+        },
+        "required": [
+          "purpose",
+          "mime_type",
+          "bytes"
+        ],
+        "title": "UploadIn",
+        "type": "object"
+      },
+      "UploadOut": {
+        "properties": {
+          "expires_at": {
+            "format": "date-time",
+            "title": "Expires At",
+            "type": "string"
+          },
+          "headers": {
+            "additionalProperties": {
+              "type": "string"
+            },
+            "title": "Headers",
+            "type": "object"
+          },
+          "media_id": {
+            "format": "uuid",
+            "title": "Media Id",
+            "type": "string"
+          },
+          "upload_url": {
+            "title": "Upload Url",
+            "type": "string"
+          }
+        },
+        "required": [
+          "media_id",
+          "upload_url",
+          "headers",
+          "expires_at"
+        ],
+        "title": "UploadOut",
+        "type": "object"
+      },
       "UsernameSuggestion": {
         "properties": {
           "username": {
@@ -2052,6 +2195,34 @@
           "type"
         ],
         "title": "ValidationError",
+        "type": "object"
+      },
+      "VariantOut": {
+        "properties": {
+          "format": {
+            "title": "Format",
+            "type": "string"
+          },
+          "height": {
+            "title": "Height",
+            "type": "integer"
+          },
+          "url": {
+            "title": "Url",
+            "type": "string"
+          },
+          "width": {
+            "title": "Width",
+            "type": "integer"
+          }
+        },
+        "required": [
+          "format",
+          "width",
+          "height",
+          "url"
+        ],
+        "title": "VariantOut",
         "type": "object"
       },
       "ZoneIn": {
@@ -4111,6 +4282,143 @@
         "summary": "Update Zone",
         "tags": [
           "me"
+        ]
+      }
+    },
+    "/v1/media/uploads": {
+      "post": {
+        "description": "A 5-minute URL to PUT the file to, with its exact type and size.",
+        "operationId": "media_upload",
+        "requestBody": {
+          "content": {
+            "application/json": {
+              "schema": {
+                "$ref": "#/components/schemas/UploadIn"
+              }
+            }
+          },
+          "required": true
+        },
+        "responses": {
+          "201": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/UploadOut"
+                }
+              }
+            },
+            "description": "Successful Response"
+          },
+          "413": {
+            "description": "Larger than media.max_image_bytes"
+          },
+          "422": {
+            "description": "Type not accepted"
+          },
+          "429": {
+            "description": "media.uploads_per_hour or _per_day reached"
+          }
+        },
+        "summary": "Post Upload",
+        "tags": [
+          "media"
+        ]
+      }
+    },
+    "/v1/media/{media_id}": {
+      "get": {
+        "operationId": "media_get",
+        "parameters": [
+          {
+            "in": "path",
+            "name": "media_id",
+            "required": true,
+            "schema": {
+              "format": "uuid",
+              "title": "Media Id",
+              "type": "string"
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/MediaOut"
+                }
+              }
+            },
+            "description": "Successful Response"
+          },
+          "404": {
+            "description": "Not the caller's"
+          },
+          "422": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/HTTPValidationError"
+                }
+              }
+            },
+            "description": "Validation Error"
+          }
+        },
+        "summary": "Get Media",
+        "tags": [
+          "media"
+        ]
+      }
+    },
+    "/v1/media/{media_id}/complete": {
+      "post": {
+        "description": "The file is in storage: the worker checks and processes it.",
+        "operationId": "media_complete",
+        "parameters": [
+          {
+            "in": "path",
+            "name": "media_id",
+            "required": true,
+            "schema": {
+              "format": "uuid",
+              "title": "Media Id",
+              "type": "string"
+            }
+          }
+        ],
+        "responses": {
+          "202": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/MediaOut"
+                }
+              }
+            },
+            "description": "Successful Response"
+          },
+          "404": {
+            "description": "Not the caller's"
+          },
+          "409": {
+            "description": "Already sent"
+          },
+          "422": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/HTTPValidationError"
+                }
+              }
+            },
+            "description": "Validation Error"
+          }
+        },
+        "summary": "Post Complete",
+        "tags": [
+          "media"
         ]
       }
     },

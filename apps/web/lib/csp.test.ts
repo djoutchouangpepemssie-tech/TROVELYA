@@ -3,6 +3,7 @@ import { afterEach, describe, expect, it, vi } from "vitest";
 import { contentSecurityPolicy } from "./csp";
 
 const connectSrc = (csp: string) => csp.split("; ").find((d) => d.startsWith("connect-src"));
+const imgSrc = (csp: string) => csp.split("; ").find((d) => d.startsWith("img-src"));
 
 describe("contentSecurityPolicy", () => {
   afterEach(() => {
@@ -25,5 +26,23 @@ describe("contentSecurityPolicy", () => {
   it("allows only the site itself when nothing is configured", () => {
     vi.stubEnv("NEXT_PUBLIC_SENTRY_DSN", "");
     expect(connectSrc(contentSecurityPolicy("n", false))).toBe("connect-src 'self'");
+  });
+
+  it("lets the browser upload to the storage host and show the variants (ADR-0019)", () => {
+    vi.stubEnv("NEXT_PUBLIC_SENTRY_DSN", "");
+    vi.stubEnv("MEDIA_UPLOAD_ORIGIN", "https://acc.eu.r2.cloudflarestorage.com");
+    vi.stubEnv("MEDIA_PUBLIC_URL", "https://pub-123.r2.dev/some/path");
+    const csp = contentSecurityPolicy("n", false);
+    expect(connectSrc(csp)).toBe("connect-src 'self' https://acc.eu.r2.cloudflarestorage.com");
+    expect(imgSrc(csp)).toBe("img-src 'self' data: blob: https://pub-123.r2.dev");
+  });
+
+  it("adds no media host when unset or invalid", () => {
+    vi.stubEnv("NEXT_PUBLIC_SENTRY_DSN", "");
+    vi.stubEnv("MEDIA_UPLOAD_ORIGIN", "not a url");
+    vi.stubEnv("MEDIA_PUBLIC_URL", "");
+    const csp = contentSecurityPolicy("n", false);
+    expect(connectSrc(csp)).toBe("connect-src 'self'");
+    expect(imgSrc(csp)).toBe("img-src 'self' data: blob:");
   });
 });

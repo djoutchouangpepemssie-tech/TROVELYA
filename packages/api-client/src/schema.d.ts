@@ -852,6 +852,63 @@ export interface paths {
         patch: operations["me_zones_update"];
         trace?: never;
     };
+    "/v1/media/uploads": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        get?: never;
+        put?: never;
+        /**
+         * Post Upload
+         * @description A 5-minute URL to PUT the file to, with its exact type and size.
+         */
+        post: operations["media_upload"];
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/v1/media/{media_id}": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        /** Get Media */
+        get: operations["media_get"];
+        put?: never;
+        post?: never;
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/v1/media/{media_id}/complete": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        get?: never;
+        put?: never;
+        /**
+         * Post Complete
+         * @description The file is in storage: the worker checks and processes it.
+         */
+        post: operations["media_complete"];
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
     "/v1/staff/approvals": {
         parameters: {
             query?: never;
@@ -1463,6 +1520,31 @@ export interface components {
             /** Version */
             version: number;
         };
+        /** MediaOut */
+        MediaOut: {
+            /** Height */
+            height: number | null;
+            /**
+             * Id
+             * Format: uuid
+             */
+            id: string;
+            /** Mime Type */
+            mime_type: string;
+            /** Purpose */
+            purpose: string;
+            /** Rejection Reason */
+            rejection_reason: string | null;
+            /**
+             * Status
+             * @enum {string}
+             */
+            status: "uploading" | "processing" | "ready" | "rejected";
+            /** Variants */
+            variants: components["schemas"]["VariantOut"][];
+            /** Width */
+            width: number | null;
+        };
         /** PasskeyList */
         PasskeyList: {
             /** Data */
@@ -1717,6 +1799,40 @@ export interface components {
             /** Token */
             token: string;
         };
+        /** UploadIn */
+        UploadIn: {
+            /**
+             * Bytes
+             * @description Exact size of the file: it is part of the signature
+             */
+            bytes: number;
+            /** Mime Type */
+            mime_type: string;
+            /**
+             * Purpose
+             * @enum {string}
+             */
+            purpose: "listing" | "avatar";
+        };
+        /** UploadOut */
+        UploadOut: {
+            /**
+             * Expires At
+             * Format: date-time
+             */
+            expires_at: string;
+            /** Headers */
+            headers: {
+                [key: string]: string;
+            };
+            /**
+             * Media Id
+             * Format: uuid
+             */
+            media_id: string;
+            /** Upload Url */
+            upload_url: string;
+        };
         /** UsernameSuggestion */
         UsernameSuggestion: {
             /** Username */
@@ -1734,6 +1850,17 @@ export interface components {
             msg: string;
             /** Error Type */
             type: string;
+        };
+        /** VariantOut */
+        VariantOut: {
+            /** Format */
+            format: string;
+            /** Height */
+            height: number;
+            /** Url */
+            url: string;
+            /** Width */
+            width: number;
         };
         /** ZoneIn */
         ZoneIn: {
@@ -3335,6 +3462,134 @@ export interface operations {
                 content: {
                     "application/json": components["schemas"]["ZoneOut"];
                 };
+            };
+            /** @description Validation Error */
+            422: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["HTTPValidationError"];
+                };
+            };
+        };
+    };
+    media_upload: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        requestBody: {
+            content: {
+                "application/json": components["schemas"]["UploadIn"];
+            };
+        };
+        responses: {
+            /** @description Successful Response */
+            201: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["UploadOut"];
+                };
+            };
+            /** @description Larger than media.max_image_bytes */
+            413: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content?: never;
+            };
+            /** @description Type not accepted */
+            422: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content?: never;
+            };
+            /** @description media.uploads_per_hour or _per_day reached */
+            429: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content?: never;
+            };
+        };
+    };
+    media_get: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                media_id: string;
+            };
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description Successful Response */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["MediaOut"];
+                };
+            };
+            /** @description Not the caller's */
+            404: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content?: never;
+            };
+            /** @description Validation Error */
+            422: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["HTTPValidationError"];
+                };
+            };
+        };
+    };
+    media_complete: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                media_id: string;
+            };
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description Successful Response */
+            202: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["MediaOut"];
+                };
+            };
+            /** @description Not the caller's */
+            404: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content?: never;
+            };
+            /** @description Already sent */
+            409: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content?: never;
             };
             /** @description Validation Error */
             422: {
