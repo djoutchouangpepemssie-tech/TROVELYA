@@ -55,8 +55,8 @@ consentements, abonnements, blocages et demandes ; « media » : les photos que 
 envoyées, décrites sans leur contenu).
 
 Ne figurent pas dans cet export : les secrets de sécurité (empreintes de jetons de connexion,
-clés de vos passkeys) et les données d'autres personnes (qui vous bloque ; vos abonnés sont
-comptés, pas nommés).
+clés de vos passkeys), les empreintes de vos photos (elles servent à détecter la fraude) et
+les données d'autres personnes (qui vous bloque ; vos abonnés sont comptés, pas nommés).
 
 Pour toute question : la politique de confidentialité, sur le site.
 """
