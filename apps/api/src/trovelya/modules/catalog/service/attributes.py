@@ -3,10 +3,12 @@
 
 Every error is reported at once, as `(attribute key, code)`; the accepted values are returned in
 the category's order, text trimmed. Codes: `required`, `unknown` (not an attribute of the
-category), `type`, `not_in_list`, `too_small`, `too_large`, `step`, `too_long`, `empty`.
+category), `type`, `not_in_list`, `too_small`, `too_large`, `step` (exact decimal arithmetic:
+0.1 + 0.2 is not a multiple of 0.1), `too_long`, `empty`, `invalid_characters`.
 """
 
 import math
+import unicodedata
 from collections.abc import Mapping, Sequence
 from dataclasses import dataclass, field
 from decimal import Decimal
@@ -14,7 +16,7 @@ from typing import Any
 
 from trovelya.modules.catalog.models import AttributeType
 
-AttributeError_ = tuple[str, str]
+AttributeIssue = tuple[str, str]
 
 
 @dataclass(frozen=True)
@@ -27,7 +29,18 @@ class AttributeRule:
 
 
 def _is_number(value: Any) -> bool:
-    return isinstance(value, int | float) and not isinstance(value, bool) and math.isfinite(value)
+    """A JSON number: never a boolean, never NaN or an infinity (a huge integer is a number)."""
+    if isinstance(value, bool):
+        return False
+    return isinstance(value, int) or (isinstance(value, float) and math.isfinite(value))
+
+
+def _clean_text(value: str) -> str | None:
+    """Trimmed text without its invisible format characters; None when it holds a control
+    character (PostgreSQL refuses NUL in JSONB, the brand search refuses the same)."""
+    if any(unicodedata.category(c) == "Cc" for c in value):
+        return None
+    return "".join(c for c in value if unicodedata.category(c) != "Cf").strip()
 
 
 def _check_bounds(value: int | float, constraints: Mapping[str, int | float]) -> str | None:
@@ -56,7 +69,9 @@ def _check(rule: AttributeRule, value: Any) -> tuple[Any, str | None]:
         case "text":
             if not isinstance(value, str):
                 return None, "type"
-            text = value.strip()
+            text = _clean_text(value)
+            if text is None:
+                return None, "invalid_characters"
             if not text:
                 return None, "empty"
             if len(text) > rule.constraints.get("max_length", math.inf):
@@ -70,14 +85,16 @@ def _check(rule: AttributeRule, value: Any) -> tuple[Any, str | None]:
             if not _is_number(value):
                 return None, "type"
             return value, _check_bounds(value, rule.constraints)
+        case _:  # a type the seed does not know: a bug, not the member's mistake
+            raise ValueError(f"attribute {rule.key}: unknown type {rule.data_type!r}")
 
 
 def validate_attributes(
     values: Mapping[str, Any], rules: Sequence[AttributeRule]
-) -> tuple[dict[str, Any], list[AttributeError_]]:
+) -> tuple[dict[str, Any], list[AttributeIssue]]:
     """Accepted values (category order) and every error found."""
     accepted: dict[str, Any] = {}
-    errors: list[AttributeError_] = []
+    errors: list[AttributeIssue] = []
     known = {rule.key for rule in rules}
     errors.extend((key, "unknown") for key in values if key not in known)
     for rule in rules:

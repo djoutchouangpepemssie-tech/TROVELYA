@@ -30,6 +30,7 @@ def test_round_distance(meters: float, shown: str) -> None:
     assert round_distance(meters) == shown
 
 
-def test_round_distance_refuses_a_negative_distance() -> None:
+@pytest.mark.parametrize("meters", [-1, float("nan"), float("inf")])
+def test_round_distance_refuses_what_is_not_a_distance(meters: float) -> None:
     with pytest.raises(ValueError, match="distance"):
-        round_distance(-1)
+        round_distance(meters)
