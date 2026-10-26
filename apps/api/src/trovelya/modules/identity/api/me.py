@@ -86,7 +86,13 @@ async def delete_other_sessions(db: Uow, user: Me, clock: ClockDep) -> None:
 
 @router.get("", operation_id="me_get")
 async def get_me(request: Request, db: Uow, user: Me, clock: ClockDep) -> MeOut:
-    data = await profile.me(db, user=user, flags=request.app.state.flags, clock=clock)
+    data = await profile.me(
+        db,
+        user=user,
+        flags=request.app.state.flags,
+        clock=clock,
+        media_public_url=request.app.state.settings.media_public_url,
+    )
     return MeOut.model_validate(data)
 
 
@@ -128,7 +134,13 @@ async def post_complete_profile(
         is_staff=user.is_staff,
         profile_completed=True,
     )
-    data = await profile.me(db, user=completed, flags=request.app.state.flags, clock=clock)
+    data = await profile.me(
+        db,
+        user=completed,
+        flags=request.app.state.flags,
+        clock=clock,
+        media_public_url=request.app.state.settings.media_public_url,
+    )
     return MeOut.model_validate(data)
 
 
@@ -140,11 +152,22 @@ async def patch_me(
     user: Annotated[CurrentUser, Depends(completed_user)],
     clock: ClockDep,
 ) -> MeOut:
-    """Change the username, display name, bio or language. `If-Match: <version>` required."""
+    """Change the username, display name, bio, language or avatar. `If-Match: <version>`
+    required."""
     await profile.update_profile(
-        db, user=user, if_match=request.headers.get("if-match"), changes=body.changes()
+        db,
+        user=user,
+        if_match=request.headers.get("if-match"),
+        changes=body.changes(),
+        clock=clock,
     )
-    data = await profile.me(db, user=user, flags=request.app.state.flags, clock=clock)
+    data = await profile.me(
+        db,
+        user=user,
+        flags=request.app.state.flags,
+        clock=clock,
+        media_public_url=request.app.state.settings.media_public_url,
+    )
     return MeOut.model_validate(data)
 
 

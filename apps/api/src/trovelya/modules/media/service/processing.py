@@ -154,14 +154,14 @@ async def _mark_ready(
 
 
 async def _decode(
-    slot: asyncio.Semaphore, data: bytes, mime_type: str, max_bytes: int
+    slot: asyncio.Semaphore, data: bytes, mime_type: str, max_bytes: int, *, square: bool = False
 ) -> ProcessedImage:
     """`process_image` in a thread, within IMAGE_TIMEOUT_S. A thread cannot be stopped: when the
     wait gives up, the slot stays taken until the thread really ends, so a slow hostile file
     never runs next to another decoding."""
     await slot.acquire()
     task = asyncio.ensure_future(
-        asyncio.to_thread(process_image, data, mime_type, max_bytes=max_bytes)
+        asyncio.to_thread(process_image, data, mime_type, max_bytes=max_bytes, square=square)
     )
 
     def release(done: asyncio.Future[ProcessedImage]) -> None:
@@ -195,7 +195,8 @@ async def process_media(
         await commit(db)
     try:
         data = await _read(storage, row, max_bytes)
-        image = await _decode(image_slot or asyncio.Semaphore(1), data, row.mime_type, max_bytes)
+        slot = image_slot or asyncio.Semaphore(1)
+        image = await _decode(slot, data, row.mime_type, max_bytes, square=row.purpose == "avatar")
     except ImageRejectedError as rejected:
         return await _reject(sessionmaker, storage, row, rejected.reason)
 

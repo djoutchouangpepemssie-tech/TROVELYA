@@ -77,6 +77,10 @@ forbidden_modules =
 [importlinter:contract:module-media]
 name = Other modules use media only through media.service
 type = forbidden
+# media.service reaching its own repository is not a breach: identity goes through
+# media.service.avatars (P2-T02c). Any other path to these modules still is.
+ignore_imports =
+    trovelya.modules.media.service.* -> trovelya.modules.media.repository
 source_modules =
     trovelya.modules.ledger
     trovelya.modules.catalog

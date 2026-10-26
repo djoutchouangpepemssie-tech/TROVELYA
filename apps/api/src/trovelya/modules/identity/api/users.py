@@ -3,9 +3,9 @@
 from typing import Annotated
 from uuid import UUID
 
-from fastapi import APIRouter, Depends, status
+from fastapi import APIRouter, Depends, Request, status
 
-from trovelya.modules.identity.schemas import PublicProfile, Relationship
+from trovelya.modules.identity.schemas import AvatarVariant, PublicProfile, Relationship
 from trovelya.modules.identity.service import CurrentUser, get_clock, optional_user, profile
 from trovelya.modules.identity.service import social as social_service
 from trovelya.modules.identity.service.auth import Uow, completed_user
@@ -24,13 +24,19 @@ _TARGET_RESPONSES: dict[int | str, dict[str, str]] = {
 @router.get("/{username}", operation_id="users_get_public")
 async def get_public_profile(
     username: str,
+    request: Request,
     db: Uow,
     viewer: Annotated[CurrentUser | None, Depends(optional_user)],
 ) -> PublicProfile:
     """404 for an unknown name, an account not active or restricted, a profile not yet
     completed, or an account whose erasure was requested. Visible to the people it blocks."""
     row = await profile.public_profile(db, username)
-    result = PublicProfile.model_validate(row, from_attributes=True)
+    avatar = await profile.public_avatar(
+        db, row.avatar_media_id, media_public_url=request.app.state.settings.media_public_url
+    )
+    result = PublicProfile.model_validate(row, from_attributes=True).model_copy(
+        update={"avatar": None if avatar is None else [AvatarVariant(**v) for v in avatar]}
+    )
     if viewer is not None:
         relation = await social_service.relationship(db, viewer=viewer.id, target=row.id)
         result.viewer = Relationship(**relation)

@@ -550,3 +550,17 @@ async def test_read_is_bounded() -> None:
     await storage.put("originals", "k", b"x" * 100, content_type="image/png")
     assert len(await storage.get("originals", "k", max_bytes=10)) == 11
     assert len(await storage.get("originals", "k")) == 100
+
+
+async def test_avatar_processed_into_squares(sessionmaker: Session, storage: MemoryStorage) -> None:
+    owner = await make_account(sessionmaker, completed=True)
+    wide = Image.new("RGB", (1200, 800), (30, 90, 200))
+    media_id, _ = await _media(sessionmaker, storage, owner.id, _encode(wide), purpose="avatar")
+    assert await process_media(sessionmaker, storage, media_id) == "ready"
+    row = await _row(sessionmaker, media_id)
+    assert [(v["format"], v["width"], v["height"]) for v in row.variants] == [
+        ("avif", 320, 320),
+        ("avif", 640, 640),
+        ("webp", 320, 320),
+        ("webp", 640, 640),
+    ]

@@ -487,7 +487,8 @@ export interface paths {
         head?: never;
         /**
          * Patch Me
-         * @description Change the username, display name, bio or language. `If-Match: <version>` required.
+         * @description Change the username, display name, bio, language or avatar. `If-Match: <version>`
+         *     required.
          */
         patch: operations["me_update"];
         trace?: never;
@@ -1243,6 +1244,20 @@ export interface components {
             /** Passkey */
             passkey: boolean;
         };
+        /**
+         * AvatarVariant
+         * @description One square size of the avatar, in AVIF or WebP (variants of P2-T02b).
+         */
+        AvatarVariant: {
+            /** Format */
+            format: string;
+            /** Height */
+            height: number;
+            /** Url */
+            url: string;
+            /** Width */
+            width: number;
+        };
         /** BlockList */
         BlockList: {
             /** Data */
@@ -1485,6 +1500,10 @@ export interface components {
          * @description The signed-in person's own account. Never shown to anybody else.
          */
         MeOut: {
+            /** Avatar */
+            avatar: components["schemas"]["AvatarVariant"][] | null;
+            /** Avatar Media Id */
+            avatar_media_id: string | null;
             /** Bio */
             bio: string | null;
             counters: components["schemas"]["Counters"];
@@ -1656,6 +1675,8 @@ export interface components {
          * @description Only the fields sent are changed; `bio` set to blank clears it.
          */
         ProfilePatch: {
+            /** Avatar Media Id */
+            avatar_media_id?: string | null;
             /** Bio */
             bio?: string | null;
             /** Display Name */
@@ -1670,6 +1691,8 @@ export interface components {
          * @description What anybody can see. Never the e-mail, location, age or account status.
          */
         PublicProfile: {
+            /** Avatar */
+            avatar?: components["schemas"]["AvatarVariant"][] | null;
             /** Bio */
             bio: string | null;
             /** Display Name */

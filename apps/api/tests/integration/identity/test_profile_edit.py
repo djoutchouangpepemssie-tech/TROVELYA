@@ -120,6 +120,7 @@ async def test_public_profile_has_no_email_or_location(
         "username",
         "display_name",
         "bio",
+        "avatar",  # public variants only (P2-T02c), never the media id
         "member_since",
         "followers_count",
         "following_count",

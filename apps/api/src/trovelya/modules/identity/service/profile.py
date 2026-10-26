@@ -11,6 +11,7 @@ import unicodedata
 from dataclasses import dataclass
 from datetime import timedelta
 from typing import Any
+from uuid import UUID
 from zoneinfo import ZoneInfo
 
 from sqlalchemy import Row
@@ -22,6 +23,7 @@ from trovelya.core.flags import FlagService
 from trovelya.modules.identity import repository
 from trovelya.modules.identity.service.gdpr import erasure_grace_days
 from trovelya.modules.identity.service.sessions import CurrentUser
+from trovelya.modules.media.service import avatars as media_avatars
 from trovelya.shared.clock import Clock
 
 PARIS = ZoneInfo("Europe/Paris")
@@ -50,9 +52,17 @@ async def is_minor(db: AsyncSession, birth_year: int | None, *, clock: Clock) ->
 
 
 async def me(
-    db: AsyncSession, *, user: CurrentUser, flags: FlagService, clock: Clock
+    db: AsyncSession,
+    *,
+    user: CurrentUser,
+    flags: FlagService,
+    clock: Clock,
+    media_public_url: str | None,
 ) -> dict[str, Any]:
     row = await repository.me(db, user.id)
+    avatar = await media_avatars.avatar_variants(
+        db, row.avatar_media_id, public_url=media_public_url
+    )
     erase_at = (
         row.erasure_requested_at + timedelta(days=await erasure_grace_days(db))
         if row.erasure_requested_at
@@ -64,6 +74,9 @@ async def me(
         "username": row.username,
         "display_name": row.display_name,
         "bio": row.bio,
+        "avatar": avatar,
+        # Only while the avatar can be shown: a photo withdrawn meanwhile is no avatar.
+        "avatar_media_id": row.avatar_media_id if avatar is not None else None,
         "locale": row.locale,
         "country_code": row.country_code,
         "profile_completed": row.profile_completed,
@@ -150,9 +163,12 @@ async def update_profile(
     *,
     user: CurrentUser,
     if_match: str | None,
-    changes: dict[str, str | None],
+    changes: dict[str, Any],
+    clock: Clock,
 ) -> None:
-    """`If-Match: <version>` is mandatory (428 without it, 412 when stale, section 11.1)."""
+    """`If-Match: <version>` is mandatory (428 without it, 412 when stale, section 11.1). A new
+    avatar must be the member's own processed avatar photo; the one it replaces (or that is
+    removed) is deleted."""
     if if_match is None:
         raise AppError(ErrorCode.PRECONDITION_REQUIRED, 428)
     try:
@@ -164,6 +180,13 @@ async def update_profile(
         if current.version != version:
             raise AppError(ErrorCode.PRECONDITION_FAILED, 412)
         return
+    previous_avatar = None
+    if "avatar_media_id" in changes:
+        if changes["avatar_media_id"] is not None:
+            await media_avatars.check_avatar(
+                db, owner_id=user.id, media_id=changes["avatar_media_id"]
+            )
+        previous_avatar = (await repository.me(db, user.id)).avatar_media_id
     try:
         async with db.begin_nested():
             updated = await repository.update_profile(
@@ -173,6 +196,8 @@ async def update_profile(
         raise AppError(ErrorCode.USERNAME_TAKEN, 409) from exc
     if not updated:
         raise AppError(ErrorCode.PRECONDITION_FAILED, 412)
+    if previous_avatar is not None and previous_avatar != changes["avatar_media_id"]:
+        await media_avatars.discard(db, previous_avatar, now=clock.now())
 
 
 async def public_profile(db: AsyncSession, username: str) -> Row[Any]:
@@ -185,3 +210,9 @@ async def public_profile(db: AsyncSession, username: str) -> Row[Any]:
     if row is None:
         raise AppError(ErrorCode.NOT_FOUND, 404)
     return row
+
+
+async def public_avatar(
+    db: AsyncSession, media_id: UUID | None, *, media_public_url: str | None
+) -> list[dict[str, Any]] | None:
+    return await media_avatars.avatar_variants(db, media_id, public_url=media_public_url)
