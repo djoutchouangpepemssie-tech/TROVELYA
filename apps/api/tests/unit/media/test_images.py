@@ -9,6 +9,7 @@ from pathlib import Path
 
 import pytest
 from PIL import Image, ImageDraw
+from structlog.testing import capture_logs
 
 from trovelya.modules.media.service.images import (
     MAX_PIXELS,
@@ -343,3 +344,19 @@ def test_avif_brands() -> None:
     mif1 = avif[:8] + b"mif1" + avif[12:16] + b"avif" + avif[20:]
     assert detect_type(mif1) == "image/avif"
     assert detect_type(avif[:8] + b"avis" + avif[12:]) is None
+
+
+@pytest.mark.parametrize("mode", ["P", "1", "I;16"])
+def test_large_palette_bilevel_and_16_bit_images_are_processed(mode: str) -> None:
+    """A floor plan or a scan wider than the working size: reduced like any other image."""
+    image = Image.new(mode, (6500, 6500), 1)
+    result = process_image(_encode(image, "PNG"), "image/png", max_bytes=MAX_BYTES)
+    assert (result.width, result.height) == (6500, 6500)
+    assert max(v.width for v in result.variants) == 1600
+
+
+def test_unreadable_file_is_logged_by_error_type() -> None:
+    data = _encode(_picture(), "JPEG")
+    with capture_logs() as logs, pytest.raises(ImageRejectedError):
+        process_image(data[: len(data) // 2], "image/jpeg", max_bytes=MAX_BYTES)
+    assert [(log["event"], log["error"]) for log in logs] == [("media.image_unreadable", "OSError")]

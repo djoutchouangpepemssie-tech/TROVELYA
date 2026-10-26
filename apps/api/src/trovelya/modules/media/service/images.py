@@ -12,7 +12,10 @@ from dataclasses import dataclass
 from io import BytesIO
 from typing import cast
 
+import structlog
 from PIL import Image, ImageCms, ImageOps
+
+logger = structlog.get_logger(__name__)
 
 # 50 Mpx: a 12 Mpx phone photo passes with room to spare; a decompression bomb does not.
 MAX_PIXELS = 50_000_000
@@ -83,29 +86,33 @@ def hamming(a: int, b: int) -> int:
 
 
 def _decode(data: bytes, mime: str) -> tuple[Image.Image, tuple[int, int]]:
-    """The decoded image (possibly at reduced scale) and the file's own dimensions."""
+    """The decoded image (a JPEG at reduced scale when large) and the file's own dimensions,
+    oriented as displayed."""
     image = Image.open(BytesIO(data), formats=[_PIL_FORMAT[mime]])
-    size = image.size
-    if size[0] * size[1] > MAX_PIXELS:
+    width, height = image.size
+    if width * height > MAX_PIXELS:
         raise ImageRejectedError("too_many_pixels")
-    if image.format == "JPEG":
-        image.draft("RGB", (WORK_SIDE, WORK_SIDE))  # DCT scaling, never below these sides
+    if image.format == "JPEG":  # DCT scaling; the side that is displayed as the width keeps
+        turned = image.getexif().get(_ORIENTATION_TAG) in _QUARTER_TURNS  # WORK_SIDE pixels
+        image.draft("RGB", (1, WORK_SIDE) if turned else (WORK_SIDE, 1))
     image.load()
-    return image, size
+    if image.getexif().get(_ORIENTATION_TAG) in _QUARTER_TURNS:  # PNG may keep it after pixels
+        width, height = height, width
+    return image, (width, height)
 
 
 def _prepare(image: Image.Image) -> Image.Image:
-    """Reduced to the working size, oriented, in sRGB, 8-bit RGB or RGBA, with no metadata."""
-    factor = min(image.width, image.height) // WORK_SIDE
-    if factor > 1:
-        image = image.reduce(factor)
+    """Oriented, 8-bit RGB or RGBA, reduced to the working width, in sRGB, with no metadata."""
     image = ImageOps.exif_transpose(image)
     if image.mode in _HIGH_DEPTH:  # 16-bit greyscale: scale to 8 bits, do not clip
         image = image.convert("I").point(lambda v: v / 256).convert("L")  # pyright: ignore[reportUnknownMemberType, reportUnknownLambdaType, reportOperatorIssue]
     alpha = image.mode in {"RGBA", "LA", "PA", "RGBa", "La"} or "transparency" in image.info
     mode = "RGBA" if alpha else "RGB"
     icc = image.info.get("icc_profile")
-    image = image.convert(mode)
+    image = image.convert(mode)  # before reducing: palette and 1-bit images cannot be reduced
+    factor = image.width // WORK_SIDE  # the width variants are cut from stays >= WORK_SIDE
+    if factor > 1:
+        image = image.reduce(factor)
     if icc:
         try:
             source = ImageCms.ImageCmsProfile(BytesIO(icc))
@@ -165,8 +172,6 @@ def process_image(data: bytes, declared_type: str, *, max_bytes: int) -> Process
     try:
         decoded, (width, height) = _decode(data, declared_type)
         with decoded:
-            if decoded.getexif().get(_ORIENTATION_TAG) in _QUARTER_TURNS:
-                width, height = height, width
             image = _prepare(decoded)
         variants = _variants(image)
         dhash = _dhash(image)
@@ -174,7 +179,9 @@ def process_image(data: bytes, declared_type: str, *, max_bytes: int) -> Process
         raise
     except Image.DecompressionBombError:
         raise ImageRejectedError("too_many_pixels") from None
-    except Exception:  # noqa: BLE001 — any decoder error on a hostile or broken file: refused
+    except Exception as exc:  # noqa: BLE001 — any decoder error on a hostile or broken file
+        # Logged by type, so that a refusal caused by our own code shows up.
+        logger.warning("media.image_unreadable", error=type(exc).__name__, mime=declared_type)
         raise ImageRejectedError("unreadable") from None
     return ProcessedImage(
         width=width,
