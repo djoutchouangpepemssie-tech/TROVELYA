@@ -5,7 +5,10 @@ moving one keeps its id and its listings. A key missing from the file is deactiv
 deleted. The caller's transaction holds everything; the caller commits.
 """
 
+<<<<<<< HEAD
 from collections.abc import Sequence
+=======
+>>>>>>> origin/main
 from uuid import UUID
 
 from sqlalchemy.ext.asyncio import AsyncSession
@@ -79,7 +82,10 @@ async def apply_seed(db: AsyncSession, seed: CatalogSeed) -> None:
             for position, attribute in enumerate(category.attributes)
         ],
     )
+<<<<<<< HEAD
 
 
 async def apply_brands(db: AsyncSession, brands: Sequence[tuple[str, str]]) -> None:
     await repository.insert_brands(db, brands)
+=======
+>>>>>>> origin/main
