@@ -852,6 +852,26 @@ export interface paths {
         patch: operations["me_zones_update"];
         trace?: never;
     };
+    "/v1/media/uploads": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        get?: never;
+        put?: never;
+        /**
+         * Post Upload
+         * @description A 5-minute URL to PUT the file to, with its exact type and size.
+         */
+        post: operations["media_upload"];
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
     "/v1/staff/approvals": {
         parameters: {
             query?: never;
@@ -1716,6 +1736,40 @@ export interface components {
         StepUpVerify: {
             /** Token */
             token: string;
+        };
+        /** UploadIn */
+        UploadIn: {
+            /**
+             * Bytes
+             * @description Exact size of the file: it is part of the signature
+             */
+            bytes: number;
+            /** Mime Type */
+            mime_type: string;
+            /**
+             * Purpose
+             * @enum {string}
+             */
+            purpose: "listing" | "avatar";
+        };
+        /** UploadOut */
+        UploadOut: {
+            /**
+             * Expires At
+             * Format: date-time
+             */
+            expires_at: string;
+            /** Headers */
+            headers: {
+                [key: string]: string;
+            };
+            /**
+             * Media Id
+             * Format: uuid
+             */
+            media_id: string;
+            /** Upload Url */
+            upload_url: string;
         };
         /** UsernameSuggestion */
         UsernameSuggestion: {
@@ -3344,6 +3398,58 @@ export interface operations {
                 content: {
                     "application/json": components["schemas"]["HTTPValidationError"];
                 };
+            };
+        };
+    };
+    media_upload: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        requestBody: {
+            content: {
+                "application/json": components["schemas"]["UploadIn"];
+            };
+        };
+        responses: {
+            /** @description Successful Response */
+            201: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["UploadOut"];
+                };
+            };
+            /** @description Flag media.uploads off */
+            404: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content?: never;
+            };
+            /** @description Larger than media.max_image_bytes */
+            413: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content?: never;
+            };
+            /** @description Type not accepted */
+            422: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content?: never;
+            };
+            /** @description media.uploads_per_hour or _per_day reached */
+            429: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content?: never;
             };
         };
     };

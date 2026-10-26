@@ -48,6 +48,9 @@ class ErrorCode(StrEnum):
     APPROVAL_NOT_PENDING = "approval_not_pending"
     APPROVAL_EXPIRED = "approval_expired"
     ENROLMENT_INVALID = "enrolment_invalid"
+    MEDIA_TYPE_REJECTED = "media_type_rejected"
+    MEDIA_TOO_LARGE = "media_too_large"
+    UPLOAD_LIMIT = "upload_limit"
 
 
 # French titles by default (section 2); translation by Accept-Language arrives with P1.
@@ -83,6 +86,9 @@ _TITLES: dict[ErrorCode, str] = {
     ErrorCode.APPROVAL_NOT_PENDING: "Cette demande a déjà été traitée",
     ErrorCode.APPROVAL_EXPIRED: "Cette demande a expiré",
     ErrorCode.ENROLMENT_INVALID: "Lien d'enrôlement invalide ou expiré",
+    ErrorCode.MEDIA_TYPE_REJECTED: "Type de fichier refusé",
+    ErrorCode.MEDIA_TOO_LARGE: "Fichier trop volumineux",
+    ErrorCode.UPLOAD_LIMIT: "Trop d'envois de fichiers, réessayez plus tard",
 }
 
 _STATUS_CODES: dict[int, ErrorCode] = {

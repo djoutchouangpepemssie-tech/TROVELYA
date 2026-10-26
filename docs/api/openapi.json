@@ -2001,6 +2001,70 @@
         "title": "StepUpVerify",
         "type": "object"
       },
+      "UploadIn": {
+        "additionalProperties": false,
+        "properties": {
+          "bytes": {
+            "description": "Exact size of the file: it is part of the signature",
+            "minimum": 1.0,
+            "title": "Bytes",
+            "type": "integer"
+          },
+          "mime_type": {
+            "maxLength": 100,
+            "title": "Mime Type",
+            "type": "string"
+          },
+          "purpose": {
+            "enum": [
+              "listing",
+              "avatar"
+            ],
+            "title": "Purpose",
+            "type": "string"
+          }
+        },
+        "required": [
+          "purpose",
+          "mime_type",
+          "bytes"
+        ],
+        "title": "UploadIn",
+        "type": "object"
+      },
+      "UploadOut": {
+        "properties": {
+          "expires_at": {
+            "format": "date-time",
+            "title": "Expires At",
+            "type": "string"
+          },
+          "headers": {
+            "additionalProperties": {
+              "type": "string"
+            },
+            "title": "Headers",
+            "type": "object"
+          },
+          "media_id": {
+            "format": "uuid",
+            "title": "Media Id",
+            "type": "string"
+          },
+          "upload_url": {
+            "title": "Upload Url",
+            "type": "string"
+          }
+        },
+        "required": [
+          "media_id",
+          "upload_url",
+          "headers",
+          "expires_at"
+        ],
+        "title": "UploadOut",
+        "type": "object"
+      },
       "UsernameSuggestion": {
         "properties": {
           "username": {
@@ -4111,6 +4175,50 @@
         "summary": "Update Zone",
         "tags": [
           "me"
+        ]
+      }
+    },
+    "/v1/media/uploads": {
+      "post": {
+        "description": "A 5-minute URL to PUT the file to, with its exact type and size.",
+        "operationId": "media_upload",
+        "requestBody": {
+          "content": {
+            "application/json": {
+              "schema": {
+                "$ref": "#/components/schemas/UploadIn"
+              }
+            }
+          },
+          "required": true
+        },
+        "responses": {
+          "201": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/UploadOut"
+                }
+              }
+            },
+            "description": "Successful Response"
+          },
+          "404": {
+            "description": "Flag media.uploads off"
+          },
+          "413": {
+            "description": "Larger than media.max_image_bytes"
+          },
+          "422": {
+            "description": "Type not accepted"
+          },
+          "429": {
+            "description": "media.uploads_per_hour or _per_day reached"
+          }
+        },
+        "summary": "Post Upload",
+        "tags": [
+          "media"
         ]
       }
     },
