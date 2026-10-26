@@ -589,6 +589,17 @@ _LIST_ADDRESSES = text(
     " FROM addresses WHERE user_id = :user_id AND deleted_at IS NULL ORDER BY created_at, id"
 )
 
+# Where a listing of the member stands: one of their placed addresses or one of their zones.
+_ADDRESS_PLACE = text(
+    "SELECT ST_Y(location::geometry) AS lat, ST_X(location::geometry) AS lon, postal_code, city,"
+    " country_code FROM addresses"
+    " WHERE id = :id AND user_id = :user_id AND deleted_at IS NULL AND location IS NOT NULL"
+)
+_ZONE_PLACE = text(
+    "SELECT ST_Y(center::geometry) AS lat, ST_X(center::geometry) AS lon, place_name"
+    " FROM search_zones WHERE id = :id AND user_id = :user_id"
+)
+
 _COUNT_ADDRESSES = text(
     "SELECT count(*) FROM addresses WHERE user_id = :user_id AND deleted_at IS NULL"
 )
@@ -744,6 +755,14 @@ _PROMOTE_OLDEST_ZONE = text(
     "UPDATE search_zones SET is_default = true WHERE id = ("
     " SELECT id FROM search_zones WHERE user_id = :user_id ORDER BY created_at, id LIMIT 1)"
 )
+
+
+async def address_place(db: AsyncSession, *, user_id: UUID, address_id: UUID) -> Row[Any] | None:
+    return (await db.execute(_ADDRESS_PLACE, {"id": address_id, "user_id": user_id})).one_or_none()
+
+
+async def zone_place(db: AsyncSession, *, user_id: UUID, zone_id: UUID) -> Row[Any] | None:
+    return (await db.execute(_ZONE_PLACE, {"id": zone_id, "user_id": user_id})).one_or_none()
 
 
 async def list_zones(db: AsyncSession, user_id: UUID) -> list[Row[Any]]:
