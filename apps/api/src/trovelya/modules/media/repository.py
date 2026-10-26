@@ -187,3 +187,23 @@ async def oldest_similar_media(
             {"hash": perceptual_hash, "distance": max_distance},
         )
     ).first()
+
+
+async def mark_attempt(db: AsyncSession, media_id: UUID) -> None:
+    """An attempt starts now: `updated_at` is when the media was last worked on."""
+    await db.execute(
+        text("UPDATE media SET updated_at = now() WHERE id = :id AND status = 'processing'"),
+        {"id": media_id},
+    )
+
+
+async def stuck_in_processing(db: AsyncSession, before: datetime) -> list[tuple[UUID, datetime]]:
+    """Media `processing` with no attempt since `before`: (id, created_at)."""
+    rows = await db.execute(
+        text(
+            "SELECT id, created_at FROM media WHERE status = 'processing' AND deleted_at IS NULL"
+            " AND updated_at < :before ORDER BY updated_at LIMIT 100"
+        ),
+        {"before": before},
+    )
+    return [(row[0], row[1]) for row in rows]

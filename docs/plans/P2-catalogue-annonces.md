@@ -373,6 +373,7 @@ tout ── T12 (parcours 2, démo, porte)
 - Temps de traitement d'une photo de 12 Mpx en AVIF (≈ 1 à 3 s par variante) → mesure dans le test, file dédiée ; si plus de 10 s au total, l'AVIF passe en 2ᵉ étape après `ready` en WebP.
 - Mémoire du worker Railway → limite de 50 Mpx et traitement une image à la fois.
 - Recherche des doublons par balayage de `media` (acceptable tant que P2 compte peu de photos) → **avant le lancement**, index par bandes du dHash : 7 bandes, deux empreintes à 6 bits au plus en partagent au moins une (colonnes générées et index B-tree, puis `bit_count`).
+- File arq commune : avec une image décodée à la fois par worker, un gros envoi de photos retarde les autres tâches (e-mails de connexion). **Avant d'ouvrir l'envoi** (`media.uploads`), file `media` dédiée (`queue_name`) servie par son propre worker.
 - Mesures réelles (T02b) : photo de 12 Mpx en 3,2 s, image de 49 Mpx en 2,4 s (PNG) ou 1,3 s (JPEG) ; pas de file `media` dédiée tant que le traitement reste sous 10 s.
 
 ### P2-T02c — Avatar (fin de l'écart E13 de P1) et RGPD des médias

@@ -3,19 +3,29 @@ variants in the public bucket, or `rejected` with a reason; the original never o
 
 import asyncio
 import random
+import threading
+from datetime import timedelta
 from io import BytesIO
 from typing import Any
 from uuid import UUID
 
 import pytest
+from arq import Retry
 from PIL import Image, ImageDraw
 from sqlalchemy import text
 from sqlalchemy.ext.asyncio import AsyncSession, async_sessionmaker
 
-from tests.integration.identity.test_profile import make_account
+from tests.integration.identity.test_profile import T0, make_account
+from trovelya.modules.media import tasks
 from trovelya.modules.media.adapters.storage import MemoryStorage, new_storage_key
-from trovelya.modules.media.service.processing import process_media
+from trovelya.modules.media.service import processing
+from trovelya.modules.media.service.processing import (
+    fail_media,
+    process_media,
+    recover_stuck_media,
+)
 from trovelya.modules.media.tasks import process_media_job
+from trovelya.shared.clock import FixedClock
 from trovelya.shared.ids import new_id
 
 Session = async_sessionmaker[AsyncSession]
@@ -40,6 +50,37 @@ def _encode(image: Image.Image) -> bytes:
     out = BytesIO()
     image.save(out, "JPEG", quality=90)
     return out.getvalue()
+
+
+class FlakyStorage(MemoryStorage):
+    """MemoryStorage whose calls can fail once, or run a hook first (to change the database
+    while the worker is between two steps)."""
+
+    def __init__(self) -> None:
+        super().__init__()
+        self.fail: set[str] = set()  # "get", "put", "delete-originals"
+        self.puts = 0
+        self.before_get: Any = None
+
+    async def get(self, bucket: Any, key: str, *, max_bytes: int | None = None) -> bytes:
+        if self.before_get is not None:
+            await self.before_get()
+        if "get" in self.fail:
+            raise ConnectionError("storage unreachable")
+        return await super().get(bucket, key, max_bytes=max_bytes)
+
+    async def put(self, bucket: Any, key: str, data: bytes, *, content_type: str) -> None:
+        await super().put(bucket, key, data, content_type=content_type)
+        if bucket == "variants":
+            self.puts += 1
+            if "put" in self.fail and self.puts == 3:
+                raise ConnectionError("storage unreachable")
+
+    async def delete(self, bucket: Any, key: str) -> None:
+        if bucket == "originals" and "delete-originals" in self.fail:
+            self.fail.discard("delete-originals")
+            raise ConnectionError("storage unreachable")
+        await super().delete(bucket, key)
 
 
 async def _media(
@@ -116,7 +157,7 @@ async def test_ready_with_clean_variants_and_hashes(
     owner = await make_account(sessionmaker, completed=True)
     media_id, key = await _media(sessionmaker, storage, owner.id, _photo())
     # Through the worker job, as `complete` enqueues it.
-    ctx = {"sessionmaker": sessionmaker, "storage": storage}
+    ctx = {"sessionmaker": sessionmaker, "storage": storage, "job_try": 1}
     assert await process_media_job(ctx, str(media_id)) == "ready"
     row = await _row(sessionmaker, media_id)
     assert (row.status, row.width, row.height, row.exif_stripped) == ("ready", 800, 600, True)
@@ -294,3 +335,218 @@ async def test_only_live_listing_photos_are_references(
     for media_id in (avatar, listing):
         assert await process_media(sessionmaker, storage, media_id) == "ready"
     assert (await _row(sessionmaker, listing)).moderation == {}
+
+
+async def test_failed_attempts_are_retried_then_the_media_rejected(
+    sessionmaker: Session,
+) -> None:
+    """arq retries only on Retry: a failure is retried, the last try gives up cleanly."""
+    storage = FlakyStorage()
+    storage.fail.add("get")
+    owner = await make_account(sessionmaker, completed=True)
+    media_id, key = await _media(sessionmaker, storage, owner.id, _photo())
+    ctx: dict[str, Any] = {"sessionmaker": sessionmaker, "storage": storage}
+    for attempt in (1, 2):
+        with pytest.raises(Retry) as retry:
+            await process_media_job(ctx | {"job_try": attempt}, str(media_id))
+        assert retry.value.defer_score == 1000 * 30 * 4 ** (attempt - 1)  # 30 s, 2 min
+    assert (await _row(sessionmaker, media_id)).status == "processing"
+    assert await process_media_job(ctx | {"job_try": 3}, str(media_id)) == "rejected"
+    row = await _row(sessionmaker, media_id)
+    assert (row.status, row.rejection_reason) == ("rejected", "processing_failed")
+    assert ("originals", key) not in storage.objects
+
+
+async def test_failure_after_variants_leaves_nothing_public(sessionmaker: Session) -> None:
+    storage = FlakyStorage()
+    owner = await make_account(sessionmaker, completed=True)
+    media_id, _ = await _media(sessionmaker, storage, owner.id, _photo())
+    storage.fail.add("put")  # the third variant upload fails
+    with pytest.raises(ConnectionError):
+        await process_media(sessionmaker, storage, media_id)
+    assert not _variant_keys(storage)
+    storage.fail.clear()
+
+    async def no_database(*_: Any, **__: Any) -> bool:
+        raise ConnectionError("database unreachable")
+
+    original = processing._mark_ready  # pyright: ignore[reportPrivateUsage]
+    processing._mark_ready = no_database  # pyright: ignore[reportPrivateUsage]
+    try:
+        with pytest.raises(ConnectionError):
+            await process_media(sessionmaker, storage, media_id)
+    finally:
+        processing._mark_ready = original  # pyright: ignore[reportPrivateUsage]
+    assert not _variant_keys(storage)
+    assert (await _row(sessionmaker, media_id)).status == "processing"
+    assert await process_media(sessionmaker, storage, media_id) == "ready"
+
+
+async def test_original_deleted_by_the_replay_when_its_deletion_failed(
+    sessionmaker: Session,
+) -> None:
+    storage = FlakyStorage()
+    owner = await make_account(sessionmaker, completed=True)
+    media_id, key = await _media(sessionmaker, storage, owner.id, _photo())
+    storage.fail.add("delete-originals")
+    with pytest.raises(ConnectionError):
+        await process_media(sessionmaker, storage, media_id)
+    assert (await _row(sessionmaker, media_id)).status == "ready"
+    assert ("originals", key) in storage.objects
+    assert await process_media(sessionmaker, storage, media_id) == "ready"
+    assert ("originals", key) not in storage.objects
+
+
+async def test_media_deleted_during_processing_is_not_published(sessionmaker: Session) -> None:
+    storage = FlakyStorage()
+    owner = await make_account(sessionmaker, completed=True)
+    media_id, _ = await _media(sessionmaker, storage, owner.id, _photo())
+
+    async def delete_media() -> None:
+        async with sessionmaker() as db:
+            await db.execute(
+                text("UPDATE media SET deleted_at = now() WHERE id = :id"), {"id": media_id}
+            )
+            await db.commit()
+
+    storage.before_get = delete_media
+    assert await process_media(sessionmaker, storage, media_id) == "gone"
+    assert not _variant_keys(storage)
+    assert await _events(sessionmaker, media_id) == []
+
+
+async def test_rejection_loses_to_a_run_that_already_decided(sessionmaker: Session) -> None:
+    storage = FlakyStorage()
+    owner = await make_account(sessionmaker, completed=True)
+    media_id, _ = await _media(sessionmaker, storage, owner.id, b"#!/bin/sh\n" * 50)
+
+    async def other_run_finishes() -> None:
+        async with sessionmaker() as db:
+            await db.execute(
+                text(
+                    "UPDATE media SET status = 'ready', sha256 = :h, exif_stripped = true,"
+                    ' variants = \'[{"format": "webp"}]\' WHERE id = :id'
+                ),
+                {"h": b"\x01" * 32, "id": media_id},
+            )
+            await db.commit()
+
+    storage.before_get = other_run_finishes
+    assert await process_media(sessionmaker, storage, media_id) == "ready"
+    assert await _events(sessionmaker, media_id) == []
+
+
+class RecordingJobs:
+    def __init__(self) -> None:
+        self.jobs: list[tuple[str, tuple[Any, ...], dict[str, Any]]] = []
+
+    async def enqueue_job(self, function: str, *args: Any, **kwargs: Any) -> None:
+        self.jobs.append((function, args, kwargs))
+
+
+async def test_lost_jobs_are_enqueued_again_then_given_up(sessionmaker: Session) -> None:
+    """No attempt for 15 min: the job was lost, it is enqueued again (one recovery job per
+    media); a day after the upload the media is rejected. A media waiting in a long queue is
+    therefore never rejected early."""
+    storage = FlakyStorage()
+    owner = await make_account(sessionmaker, completed=True)
+    lost, _ = await _media(sessionmaker, storage, owner.id, _photo())
+    old, key = await _media(sessionmaker, storage, owner.id, _photo())
+    recent, _ = await _media(sessionmaker, storage, owner.id, _photo())
+    async with sessionmaker() as db:
+        await db.execute(text("SET LOCAL session_replication_role = replica"))  # no trigger
+        await db.execute(
+            text("UPDATE media SET updated_at = :at, created_at = :created WHERE id = :id"),
+            [
+                {"at": T0 - timedelta(minutes=16), "created": T0 - timedelta(hours=1), "id": lost},
+                {"at": T0 - timedelta(minutes=16), "created": T0 - timedelta(hours=25), "id": old},
+                {"at": T0 - timedelta(minutes=5), "created": T0 - timedelta(hours=1), "id": recent},
+            ],
+        )
+        await db.commit()
+    queue = RecordingJobs()
+    assert await recover_stuck_media(sessionmaker, storage, queue, clock=FixedClock(T0)) == 2
+    assert queue.jobs == [("process_media", (str(lost),), {"_job_id": f"media-recovery:{lost}"})]
+    row = await _row(sessionmaker, old)
+    assert (row.status, row.rejection_reason) == ("rejected", "processing_failed")
+    assert ("originals", key) not in storage.objects
+    for media_id in (lost, recent):
+        assert (await _row(sessionmaker, media_id)).status == "processing"
+
+
+async def test_an_attempt_marks_the_media_as_worked_on(sessionmaker: Session) -> None:
+    storage = FlakyStorage()
+    storage.fail.add("get")
+    owner = await make_account(sessionmaker, completed=True)
+    media_id, _ = await _media(sessionmaker, storage, owner.id, _photo())
+    async with sessionmaker() as db:
+        await db.execute(text("SET LOCAL session_replication_role = replica"))
+        await db.execute(
+            text("UPDATE media SET updated_at = now() - interval '1 hour' WHERE id = :id"),
+            {"id": media_id},
+        )
+        await db.commit()
+    with pytest.raises(ConnectionError):
+        await process_media(sessionmaker, storage, media_id)
+    async with sessionmaker() as db:
+        age = await db.scalar(
+            text("SELECT now() - updated_at FROM media WHERE id = :id"), {"id": media_id}
+        )
+    assert age < timedelta(minutes=1)
+
+
+async def test_slow_decoding_keeps_the_slot_until_its_thread_ends(
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    """The wait gives up after IMAGE_TIMEOUT_S, the thread cannot be stopped: the slot stays
+    taken until it ends, so no second decoding runs beside it."""
+    done = threading.Event()
+
+    def slow(*_: Any, **__: Any) -> Any:
+        done.wait(5)
+        return "decoded"
+
+    monkeypatch.setattr(processing, "process_image", slow)
+    monkeypatch.setattr(processing, "IMAGE_TIMEOUT_S", 0.1)
+    slot = asyncio.Semaphore(1)
+    with pytest.raises(TimeoutError):
+        await processing._decode(slot, b"", "image/png", 10)  # pyright: ignore[reportPrivateUsage]
+    assert slot.locked()
+    done.set()
+    for _ in range(50):
+        if not slot.locked():
+            break
+        await asyncio.sleep(0.02)
+    assert not slot.locked()
+
+
+async def test_an_attempt_bounds_its_own_time(
+    sessionmaker: Session, monkeypatch: pytest.MonkeyPatch
+) -> None:
+    """Waiting for the image slot counts: past the budget the attempt goes through Retry, not
+    through arq's own timeout (which neither retries nor gives up)."""
+    owner = await make_account(sessionmaker, completed=True)
+    storage = FlakyStorage()
+    media_id, _ = await _media(sessionmaker, storage, owner.id, _photo())
+    busy = asyncio.Semaphore(1)
+    await busy.acquire()  # another image holds the slot
+    monkeypatch.setattr(tasks, "_ATTEMPT_BUDGET_S", 0.5)
+    ctx = {"sessionmaker": sessionmaker, "storage": storage, "image_slot": busy, "job_try": 1}
+    async with asyncio.timeout(10):  # a regression fails here instead of hanging
+        with pytest.raises(Retry):
+            await process_media_job(ctx, str(media_id))
+
+
+async def test_giving_up_still_deletes_a_surviving_original(sessionmaker: Session) -> None:
+    storage = FlakyStorage()
+    owner = await make_account(sessionmaker, completed=True)
+    media_id, key = await _media(sessionmaker, storage, owner.id, _photo(), status="ready")
+    assert await fail_media(sessionmaker, storage, media_id) == "ready"
+    assert ("originals", key) not in storage.objects
+
+
+async def test_read_is_bounded() -> None:
+    storage = MemoryStorage()
+    await storage.put("originals", "k", b"x" * 100, content_type="image/png")
+    assert len(await storage.get("originals", "k", max_bytes=10)) == 11
+    assert len(await storage.get("originals", "k")) == 100

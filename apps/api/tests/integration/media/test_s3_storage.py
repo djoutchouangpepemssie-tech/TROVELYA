@@ -103,3 +103,11 @@ async def test_storage_errors_are_not_taken_for_a_missing_file(garage: S3Storage
     )
     with pytest.raises(ClientError):
         await wrong.size("originals", new_storage_key())
+
+
+async def test_bounded_read(garage: S3Storage) -> None:
+    """At most max_bytes + 1 bytes come back: enough to see a file is too large."""
+    key = new_storage_key()
+    await garage.put("originals", key, b"x" * 100, content_type="image/png")
+    assert len(await garage.get("originals", key, max_bytes=10)) == 11
+    assert len(await garage.get("originals", key, max_bytes=500)) == 100

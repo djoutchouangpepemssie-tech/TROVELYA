@@ -34,10 +34,12 @@ from trovelya.modules.identity.service import (
     purge_expired_magic_links,
 )
 from trovelya.modules.media.adapters.storage import storage_from_settings
+from trovelya.modules.media.tasks import MAX_TRIES as MEDIA_MAX_TRIES
 from trovelya.modules.media.tasks import (
     PROCESS_JOB,
     PROCESS_TIMEOUT_S,
     process_media_job,
+    recover_stuck_media_job,
 )
 from trovelya.shared.clock import SystemClock
 from trovelya.workers.consumers import consume_events, ensure_group
@@ -149,7 +151,7 @@ class WorkerSettings:
         func(
             process_media_job,
             name=PROCESS_JOB,
-            max_tries=1,  # replays come from `complete`; retries arrive with P2-T02b3
+            max_tries=MEDIA_MAX_TRIES,
             timeout=PROCESS_TIMEOUT_S,
         ),
     ]
@@ -157,6 +159,7 @@ class WorkerSettings:
         cron(relay_outbox, second=EVERY_SECOND, unique=True, timeout=30),
         cron(consume_events_job, second=EVERY_SECOND, unique=True, timeout=30),
         cron(audit_verify_chain_job, hour=3, minute=0, unique=True, timeout=600),
+        cron(recover_stuck_media_job, minute=set(range(5, 60, 10)), unique=True, timeout=600),
         cron(expire_approvals_job, minute=set(range(0, 60, 10)), unique=True, timeout=120),
         cron(process_erasures_job, hour=4, minute=0, unique=True, timeout=1800),
         cron(purge_idempotency_keys_job, hour=4, minute=30, unique=True, timeout=600),
