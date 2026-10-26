@@ -18,7 +18,7 @@ Le cahier (11.5, 13.2) prévoit des URL d'envoi présignées, des photos nettoy�
    - `variantes`, public : seulement les images ré-encodées par le worker.
 
    Le code passe par l'interface `ObjectStorage` (`modules/media/adapters/storage.py`) ; `S3Storage` parle S3, `MemoryStorage` sert aux tests unitaires.
-2. **Envoi direct navigateur → R2** par une URL `PUT` présignée de **5 minutes**, pour **un** objet. Son `Content-Type` et sa `Content-Length` font partie de la signature : tout autre fichier est refusé par le stockage lui-même. Le test `test_s3_storage.py` le vérifie contre un vrai serveur S3. R2 n'accepte pas les formulaires `POST` à politique, d'où le `PUT` signé. Le worker revérifie toujours la taille réelle et le type réel.
+2. **Envoi direct navigateur → R2** par une URL `PUT` présignée de **5 minutes**, pour **un** objet. Son `Content-Type` et sa `Content-Length` font partie de la signature : tout autre fichier est refusé par le stockage lui-même. Le test `test_s3_storage.py` le vérifie contre Garage ; **à vérifier sur R2 en staging** avant d'ouvrir l'envoi. Pendant ses 5 minutes, l'URL accepte plusieurs `PUT` du même type et de la même taille : le worker décode, mesure et calcule l'empreinte sur les octets qu'il lit lui-même (`GET`), jamais d'après un `HEAD`. R2 n'accepte pas les formulaires `POST` à politique, d'où le `PUT` signé. Le worker revérifie toujours la taille réelle et le type réel.
 3. **Clés aléatoires de 128 bits** (32 caractères hexadécimaux), sans nom, identifiant ni donnée personnelle. Une variante publique est une URL de capacité : impossible à deviner ou à énumérer. Elle est supprimée dès le retrait par la modération ou l'effacement du compte.
 4. **Variantes précalculées** par le worker (AVIF et WebP × 320/640/1080/1600, sans agrandissement), servies avec `srcset` par un chargeur `next/image` personnalisé ; pas d'optimisation Vercel. Les variantes sont immuables : `Cache-Control: public, max-age=31536000, immutable`.
 5. **Diffusion** : `MEDIA_PUBLIC_URL` (domaine `r2.dev` du bucket sur staging, `media.trovelya.com` après l'achat du domaine). Côté CSP, l'hôte d'envoi va dans `connect-src` et `MEDIA_PUBLIC_URL` dans `img-src`.
@@ -28,7 +28,7 @@ Le cahier (11.5, 13.2) prévoit des URL d'envoi présignées, des photos nettoy�
 ## Conséquences
 
 + Aucune photo ne transite par Vercel ni par l'API ; une photo de 15 Mo passe.
-+ Le stockage refuse de lui-même un fichier plus gros ou d'un autre type que celui déclaré.
++ Le stockage refuse de lui-même un fichier plus gros ou d'un autre type que celui déclaré (vérifié sur Garage, à vérifier sur R2 en staging).
 + Pas de coût de transformation à la volée ; les variantes sont en cache longtemps.
 − **Cloudflare est une société américaine** (CLOUD Act) : même avec des données stockées dans l'UE, une autorité américaine pourrait en demander l'accès. Écart accepté par Arcel (Q4). Les photos d'annonces sont publiques, ce qui limite l'enjeu ; en revanche, les originaux contiennent des métadonnées jusqu'au traitement, qui les supprime en quelques secondes. À réévaluer avant le lancement public (fournisseur européen : Scaleway, OVHcloud).
 − Une URL de variante reste valable tant que l'objet existe : la confidentialité d'une photo retirée repose sur sa suppression immédiate (tâches T02b, T05c et T02c).

@@ -1,4 +1,4 @@
-"""Uploads straight to object storage (P2-T02a1, ADR-0019), checked against a real S3 server:
+"""Uploads straight to object storage (P2-T02a2, ADR-0019), checked against a real S3 server:
 the presigned URL signs the type and the length, so the storage itself refuses anything
 else (13.2)."""
 
@@ -6,8 +6,10 @@ import asyncio
 
 import httpx
 import pytest
+from botocore.exceptions import ClientError  # pyright: ignore[reportMissingTypeStubs]
 
-from trovelya.modules.media.adapters.storage import S3Storage, new_storage_key
+from tests.integration.media.conftest import BUCKETS
+from trovelya.modules.media.adapters.storage import IMMUTABLE, S3Storage, new_storage_key
 
 JPEG = b"\xff\xd8\xff\xe0" + b"x" * 996
 
@@ -36,6 +38,7 @@ async def test_presigned_put_accepts_the_declared_file(garage: S3Storage) -> Non
         (JPEG, "text/html"),  # another type
         (JPEG, "image/svg+xml"),
     ],
+    ids=["longer", "shorter", "html", "svg"],
 )
 async def test_presigned_put_refuses_anything_else(
     garage: S3Storage, data: bytes, content_type: str
@@ -74,6 +77,29 @@ async def test_put_size_and_delete(garage: S3Storage) -> None:
     key = new_storage_key()
     await garage.put("variants", key, b"webp", content_type="image/webp")
     assert await garage.size("variants", key) == 4
+    head = garage._client.head_object(Bucket=BUCKETS["variants"], Key=key)  # pyright: ignore[reportPrivateUsage]
+    assert (head["ContentType"], head["CacheControl"]) == ("image/webp", IMMUTABLE)
     await garage.delete("variants", key)
     await garage.delete("variants", key)  # idempotent
     assert await garage.size("variants", key) is None
+
+
+async def test_originals_are_not_cached_publicly(garage: S3Storage) -> None:
+    key = new_storage_key()
+    await garage.put("originals", key, JPEG, content_type="image/jpeg")
+    head = garage._client.head_object(Bucket=BUCKETS["originals"], Key=key)  # pyright: ignore[reportPrivateUsage]
+    assert "CacheControl" not in head
+
+
+async def test_storage_errors_are_not_taken_for_a_missing_file(garage: S3Storage) -> None:
+    """Only « not found » means nothing was uploaded; a refused request is an error."""
+    endpoint: str = garage._client.meta.endpoint_url  # pyright: ignore[reportPrivateUsage]
+    wrong = S3Storage(
+        endpoint_url=endpoint,
+        region="garage",
+        access_key_id="GK00000000000000000000000",
+        secret_access_key="0" * 64,
+        buckets=BUCKETS,
+    )
+    with pytest.raises(ClientError):
+        await wrong.size("originals", new_storage_key())

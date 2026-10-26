@@ -13,6 +13,12 @@ from trovelya.modules.media.adapters.storage import (
     storage_from_settings,
 )
 
+S3 = {
+    "storage_endpoint": "https://account.eu.r2.cloudflarestorage.com",
+    "storage_access_key_id": "id",
+    "storage_secret_access_key": "secret",
+}
+
 
 def test_storage_key_is_random_128_bits() -> None:
     keys = {new_storage_key() for _ in range(1000)}
@@ -40,6 +46,44 @@ async def test_memory_storage_round_trip() -> None:
 def test_s3_storage_needs_endpoint_and_keys() -> None:
     with pytest.raises(ValidationError, match="STORAGE_ENDPOINT"):
         make_settings(storage_provider="s3", storage_endpoint="https://r2.example")
+
+
+def test_empty_storage_keys_are_missing_keys() -> None:
+    with pytest.raises(ValidationError, match="STORAGE_ENDPOINT"):
+        make_settings(
+            storage_provider="s3",
+            storage_endpoint="https://r2.example",
+            storage_access_key_id="",
+            storage_secret_access_key="",
+        )
+
+
+@pytest.mark.parametrize(
+    "overrides",
+    [
+        {},
+        {"storage_provider": "s3", **S3, "media_public_url": "http://media.example"},
+        {"storage_provider": "s3", **S3},
+    ],
+    ids=["memory", "http", "no-public-url"],
+)
+def test_production_stores_media_for_real(overrides: dict[str, str]) -> None:
+    with pytest.raises(ValidationError, match="production needs"):
+        make_settings(env="production", **overrides)
+    make_settings(env="production", storage_provider="s3", **S3, media_public_url="https://m.fr")
+
+
+def test_upload_url_lives_five_minutes_at_most() -> None:
+    storage = storage_from_settings(make_settings(storage_provider="s3", **S3))
+    for expires_in in (0, 301):
+        with pytest.raises(ValueError, match="upload URL"):
+            storage.presign_put(
+                "originals",
+                "0" * 32,
+                content_type="image/jpeg",
+                content_length=1,
+                expires_in=expires_in,
+            )
 
 
 def test_storage_from_settings() -> None:
