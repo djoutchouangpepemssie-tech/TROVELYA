@@ -234,7 +234,7 @@ tout ── T12 (parcours 2, démo, porte)
 - Types `listing_status` et `item_condition` (7.5).
 - La `key` identifie une catégorie pour toujours ; le `path` (ltree) dit où elle se trouve. Une catégorie nouvelle a pour chemin sa clé ; une catégorie déplacée garde sa clé et prend un chemin sous son nouveau parent (seul le dernier libellé est commun).
 - Cohérence de l'arbre garantie par la base : chemin = chemin du parent + libellé (déclencheur de contrainte vérifié à la validation de la transaction) ; changer le chemin d'une catégorie déplace tout son sous-arbre (déclencheur, enfants trouvés par `parent_id`) ; chemins uniques, catégories inactives comprises (contrainte vérifiée à la validation, pour permettre les échanges).
-- `names` et `enum_values` (`{"noir": {"fr": "Noir"}}`) exigent `fr` ; `enum_values` réservé au type `enum` ; formats de clés contrôlés ; `category_attributes` sans suppression en cascade.
+- `names` exige `fr` ; `enum_values` est une liste ordonnée (`[{"key": "noir", "names": {"fr": "Noir"}}]`, un objet JSONB ne garde pas l'ordre) ; `enum_values` réservé au type `enum` ; formats de clés contrôlés ; `category_attributes` sans suppression en cascade.
 - Index `categories_path_gist`, `categories (parent_id)`, `brands` trigram sur `name::text` (autocomplétion par `name::text ILIKE`).
 - Contrat import-linter : `catalog.universes` n'importe rien de l'application.
 - `catalog/universes.py` devient la **seule** liste des 16 clés ; `identity/universes.py` la réexporte, sans changer le comportement des préférences de P1.
