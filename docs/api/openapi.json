@@ -4310,6 +4310,9 @@
             },
             "description": "Successful Response"
           },
+          "404": {
+            "description": "Flag media.uploads off"
+          },
           "413": {
             "description": "Larger than media.max_image_bytes"
           },

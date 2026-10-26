@@ -3496,6 +3496,13 @@ export interface operations {
                     "application/json": components["schemas"]["UploadOut"];
                 };
             };
+            /** @description Flag media.uploads off */
+            404: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content?: never;
+            };
             /** @description Larger than media.max_image_bytes */
             413: {
                 headers: {

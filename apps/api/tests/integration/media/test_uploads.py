@@ -7,6 +7,7 @@ from typing import Any
 from uuid import UUID
 
 import pytest
+from fastapi import FastAPI
 from httpx import ASGITransport, AsyncClient
 from redis.asyncio import Redis
 from sqlalchemy import text
@@ -42,19 +43,24 @@ def queue() -> RecordingQueue:
 
 
 @pytest.fixture
-async def client(
+def app(
     sessionmaker: async_sessionmaker[AsyncSession],
     redis_client: Redis,
     clock: FixedClock,
     queue: RecordingQueue,
-) -> AsyncIterator[AsyncClient]:
+) -> FastAPI:
     app = create_app(make_settings(media_public_url="https://media.example"))
     app.state.sessionmaker = sessionmaker
     app.state.redis = redis_client
     app.state.clock = clock
-    app.state.flags = FlagService(sessionmaker, redis_client, {})
+    app.state.flags = FlagService(sessionmaker, redis_client, {"media.uploads": True})
     app.state.queue = queue
     app.state.storage = MemoryStorage()
+    return app
+
+
+@pytest.fixture
+async def client(app: FastAPI) -> AsyncIterator[AsyncClient]:
     async with AsyncClient(
         transport=ASGITransport(app=app, raise_app_exceptions=False), base_url="https://test"
     ) as c:
@@ -157,6 +163,18 @@ async def test_upload_quota_per_hour_and_day(
                 ],
             )
             await db.commit()
+
+
+async def test_uploads_closed_while_the_flag_is_off(
+    app: FastAPI,
+    client: AsyncClient,
+    sessionmaker: async_sessionmaker[AsyncSession],
+    redis_client: Redis,
+) -> None:
+    member = await make_account(sessionmaker, completed=True)
+    app.state.flags = FlagService(sessionmaker, redis_client, {})
+    response = await _upload(client, member.headers)
+    assert (response.status_code, response.json()["code"]) == (404, "not_found")
 
 
 async def test_upload_needs_a_completed_profile(

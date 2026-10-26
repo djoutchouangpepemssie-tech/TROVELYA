@@ -138,7 +138,9 @@ async def client(
     app.state.sessionmaker = sessionmaker
     app.state.redis = redis_client
     app.state.clock = FixedClock(T0)
-    app.state.flags = FlagService(sessionmaker, redis_client, {"auth.passkeys": True})
+    app.state.flags = FlagService(
+        sessionmaker, redis_client, {"auth.passkeys": True, "media.uploads": True}
+    )
     app.state.queue = _NoQueue()
     async with AsyncClient(
         transport=ASGITransport(app=app, raise_app_exceptions=False), base_url="https://test"
