@@ -2,18 +2,20 @@
 
 1. Marked deleted: uploads never completed and avatar photos never chosen after 24 hours,
    refusals after `retention.deleted_media_days` (30). Marked first and committed, so a worker
-   finishing late (`mark_ready` needs a media not deleted) or a member choosing the photo as
-   their avatar (`check_avatar`) cannot race with the deletion of its files.
+   finishing late (`mark_ready` needs a media not deleted) cannot race with the deletion of
+   its files; a photo a member is choosing as their avatar is skipped (`mark_for_purge`).
 2. Files of every deleted media: original and variants leave storage at the next run, an
    hour at most after the photo was withdrawn or the account erased (ADR-0019: a withdrawn
-   photo's public URL must stop working). A storage failure leaves them for the next run.
+   photo's public URL must stop working). A failure is recorded on the row; the media is
+   retried at the next run, after the ones that never failed. Files still stored 48 hours
+   after the deletion are reported.
 3. Rows whose files are gone: after the retention, at once for an erased account or a media
    that never became a photo.
 
 Photos never attached to a listing are purged once listings exist (P2-T03).
 """
 
-from datetime import timedelta
+from datetime import datetime, timedelta
 
 import structlog
 from sqlalchemy.ext.asyncio import AsyncSession, async_sessionmaker
@@ -26,23 +28,39 @@ from trovelya.shared.clock import Clock
 logger = structlog.get_logger(__name__)
 
 ABANDONED_AFTER = timedelta(hours=24)  # plan P2, T02c
-# An erased account's files still stored after this are reported (the erasure is recorded as
+# Files of a deleted media still stored after this are reported (an erasure is recorded as
 # completed when the database is anonymised; its files follow within the hour).
-ERASED_FILES_ALERT_AFTER = timedelta(hours=48)
+FILES_OVERDUE_AFTER = timedelta(hours=48)
 BATCH = 200
-# Storage down: the run stops rather than failing on every row until its timeout.
+# Storage down: the run stops rather than failing on every row until its timeout (at least 1).
 MAX_CONSECUTIVE_FAILURES = 20
 
 Session = async_sessionmaker[AsyncSession]
 
 
-async def _delete_files(sessionmaker: Session, storage: ObjectStorage, *, clock: Clock) -> int:
-    deleted, consecutive_failures, after = 0, 0, None
-    while consecutive_failures < MAX_CONSECUTIVE_FAILURES:
+class _Run:
+    def __init__(self, started: datetime) -> None:
+        self.started = started  # failures from this run are retried at the next one
+        self.deleted = 0
+        self.consecutive_failures = 0
+
+    @property
+    def stopped(self) -> bool:
+        return self.consecutive_failures >= MAX_CONSECUTIVE_FAILURES
+
+
+async def _delete_files(
+    sessionmaker: Session, storage: ObjectStorage, run: _Run, *, clock: Clock, retry: bool
+) -> None:
+    """One pass: the media that never failed, or (`retry`) the ones that failed before."""
+    after = None
+    while not run.stopped:
         async with sessionmaker() as db:
-            rows = await repository.files_to_delete(db, after=after, limit=BATCH)
+            rows = await repository.files_to_delete(
+                db, retry_failed_before=run.started if retry else None, after=after, limit=BATCH
+            )
         if not rows:
-            break
+            return
         for row in rows:
             after = row.id
             try:
@@ -51,16 +69,19 @@ async def _delete_files(sessionmaker: Session, storage: ObjectStorage, *, clock:
                     await storage.delete("variants", variant["key"])
             except Exception:
                 logger.exception("media.purge_failed", media_id=str(row.id))
-                consecutive_failures += 1
-                if consecutive_failures >= MAX_CONSECUTIVE_FAILURES:
-                    break
+                async with sessionmaker() as db:
+                    await repository.mark_files_purge_failed(db, row.id, clock.now())
+                    await commit(db)
+                run.consecutive_failures += 1
+                if run.stopped:
+                    logger.error("media.purge_stopped", failures=run.consecutive_failures)
+                    return
                 continue
-            consecutive_failures = 0
+            run.consecutive_failures = 0
             async with sessionmaker() as db:
                 await repository.mark_files_deleted(db, row.id, clock.now())
                 await commit(db)
-            deleted += 1
-    return deleted
+            run.deleted += 1
 
 
 async def purge_media(sessionmaker: Session, storage: ObjectStorage, *, clock: Clock) -> int:
@@ -72,15 +93,16 @@ async def purge_media(sessionmaker: Session, storage: ObjectStorage, *, clock: C
             db, now=now, abandoned_before=now - ABANDONED_AFTER, refused_before=now - retention
         )
         await commit(db)
-    files = await _delete_files(sessionmaker, storage, clock=clock)
+    run = _Run(now)
+    await _delete_files(sessionmaker, storage, run, clock=clock, retry=False)
+    await _delete_files(sessionmaker, storage, run, clock=clock, retry=True)
+    files = run.deleted
     async with sessionmaker() as db:
         rows = await repository.delete_purged_rows(db, deleted_before=now - retention)
-        pending = await repository.erased_files_pending(
-            db, erased_before=now - ERASED_FILES_ALERT_AFTER
-        )
+        overdue = await repository.files_overdue(db, deleted_before=now - FILES_OVERDUE_AFTER)
         await commit(db)
-    if pending:
-        logger.error("media.erased_files_pending", count=pending)
+    if overdue:
+        logger.error("media.files_overdue", count=overdue)
     if marked or files or rows:
         logger.info("media.purged", marked=marked, files=files, rows=rows)
     return files

@@ -13,10 +13,12 @@ from sqlalchemy import text
 from sqlalchemy.ext.asyncio import AsyncSession, async_sessionmaker
 
 from tests.integration.identity.test_profile import make_account
+from trovelya.core.errors import AppError
 from trovelya.core.gdpr import registered_erasers
 from trovelya.modules.media import repository
 from trovelya.modules.media.adapters.storage import MemoryStorage, new_storage_key
 from trovelya.modules.media.service import purge
+from trovelya.modules.media.service.avatars import check_avatar
 from trovelya.modules.media.service.purge import purge_media
 from trovelya.shared.clock import FixedClock
 from trovelya.shared.ids import new_id
@@ -241,11 +243,13 @@ async def test_files_kept_until_they_can_be_deleted(sessionmaker: Session) -> No
     assert await _row(sessionmaker, media_id) is None and not any(_stored(storage, keys))
 
 
-async def test_failures_do_not_hold_back_the_others(
+async def test_failing_files_retried_after_the_others(
     sessionmaker: Session, monkeypatch: pytest.MonkeyPatch
 ) -> None:
-    """More failing media than a batch: the run goes on past them."""
+    """Files that keep failing stop a run (failures in a row, across batches), then are
+    retried after the others: a newer withdrawn photo still leaves storage at the next run."""
     monkeypatch.setattr(purge, "BATCH", 2)
+    monkeypatch.setattr(purge, "MAX_CONSECUTIVE_FAILURES", 3)
     storage = FailingStorage(set())
     member = await make_account(sessionmaker, completed=True)
     failing = [
@@ -253,11 +257,29 @@ async def test_failures_do_not_hold_back_the_others(
         for _ in range(3)
     ]
     storage.failing = {keys[0] for _, keys in failing}
-    healthy = await _media(sessionmaker, storage, member.id, deleted_for=timedelta(hours=1))
+    newer = await _media(sessionmaker, storage, member.id, deleted_for=timedelta(minutes=1))
     await _purge(sessionmaker, storage)
-    assert (await _row(sessionmaker, healthy[0])).files_deleted_at is not None
+    assert (await _row(sessionmaker, newer[0])).files_deleted_at is None  # the run stopped
+    await _purge(sessionmaker, storage)
+    assert (await _row(sessionmaker, newer[0])).files_deleted_at is not None
     for media_id, _ in failing:
         assert (await _row(sessionmaker, media_id)).files_deleted_at is None
+
+
+async def test_only_failures_in_a_row_stop_the_run(
+    sessionmaker: Session, monkeypatch: pytest.MonkeyPatch
+) -> None:
+    monkeypatch.setattr(purge, "MAX_CONSECUTIVE_FAILURES", 2)
+    storage = FailingStorage(set())
+    member = await make_account(sessionmaker, completed=True)
+    media = [
+        await _media(sessionmaker, storage, member.id, deleted_for=timedelta(hours=1))
+        for _ in range(6)
+    ]
+    storage.failing = {keys[0] for _, keys in media[0::2]}
+    await _purge(sessionmaker, storage)
+    for media_id, _ in media[1::2]:
+        assert (await _row(sessionmaker, media_id)).files_deleted_at is not None
 
 
 async def test_storage_down_stops_the_run(
@@ -330,14 +352,14 @@ async def test_late_worker_cannot_make_a_purged_media_ready(sessionmaker: Sessio
 async def test_photo_being_chosen_as_avatar_is_not_purged(
     sessionmaker: Session, storage: MemoryStorage
 ) -> None:
-    """`check_avatar` holds the photo while the profile is saved: the purge skips it, then
-    sees it chosen."""
+    """The member first: `check_avatar` holds the photo while the profile is saved; the purge
+    skips it, then sees it chosen."""
     member = await make_account(sessionmaker, completed=True)
     media_id, keys = await _media(
         sessionmaker, storage, member.id, age=timedelta(hours=25), purpose="avatar"
     )
     async with sessionmaker() as db:
-        assert await repository.owned_media(db, media_id, member.id, lock=True) is not None
+        await check_avatar(db, owner_id=member.id, media_id=media_id)
         # Waiting for the lock would hang the purge: it must skip the photo instead.
         await asyncio.wait_for(_purge(sessionmaker, storage), timeout=10)
         await db.execute(
@@ -347,6 +369,33 @@ async def test_photo_being_chosen_as_avatar_is_not_purged(
         await db.commit()
     await _purge(sessionmaker, storage)
     assert (await _row(sessionmaker, media_id)).deleted_at is None and all(_stored(storage, keys))
+
+
+async def test_photo_purged_first_cannot_be_chosen(
+    sessionmaker: Session, storage: MemoryStorage
+) -> None:
+    """The purge first: choosing the photo waits for it, then finds it gone (404)."""
+    member = await make_account(sessionmaker, completed=True)
+    media_id, _ = await _media(
+        sessionmaker, storage, member.id, age=timedelta(hours=25), purpose="avatar"
+    )
+    async with sessionmaker() as purging, sessionmaker() as choosing:
+        now = await purging.scalar(text("SELECT now()"))
+        await repository.mark_for_purge(
+            purging,
+            now=now,
+            abandoned_before=now - timedelta(hours=24),
+            refused_before=now - timedelta(days=30),
+        )
+        choice = asyncio.ensure_future(
+            check_avatar(choosing, owner_id=member.id, media_id=media_id)
+        )
+        await asyncio.sleep(1)
+        assert not choice.done()  # waiting for the purge
+        await purging.commit()
+        with pytest.raises(AppError) as refused:
+            await asyncio.wait_for(choice, timeout=10)
+    assert refused.value.status == 404
 
 
 async def test_retention_is_a_setting(sessionmaker: Session, storage: MemoryStorage) -> None:
@@ -374,19 +423,70 @@ async def test_retention_is_a_setting(sessionmaker: Session, storage: MemoryStor
             await db.commit()
 
 
-async def test_erased_account_files_still_stored_are_reported(
+async def test_files_overdue_counted(sessionmaker: Session, storage: MemoryStorage) -> None:
+    """Files of a media deleted 48 hours ago and more (any account) still stored."""
+
+    async def overdue() -> int:
+        async with sessionmaker() as db:
+            now = await db.scalar(text("SELECT now()"))
+            return await repository.files_overdue(db, deleted_before=now - timedelta(hours=48))
+
+    member = await make_account(sessionmaker, completed=True)
+    before = await overdue()
+    await _media(sessionmaker, storage, member.id, deleted_for=timedelta(hours=47))
+    await _media(sessionmaker, storage, member.id, age=timedelta(days=5))
+    gone, _ = await _media(sessionmaker, storage, member.id, deleted_for=timedelta(hours=49))
+    async with sessionmaker() as db:
+        await db.execute(
+            text("UPDATE media SET files_deleted_at = now() WHERE id = :id"), {"id": gone}
+        )
+        await db.commit()
+    assert await overdue() == before
+    await _media(sessionmaker, storage, member.id, deleted_for=timedelta(hours=49))
+    assert await overdue() == before + 1
+
+
+async def test_files_overdue_reported(
     sessionmaker: Session, monkeypatch: pytest.MonkeyPatch
 ) -> None:
-    recorder = _Recorder()
+    """Counted 48 hours after the deletion, and reported."""
+    recorder, thresholds = _Recorder(), list[timedelta]()
     monkeypatch.setattr(purge, "logger", recorder)
+    files_overdue = repository.files_overdue
+
+    async def spy(db: AsyncSession, *, deleted_before: Any) -> int:
+        thresholds.append(await db.scalar(text("SELECT now()")) - deleted_before)
+        return await files_overdue(db, deleted_before=deleted_before)
+
+    monkeypatch.setattr(repository, "files_overdue", spy)
     storage = FailingStorage()
     member = await make_account(sessionmaker, completed=True)
     await _media(sessionmaker, storage, member.id, deleted_for=timedelta(hours=49))
-    async with sessionmaker() as db:
-        await db.execute(
-            text("UPDATE users SET status = 'deleted' WHERE id = :id"), {"id": member.id}
-        )
-        await db.commit()
     await _purge(sessionmaker, storage)
-    [(event, fields)] = recorder.errors
-    assert event == "media.erased_files_pending" and fields["count"] >= 1
+    assert [event for event, _ in recorder.errors][-1] == "media.files_overdue"
+    [threshold] = thresholds
+    assert timedelta(hours=48) <= threshold < timedelta(hours=48, minutes=1)
+
+
+async def test_chosen_avatars_not_locked_by_the_purge(
+    sessionmaker: Session, storage: MemoryStorage
+) -> None:
+    """The purge locks only the avatar photos nobody chose: the others stay free for the
+    profile and the foreign keys pointing at them."""
+    member = await make_account(sessionmaker, completed=True)
+    media_id, _ = await _media(
+        sessionmaker, storage, member.id, age=timedelta(days=10), purpose="avatar"
+    )
+    await _set_avatar(sessionmaker, member.id, media_id)
+    async with sessionmaker() as purging, sessionmaker() as other:
+        now = await purging.scalar(text("SELECT now()"))
+        await repository.mark_for_purge(
+            purging,
+            now=now,
+            abandoned_before=now - timedelta(hours=24),
+            refused_before=now - timedelta(days=30),
+        )
+        await other.execute(
+            text("SELECT 1 FROM media WHERE id = :id FOR SHARE NOWAIT"), {"id": media_id}
+        )
+        await purging.rollback()
