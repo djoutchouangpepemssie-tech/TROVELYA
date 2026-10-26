@@ -26,6 +26,9 @@ MAX_TRIES = 3
 # One attempt: reading, one image (60 s at most) and writing its variants.
 PROCESS_TIMEOUT_S = 120
 
+# One attempt: reading, one image (60 s at most) and writing its variants.
+PROCESS_TIMEOUT_S = 120
+
 
 async def process_media_job(ctx: dict[str, Any], media_id: str) -> str:
     """Enqueued by `complete` after commit; safe to replay (see processing.py)."""
