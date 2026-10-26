@@ -408,7 +408,7 @@ tout ── T12 (parcours 2, démo, porte)
 
 **Branche :** `feat/P2-T03a-tables-annonces`.
 
-**Fichiers :** `modules/catalog/migrations/versions/0009_catalog_listings.py`, `models.py`, `tests/integration/catalog/test_listing_schema.py`, `docs/data/PII.md`.
+**Fichiers :** `modules/catalog/migrations/versions/0012_catalog_listings.py`, `models.py`, `tests/integration/catalog/test_listing_schema.py`, `docs/data/PII.md`.
 
 **Contenu :**
 - Tables `listings` (7.5 + `short_id`, `location_source`, `location_source_id`, `embedding VECTOR(1024)`, `embedding_model`, E5, E10, E14), `listing_media`, `favorites`, `price_watches`, `listing_price_history`.

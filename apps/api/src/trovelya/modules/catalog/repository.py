@@ -213,3 +213,31 @@ async def attributes(db: AsyncSession, keys: Sequence[str]) -> Sequence[Row[Any]
 
 async def search_brands(db: AsyncSession, *, prefix: str, q: str, limit: int) -> Sequence[Row[Any]]:
     return (await db.execute(_SEARCH_BRANDS, {"prefix": prefix, "q": q, "limit": limit})).all()
+
+
+# GDPR export (ADR-0016): the member's listings. Not exported: the public position (an offset
+# of the real one), H3 cells, embedding and search document (derived, internal).
+_EXPORT_LISTINGS = text(
+    "SELECT l.id, l.short_id, l.status::text AS status, l.title, l.description,"
+    " c.key AS category, b.name::text AS brand, l.condition::text AS condition, l.attributes,"
+    " l.price_minor, l.currency, l.original_price_minor, l.quantity, l.accepts_offers,"
+    " l.min_offer_minor, l.handover_enabled, l.shipping_enabled, l.parcel_size, l.weight_g,"
+    " ST_Y(l.location::geometry) AS latitude, ST_X(l.location::geometry) AS longitude,"
+    " l.place_name, l.country_code, l.location_source, l.sale_modes, l.open_to_swap,"
+    " l.published_at, l.sold_at, l.expires_at, l.view_count, l.favorite_count,"
+    " l.created_at, l.updated_at, l.deleted_at"
+    " FROM listings l JOIN categories c ON c.id = l.category_id"
+    " LEFT JOIN brands b ON b.id = l.brand_id"
+    " WHERE l.seller_id = :user_id ORDER BY l.created_at"
+)
+
+
+async def export_catalog(db: AsyncSession, user_id: UUID) -> dict[str, list[dict[str, Any]]]:
+    rows = await db.execute(_EXPORT_LISTINGS, {"user_id": user_id})
+    return {"listings": [dict(row) for row in rows.mappings()]}
+
+
+async def erase_catalog(db: AsyncSession, user_id: UUID) -> None:
+    """GDPR eraser (within the account's erasure, plan P2 Q13): the member's listings are
+    deleted; their photos go with the media eraser and purge."""
+    await db.execute(text("DELETE FROM listings WHERE seller_id = :u"), {"u": user_id})
