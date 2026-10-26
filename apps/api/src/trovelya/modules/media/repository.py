@@ -1,5 +1,6 @@
 """SQL of the media module. Only this module's service reads or writes these tables."""
 
+import json
 from datetime import datetime
 from typing import Any
 from uuid import UUID
@@ -109,3 +110,80 @@ async def owned_media(db: AsyncSession, media_id: UUID, owner_id: UUID) -> Row[A
             {"id": media_id, "owner": owner_id},
         )
     ).one_or_none()
+
+
+async def media_to_process(db: AsyncSession, media_id: UUID) -> Row[Any] | None:
+    """The row the worker works from; None when it does not exist or was deleted."""
+    return (
+        await db.execute(
+            text(
+                "SELECT id, owner_id, purpose, status, mime_type, storage_key FROM media"
+                " WHERE id = :id AND deleted_at IS NULL"
+            ),
+            {"id": media_id},
+        )
+    ).one_or_none()
+
+
+async def mark_rejected(db: AsyncSession, media_id: UUID, reason: str) -> bool:
+    """`processing` → `rejected`; False when another run already decided."""
+    done = await db.scalar(
+        text(
+            "UPDATE media SET status = 'rejected', rejection_reason = :reason"
+            " WHERE id = :id AND status = 'processing' AND deleted_at IS NULL RETURNING id"
+        ),
+        {"id": media_id, "reason": reason},
+    )
+    return done is not None
+
+
+async def mark_ready(
+    db: AsyncSession,
+    media_id: UUID,
+    *,
+    width: int,
+    height: int,
+    sha256: bytes,
+    perceptual_hash: int,
+    variants: list[dict[str, Any]],
+    moderation: dict[str, Any],
+) -> bool:
+    """`processing` → `ready`; False when another run already decided."""
+    done = await db.scalar(
+        text(
+            "UPDATE media SET status = 'ready', width = :width, height = :height,"
+            " sha256 = :sha256, perceptual_hash = :hash, exif_stripped = true,"
+            " variants = CAST(:variants AS jsonb), moderation = moderation || CAST(:mod AS jsonb)"
+            " WHERE id = :id AND status = 'processing' AND deleted_at IS NULL RETURNING id"
+        ),
+        {
+            "id": media_id,
+            "width": width,
+            "height": height,
+            "sha256": sha256,
+            "hash": perceptual_hash,
+            "variants": json.dumps(variants),
+            "mod": json.dumps(moderation),
+        },
+    )
+    return done is not None
+
+
+async def oldest_similar_media(
+    db: AsyncSession, perceptual_hash: int, max_distance: int
+) -> Row[Any] | None:
+    """The first ready listing photo (id, owner_id) within `max_distance` bits of this dHash.
+
+    A full scan, fine while P2 holds few photos; before launch, index bands of the hash
+    (7 bands: two hashes 6 bits apart share at least one) — recorded in the P2 plan."""
+    return (
+        await db.execute(
+            text(
+                "SELECT id, owner_id FROM media WHERE status = 'ready' AND deleted_at IS NULL"
+                " AND purpose = 'listing' AND perceptual_hash IS NOT NULL"
+                " AND bit_count((perceptual_hash # :hash)::bit(64)) <= :distance"
+                " ORDER BY created_at, id LIMIT 1"
+            ),
+            {"hash": perceptual_hash, "distance": max_distance},
+        )
+    ).first()
