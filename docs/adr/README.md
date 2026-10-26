@@ -22,3 +22,4 @@ Format : contexte, décision, conséquences. Une décision qui change donne un n
 | [0016](0016-export-rgpd.md) | Export RGPD chiffré, stocké en base jusqu'au stockage de fichiers | Acceptée (Q16, E8) |
 | [0017](0017-resend-provisoire.md) | E-mails par Resend, écart temporaire à la résidence UE | Acceptée, provisoire (décision Q6) |
 | [0018](0018-comptes-staff.md) | Comptes staff : passkey seule, création et enrôlement par script | Acceptée (Q18, E9) |
+| [0019](0019-medias.md) | Médias : stockage R2 en juridiction UE, envoi direct, variantes précalculées | Acceptée (Q4 à Q7, E2 à E4, E6, E11 du plan P2) |
