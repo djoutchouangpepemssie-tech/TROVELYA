@@ -21,7 +21,7 @@ Stockage objet Cloudflare R2 en juridiction UE (MinIO en local et en CI), deux b
 
 ## 0. Décisions prises
 
-### 0.1 Réponses d'Arcel (25 octobre 2026 : « je valide toutes tes questions et recommandations » ; 26 octobre 2026 : « je te laisse valider et trouver ce qui est mieux »)
+### 0.1 Réponses d'Arcel (25 octobre 2026 : « je valide toutes tes questions et recommandations » ; 26 octobre 2026 : « je te laisse valider et trouver ce qui est mieux », puis « je valide » pour Q19 à Q21)
 
 | # | Question | Décision |
 |---|---|---|
@@ -43,6 +43,9 @@ Stockage objet Cloudflare R2 en juridiction UE (MinIO en local et en CI), deux b
 | Q16 | File de revue | Page staff minimale `/fr/staff/moderation`, permission nouvelle `moderation.review`, chaque décision auditée. La Tour de contrôle complète arrive en P8. |
 | Q17 | Distance sur la fiche | Seulement pour un visiteur connecté qui a une zone ; sinon `place_name` seul. |
 | Q18 | Comptes externes | Arcel fournit R2 avant T02a et Bedrock avant T06b ; d'ici là, MinIO et adaptateurs factices. |
+| Q19 | Conservation des annonces terminées (section 14.1 muette) | Paramètres en jours, purge quotidienne livrée avec T04 : supprimée par le vendeur → effacée après **30 jours** [PARAM `retention.deleted_listing_days`] ; retirée ou expirée → effacée après **365 jours** sans republication [PARAM `retention.ended_listing_days`] ; vendue → contenu (description, attributs, photos, position) effacé après **365 jours** [PARAM `retention.sold_listing_days`], fiche minimale (titre, prix, date de vente) gardée tant qu'une commande y renvoie (P4) ; retirée par la modération → effacée après **180 jours** [PARAM `retention.removed_listing_days`], délai de contestation du DSA (article 20) ; effacement du compte : immédiat, inchangé (Q13). |
+| Q20 | Décalage public partagé | **Un décalage par source de position** (adresse ou zone du vendeur), tiré une fois, partagé par toutes les annonces de cette source, retiré au sort si la source change ; jamais un décalage par annonce (la moyenne de N annonces approcherait la position réelle d'environ 350/√N m). |
+| Q21 | Bornes des attributs entiers et années | `int` et `year` bornés à l'entier signé 32 bits ; `year` borné en plus à **l'année courante + 1** (millésimes vendus d'avance), calculée par l'horloge au moment de la validation ; le minimum reste celui de la graine. |
 
 ### 0.2 Écarts et précisions par rapport au cahier
 
@@ -434,7 +437,7 @@ tout ── T12 (parcours 2, démo, porte)
 
 *Livrée en trois PR : T03b1, les briques pures (validation des attributs, position publique, cellules H3, distance arrondie ; dépendance `h3` 4.5.0) ; T03b2, création et modification des brouillons ; T03b3, lecture, « mes annonces », grâce de l'effacement et purge des photos jamais rattachées.*
 
-*Questions ouvertes pour T03b2 (revue de T03b1), à faire trancher par Arcel :* (1) une annonce garde son décalage, mais plusieurs annonces d'une même adresse ont chacune le leur : leur moyenne rapprocherait de la position réelle (environ 350/√N m) ; proposition : un décalage par source de position (adresse ou zone), partagé par ses annonces. (2) Les attributs `year` sans `max` acceptent toute année (10^30) ; proposition : borner `int` et `year` à l'entier 32 bits et `year` à l'année courante + 1.
+*Questions de la revue de T03b1 tranchées par Arcel le 26 octobre 2026 : Q20 (décalage par source de position) et Q21 (bornes des entiers et des années), appliquées dans T03b2.*
 
 **Branche :** `feat/P2-T03b-brouillons`.
 
@@ -519,6 +522,7 @@ tout ── T12 (parcours 2, démo, porte)
 - Publication : politique Q1, au moins 1 photo `ready`, quota de 50 par jour compté sur `listing_status_history` (verrou `FOR UPDATE` sur l'annonce), `published_at`, `expires_at` (E12).
 - Retrait, republication et renouvellement par le propriétaire.
 - Job d'expiration quotidien idempotent (`UPDATE … WHERE status = 'active' AND expires_at <= now() … RETURNING`, transitions une par une).
+- Purge quotidienne des annonces terminées selon Q19 (durées en [PARAM], seuils comptés depuis `deleted_at`, le statut final ou `sold_at` ; photos, historiques, favoris et alertes partent avec l'annonce) ; tests aux bornes avec horloge fixe, une annonce vendue liée à une commande garde sa fiche minimale (P4).
 
 **Routes :**
 
