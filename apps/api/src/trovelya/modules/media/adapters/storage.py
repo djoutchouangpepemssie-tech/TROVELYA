@@ -19,6 +19,9 @@ from trovelya.core.config import Settings
 
 Bucket = Literal["originals", "variants"]
 KEY_BYTES = 16  # 128 bits: a key can be neither guessed nor enumerated (capability URL)
+MAX_UPLOAD_SECONDS = 300  # an upload URL lives 5 minutes at most (ADR-0019)
+# Variants never change: a new image gets a new key.
+IMMUTABLE = "public, max-age=31536000, immutable"
 
 
 def new_storage_key() -> str:
@@ -76,12 +79,16 @@ class S3Storage:
                 retries={"max_attempts": 3, "mode": "standard"},
                 connect_timeout=5,
                 read_timeout=30,
+                # As many connections as threads asyncio.to_thread may run at once.
+                max_pool_connections=32,
             ),
         )
 
     def presign_put(
         self, bucket: Bucket, key: str, *, content_type: str, content_length: int, expires_in: int
     ) -> PresignedUpload:
+        if not 0 < expires_in <= MAX_UPLOAD_SECONDS:
+            raise ValueError(f"an upload URL lives 1 to {MAX_UPLOAD_SECONDS} seconds")
         url: str = self._client.generate_presigned_url(
             "put_object",
             Params={
@@ -97,6 +104,8 @@ class S3Storage:
         )
 
     async def size(self, bucket: Bucket, key: str) -> int | None:
+        # A token without ListBucket gets 403, not 404, for a missing object: R2 tokens
+        # scoped to the buckets (infra/r2/README.md) include it.
         try:
             head = await asyncio.to_thread(
                 self._client.head_object, Bucket=self._buckets[bucket], Key=key
@@ -115,14 +124,14 @@ class S3Storage:
         return await asyncio.to_thread(response["Body"].read)
 
     async def put(self, bucket: Bucket, key: str, data: bytes, *, content_type: str) -> None:
+        extra = {"CacheControl": IMMUTABLE} if bucket == "variants" else {}
         await asyncio.to_thread(
             self._client.put_object,
             Bucket=self._buckets[bucket],
             Key=key,
             Body=data,
             ContentType=content_type,
-            # Variants never change: a new image gets a new key.
-            CacheControl="public, max-age=31536000, immutable",
+            **extra,
         )
 
     async def delete(self, bucket: Bucket, key: str) -> None:

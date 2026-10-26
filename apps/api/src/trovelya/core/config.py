@@ -109,8 +109,12 @@ class Settings(BaseSettings):
 
     @model_validator(mode="after")
     def _s3_needs_endpoint_and_keys(self) -> "Settings":
-        values = (self.storage_endpoint, self.storage_access_key_id, self.storage_secret_access_key)
-        if self.storage_provider == "s3" and any(v is None for v in values):
+        values = (
+            self.storage_endpoint,
+            self.storage_access_key_id and self.storage_access_key_id.get_secret_value(),
+            self.storage_secret_access_key and self.storage_secret_access_key.get_secret_value(),
+        )
+        if self.storage_provider == "s3" and not all(values):
             raise ValueError(
                 "STORAGE_ENDPOINT, STORAGE_ACCESS_KEY_ID and STORAGE_SECRET_ACCESS_KEY are"
                 " required when STORAGE_PROVIDER=s3"

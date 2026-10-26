@@ -4,11 +4,12 @@
 # Usage: bash infra/garage/init.sh [container]   (default container: trovelya-garage-1)
 set -euo pipefail
 CONTAINER="${1:-trovelya-garage-1}"
-garage() { docker exec "$CONTAINER" /garage "$@"; }
+garage() { docker exec -e RUST_LOG=warn "$CONTAINER" /garage "$@"; }
 
 for _ in $(seq 1 30); do garage status >/dev/null 2>&1 && break; sleep 1; done
 NODE="$(garage node id -q | cut -d@ -f1)"
-if ! garage layout show | grep -q "$NODE"; then
+# `layout show` prints the first 16 characters of the node id only.
+if ! garage layout show | grep -q "^${NODE:0:16}"; then
   garage layout assign -z local -c 1G "$NODE" >/dev/null
   garage layout apply --version 1 >/dev/null
 fi
@@ -22,8 +23,35 @@ done
 # Variants are public (ADR-0019): served read-only as a static website.
 garage bucket website --allow trovelya-variants >/dev/null
 KEY="$(garage key info trovelya-local --show-secret)"
+KEY_ID="$(echo "$KEY" | awk '/Key ID/ {print $NF}')"
+SECRET="$(echo "$KEY" | awk '/Secret key/ {print $NF}')"
+# The browser uploads straight to `originals` (as on R2, infra/r2/README.md): CORS for the
+# local web origin. Garage has no CLI command for it; the S3 API does.
+KEY_ID="$KEY_ID" SECRET="$SECRET" uv run --project "$(dirname "$0")/../../apps/api" python - <<'PY'
+import os
+
+import boto3
+
+s3 = boto3.client(
+    "s3",
+    endpoint_url="http://localhost:3900",
+    region_name="garage",
+    aws_access_key_id=os.environ["KEY_ID"],
+    aws_secret_access_key=os.environ["SECRET"],
+)
+rule = {
+    "AllowedOrigins": ["http://localhost:3000"],
+    "AllowedMethods": ["PUT"],
+    "AllowedHeaders": ["content-type"],
+    "MaxAgeSeconds": 3600,
+}
+s3.put_bucket_cors(Bucket="trovelya-originals", CORSConfiguration={"CORSRules": [rule]})
+PY
 echo "STORAGE_PROVIDER=s3"
 echo "STORAGE_ENDPOINT=http://localhost:3900"
 echo "STORAGE_REGION=garage"
-echo "STORAGE_ACCESS_KEY_ID=$(echo "$KEY" | awk '/Key ID/ {print $NF}')"
-echo "STORAGE_SECRET_ACCESS_KEY=$(echo "$KEY" | awk '/Secret key/ {print $NF}')"
+echo "STORAGE_ACCESS_KEY_ID=$KEY_ID"
+echo "STORAGE_SECRET_ACCESS_KEY=$SECRET"
+echo "STORAGE_BUCKET_ORIGINALS=trovelya-originals"
+echo "STORAGE_BUCKET_VARIANTS=trovelya-variants"
+echo "MEDIA_PUBLIC_URL=http://trovelya-variants.web.garage.localhost:3902"

@@ -45,7 +45,8 @@ IDENTITY_TABLES = {
     "data_requests",
     "data_exports",
 }
-CATALOG_TABLES = {"categories", "attribute_definitions", "category_attributes", "brands", "media"}
+CATALOG_TABLES = {"categories", "attribute_definitions", "category_attributes", "brands"}
+MEDIA_TABLES = {"media"}
 
 
 async def _tables(engine: AsyncEngine) -> set[str]:
@@ -61,13 +62,15 @@ async def test_upgrade_downgrade_upgrade(engine: AsyncEngine, migrated_url: str)
     async with engine.connect() as conn:
         extensions = {r[0] for r in await conn.execute(text("SELECT extname FROM pg_extension"))}
     assert extensions >= REQUIRED_EXTENSIONS
-    assert await _tables(engine) >= SOCLE_TABLES | IDENTITY_TABLES | CATALOG_TABLES
+    assert await _tables(engine) >= SOCLE_TABLES | IDENTITY_TABLES | CATALOG_TABLES | MEDIA_TABLES
 
     await asyncio.to_thread(command.downgrade, config, "base")
-    assert not ((SOCLE_TABLES | IDENTITY_TABLES | CATALOG_TABLES) & await _tables(engine))
+    assert not (
+        (SOCLE_TABLES | IDENTITY_TABLES | CATALOG_TABLES | MEDIA_TABLES) & await _tables(engine)
+    )
 
     await asyncio.to_thread(command.upgrade, config, "head")
-    assert await _tables(engine) >= SOCLE_TABLES | IDENTITY_TABLES | CATALOG_TABLES
+    assert await _tables(engine) >= SOCLE_TABLES | IDENTITY_TABLES | CATALOG_TABLES | MEDIA_TABLES
 
 
 async def test_updated_at_trigger(engine: AsyncEngine) -> None:
