@@ -47,10 +47,11 @@ async def _photo(
         await db.execute(
             text(
                 "INSERT INTO media (id, owner_id, kind, purpose, storage_key, mime_type, bytes,"
-                " status, sha256, exif_stripped, variants)"
+                " status, sha256, exif_stripped, variants, rejection_reason)"
                 " VALUES (:id, :owner, 'image', :purpose, :key, 'image/jpeg', 1000, :status,"
                 " CASE WHEN :status = 'ready' THEN CAST(:sha AS bytea) END, :status = 'ready',"
-                " CASE WHEN :status = 'ready' THEN CAST(:variants AS jsonb) ELSE '[]' END)"
+                " CASE WHEN :status = 'ready' THEN CAST(:variants AS jsonb) ELSE '[]' END,"
+                " CASE WHEN :status = 'rejected' THEN 'type_mismatch' END)"
             ),
             {
                 "id": media_id,
@@ -96,10 +97,25 @@ async def test_avatar_must_be_own_ready_avatar_media(
         (new_id(), 404, "not_found"),
         (await _photo(sessionmaker, member.id, status="processing"), 409, "media_not_ready"),
         (await _photo(sessionmaker, member.id, purpose="listing"), 422, "media_not_avatar"),
+        (await _photo(sessionmaker, member.id, status="rejected"), 422, "media_rejected"),
     ]
     for media_id, status, code in cases:
         response = await _set_avatar(client, member, media_id)
         assert (response.status_code, response.json()["code"]) == (status, code), media_id
+    me = await _me(client, member)
+    assert (me["avatar"], me["avatar_media_id"]) == (None, None)
+
+
+async def test_avatar_not_shown_unless_ready(sessionmaker: Session, client: AsyncClient) -> None:
+    member = await make_account(sessionmaker, completed=True)
+    media_id = await _photo(sessionmaker, member.id)
+    assert (await _set_avatar(client, member, media_id)).status_code == 200
+    async with sessionmaker() as db:  # cannot happen today: a ready photo stays ready
+        await db.execute(
+            text("UPDATE media SET status = 'processing', sha256 = NULL WHERE id = :id"),
+            {"id": media_id},
+        )
+        await db.commit()
     assert (await _me(client, member))["avatar"] is None
 
 

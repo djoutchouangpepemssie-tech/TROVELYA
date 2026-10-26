@@ -60,6 +60,9 @@ async def me(
     media_public_url: str | None,
 ) -> dict[str, Any]:
     row = await repository.me(db, user.id)
+    avatar = await media_avatars.avatar_variants(
+        db, row.avatar_media_id, public_url=media_public_url
+    )
     erase_at = (
         row.erasure_requested_at + timedelta(days=await erasure_grace_days(db))
         if row.erasure_requested_at
@@ -71,10 +74,9 @@ async def me(
         "username": row.username,
         "display_name": row.display_name,
         "bio": row.bio,
-        "avatar": await media_avatars.avatar_variants(
-            db, row.avatar_media_id, public_url=media_public_url
-        ),
-        "avatar_media_id": row.avatar_media_id,
+        "avatar": avatar,
+        # Only while the avatar can be shown: a photo withdrawn meanwhile is no avatar.
+        "avatar_media_id": row.avatar_media_id if avatar is not None else None,
         "locale": row.locale,
         "country_code": row.country_code,
         "profile_completed": row.profile_completed,

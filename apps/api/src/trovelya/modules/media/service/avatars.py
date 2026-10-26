@@ -12,12 +12,15 @@ from trovelya.modules.media import repository
 
 async def check_avatar(db: AsyncSession, *, owner_id: UUID, media_id: UUID) -> None:
     """A member's avatar is one of their own photos, sent as an avatar and processed:
-    404 for anyone else's (or none), 422 for another purpose, 409 while not ready."""
+    404 for anyone else's (or none), 422 for another purpose or a refused file, 409 while
+    still being processed."""
     row = await repository.owned_media(db, media_id, owner_id)
     if row is None:
         raise AppError(ErrorCode.NOT_FOUND, 404)
     if row.purpose != "avatar":
         raise AppError(ErrorCode.MEDIA_NOT_AVATAR, 422)
+    if row.status == "rejected":
+        raise AppError(ErrorCode.MEDIA_REJECTED, 422)
     if row.status != "ready":
         raise AppError(ErrorCode.MEDIA_NOT_READY, 409)
 
