@@ -243,13 +243,16 @@ async def media_to_purge(
     db: AsyncSession, *, deleted_before: datetime, abandoned_before: datetime, limit: int
 ) -> list[Row[Any]]:
     """Deleted media past their retention (at once for an erased account), uploads never
-    completed, old refusals: (id, storage_key, variants)."""
+    completed, avatar photos never chosen, old refusals: (id, storage_key, variants)."""
     rows = await db.execute(
         text(
             "SELECT m.id, m.storage_key, m.variants FROM media m JOIN users u ON u.id = m.owner_id"
             " WHERE (m.deleted_at IS NOT NULL"
             "        AND (m.deleted_at < :deleted_before OR u.status = 'deleted'))"
             " OR (m.status = 'uploading' AND m.created_at < :abandoned_before)"
+            " OR (m.purpose = 'avatar' AND m.deleted_at IS NULL"
+            "     AND m.created_at < :abandoned_before"
+            "     AND NOT EXISTS (SELECT 1 FROM users a WHERE a.avatar_media_id = m.id))"
             " OR (m.status = 'rejected' AND m.created_at < :deleted_before)"
             " ORDER BY m.id LIMIT :limit"
         ),

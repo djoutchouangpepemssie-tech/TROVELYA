@@ -27,6 +27,7 @@ async def _media(
     status: str = "ready",
     age: timedelta = timedelta(0),
     deleted_for: timedelta | None = None,
+    purpose: str = "listing",
 ) -> tuple[UUID, list[str]]:
     """A media of `owner` created `age` ago, with its files in storage; returns its id and
     the keys of its files (original first)."""
@@ -39,7 +40,7 @@ async def _media(
                 "INSERT INTO media (id, owner_id, kind, purpose, storage_key, mime_type, bytes,"
                 " status, sha256, exif_stripped, variants, rejection_reason, created_at,"
                 " deleted_at, captured_at)"
-                " VALUES (:id, :owner, 'image', 'listing', :key, 'image/jpeg', 1000, :status,"
+                " VALUES (:id, :owner, 'image', :purpose, :key, 'image/jpeg', 1000, :status,"
                 " :sha, :status = 'ready', CAST(:variants AS jsonb),"
                 " CASE WHEN :status = 'rejected' THEN 'type_mismatch' END, :created, :deleted,"
                 " :created)"
@@ -47,6 +48,7 @@ async def _media(
             {
                 "id": media_id,
                 "owner": owner,
+                "purpose": purpose,
                 "key": original,
                 "status": status,
                 "sha": b"\x01" * 32 if status == "ready" else None,
@@ -81,6 +83,7 @@ def _stored(storage: MemoryStorage, keys: list[str]) -> list[bool]:
 
 
 async def _purge(sessionmaker: Session, storage: MemoryStorage) -> int:
+    """Other tests' rows may be purged too: the tests check their own rows, never a count."""
     async with sessionmaker() as db:
         now = await db.scalar(text("SELECT now()"))
     return await purge_media(sessionmaker, storage, clock=FixedClock(now))
@@ -113,7 +116,7 @@ async def test_media_erased_from_storage(sessionmaker: Session, storage: MemoryS
             {"id": member.id},
         )
     assert hidden
-    assert await _purge(sessionmaker, storage) == 3
+    await _purge(sessionmaker, storage)
     for media_id, keys in (*photos, upload):
         assert not await _exists(sessionmaker, media_id)
         assert _stored(storage, keys) == [False] * len(keys)
@@ -131,7 +134,7 @@ async def test_purge_after_retention(sessionmaker: Session, storage: MemoryStora
             {"m": old[0], "u": member.id},
         )
         await db.commit()
-    assert await _purge(sessionmaker, storage) == 1
+    await _purge(sessionmaker, storage)
     assert not await _exists(sessionmaker, old[0]) and _stored(storage, old[1]) == [False] * 3
     for media_id, keys in (recent, live):
         assert await _exists(sessionmaker, media_id) and all(_stored(storage, keys))
@@ -158,7 +161,7 @@ async def test_abandoned_uploads_and_old_refusals_purged(
     new_refusal = await _media(
         sessionmaker, storage, member.id, status="rejected", age=timedelta(days=29)
     )
-    assert await _purge(sessionmaker, storage) == 2
+    await _purge(sessionmaker, storage)
     for media_id, keys in (abandoned, old_refusal):
         assert not await _exists(sessionmaker, media_id) and not any(_stored(storage, keys))
     for media_id, _ in (in_progress, new_refusal):
@@ -175,5 +178,49 @@ async def test_row_kept_while_its_files_cannot_be_deleted(sessionmaker: Session)
     storage = FailingStorage()
     member = await make_account(sessionmaker, completed=True)
     media_id, _ = await _media(sessionmaker, storage, member.id, deleted_for=timedelta(days=31))
-    assert await _purge(sessionmaker, storage) == 0
+    await _purge(sessionmaker, storage)
     assert await _exists(sessionmaker, media_id)
+
+
+async def test_avatar_photo_never_chosen_purged_after_24h(
+    sessionmaker: Session, storage: MemoryStorage
+) -> None:
+    member = await make_account(sessionmaker, completed=True)
+    chosen, unchosen, recent = [
+        await _media(sessionmaker, storage, member.id, age=age, purpose="avatar")
+        for age in (timedelta(days=3), timedelta(hours=25), timedelta(hours=23))
+    ]
+    async with sessionmaker() as db:
+        await db.execute(
+            text("UPDATE users SET avatar_media_id = :m WHERE id = :u"),
+            {"m": chosen[0], "u": member.id},
+        )
+        await db.commit()
+    await _purge(sessionmaker, storage)
+    assert not await _exists(sessionmaker, unchosen[0])
+    assert await _exists(sessionmaker, chosen[0]) and await _exists(sessionmaker, recent[0])
+
+
+async def test_retention_is_a_setting(sessionmaker: Session, storage: MemoryStorage) -> None:
+    member = await make_account(sessionmaker, completed=True)
+    media_id, _ = await _media(sessionmaker, storage, member.id, deleted_for=timedelta(days=8))
+    async with sessionmaker() as db:
+        await db.execute(
+            text(
+                "UPDATE platform_settings SET value = '7'"
+                " WHERE key = 'retention.deleted_media_days'"
+            )
+        )
+        await db.commit()
+    try:
+        await _purge(sessionmaker, storage)
+        assert not await _exists(sessionmaker, media_id)
+    finally:
+        async with sessionmaker() as db:
+            await db.execute(
+                text(
+                    "UPDATE platform_settings SET value = '30'"
+                    " WHERE key = 'retention.deleted_media_days'"
+                )
+            )
+            await db.commit()

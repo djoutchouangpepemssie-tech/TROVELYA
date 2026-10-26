@@ -1,8 +1,9 @@
 """Daily purge of media files and rows (P2-T02c2, ADR-0019).
 
 - An erased account's photos: at once (the eraser has hidden them during the erasure).
-- A deleted photo (avatar replaced or removed, photo withdrawn): after 30 days.
-- An upload never completed: after 24 hours. A refused file: its row after 30 days.
+- A deleted photo (avatar replaced or removed, photo withdrawn): after
+  `retention.deleted_media_days` (30). A refused file: its row after the same delay.
+- An upload never completed, an avatar photo never chosen: after 24 hours.
 
 Files first, then the row: a storage failure leaves the row for the next run. Photos never
 attached to a listing are purged once listings exist (P2-T03).
@@ -21,8 +22,7 @@ from trovelya.shared.clock import Clock
 
 logger = structlog.get_logger(__name__)
 
-RETENTION = timedelta(days=30)  # plan P2, T02c
-ABANDONED_AFTER = timedelta(hours=24)
+ABANDONED_AFTER = timedelta(hours=24)  # plan P2, T02c
 BATCH = 200
 
 
@@ -31,6 +31,8 @@ async def purge_media(
 ) -> int:
     """Returns the number of media removed."""
     now = clock.now()
+    async with sessionmaker() as db:
+        retention = timedelta(days=await repository.setting_int(db, "retention.deleted_media_days"))
     removed, failed = 0, set[UUID]()
     while True:
         async with sessionmaker() as db:
@@ -38,7 +40,7 @@ async def purge_media(
                 row
                 for row in await repository.media_to_purge(
                     db,
-                    deleted_before=now - RETENTION,
+                    deleted_before=now - retention,
                     abandoned_before=now - ABANDONED_AFTER,
                     limit=BATCH + len(failed),
                 )
