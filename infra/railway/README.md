@@ -35,7 +35,7 @@ Mise en production : voir `docs/runbooks/deploy.md`.
 | Répertoire racine | `/apps/api` |
 | Dockerfile | `Dockerfile` (uvicorn sur `$PORT`) |
 | Chemins surveillés | `/apps/api/**` |
-| Commande avant déploiement | `alembic upgrade head` |
+| Commande avant déploiement | `alembic upgrade head && python -m trovelya.scripts.seed_catalog` (migrations, puis arbre des catégories et marques ; un fichier de graine invalide arrête le déploiement) |
 | Healthcheck | `/ready` (120 s) |
 | Redémarrage | `ON_FAILURE`, 5 essais |
 | Variables | `ENV`, `DATABASE_URL=${{pg.DATABASE_URL}}`, `REDIS_URL=${{Redis.REDIS_URL}}`, `SECRET_KEY=${{secret(64)}}`, `PROXY_SHARED_SECRET=${{secret(48)}}`, `FIELD_ENCRYPTION_KEY=${{secret(64)}}`, `EMAIL_PROVIDER=resend`, `EMAIL_FROM`, `EMAIL_API_KEY`, `WEB_ORIGIN`, `ADMIN_ORIGIN`, `SENTRY_DSN` |

@@ -10,12 +10,14 @@ stops the deployment with the reason and changes nothing.
 import asyncio
 import sys
 
+from sqlalchemy.exc import IntegrityError
+
 from trovelya.core.config import get_settings
 from trovelya.core.db import make_engine, make_sessionmaker
+from trovelya.modules.catalog.service.brand_seed import parse_brands
 from trovelya.modules.catalog.service.seed import (
     SeedError,
     load_seed,
-    parse_brands,
     read_seed_file,
 )
 from trovelya.modules.catalog.service.seed_writer import apply_brands, apply_seed
@@ -38,6 +40,14 @@ async def _run() -> int:
             except SeedError as exc:
                 await db.rollback()
                 sys.stderr.write(f"Graine refusée : {exc}\n")
+                return 1
+            except IntegrityError:
+                # Checked at commit: a path taken by a retired category, for instance.
+                await db.rollback()
+                sys.stderr.write(
+                    "Graine refusée : l'arbre écrit viole une contrainte (chemin déjà pris par"
+                    " une catégorie retirée, ou catégorie hors de son parent). Rien n'a changé.\n"
+                )
                 return 1
     finally:
         await engine.dispose()

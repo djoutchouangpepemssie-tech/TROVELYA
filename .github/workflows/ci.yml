@@ -232,7 +232,7 @@ jobs:
           WEB_ORIGIN=https://example.vercel.app
           ADMIN_ORIGIN=https://example.vercel.app
           ENV
-          docker run --rm --network smoke --env-file api.env trovelya/api alembic upgrade head
+          docker run --rm --network smoke --env-file api.env trovelya/api sh -c "alembic upgrade head && python -m trovelya.scripts.seed_catalog"
           docker run -d --name api --network smoke --env-file api.env -p 8000:8000 trovelya/api
           for i in $(seq 1 30); do curl -fsS localhost:8000/ready && break; sleep 2; done
           curl -fsS localhost:8000/health

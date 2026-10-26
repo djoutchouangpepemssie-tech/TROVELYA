@@ -16,6 +16,7 @@ from trovelya.modules.catalog.service.seed import CatalogSeed, SeedError
 
 async def apply_seed(db: AsyncSession, seed: CatalogSeed) -> None:
     """Write the seed in the caller's transaction (the caller commits)."""
+    await repository.lock_seed(db)
     existing_types = await repository.attribute_types(db)
     for attribute in seed.attributes:
         old_type = existing_types.get(attribute.key)
@@ -63,7 +64,7 @@ async def apply_seed(db: AsyncSession, seed: CatalogSeed) -> None:
         )
     # Categories gone from the file leave the tree inactive where they are.
     await repository.deactivate_categories_except(db, list(category_ids))
-    await repository.replace_category_attributes(
+    await repository.sync_category_attributes(
         db,
         list(category_ids.values()),
         [
