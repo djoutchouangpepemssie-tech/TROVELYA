@@ -179,7 +179,7 @@ async def test_no_location_from_another_members_source(sessionmaker: Session) ->
     assert drawn == 0
 
 
-async def test_draws_exported_without_positions_and_erased(sessionmaker: Session) -> None:
+async def test_draws_exported_with_place_and_erased(sessionmaker: Session) -> None:
     seller = await make_account(sessionmaker, completed=True)
     other = await make_account(sessionmaker, completed=True)
     zone = await make_zone(sessionmaker, seller.id)
