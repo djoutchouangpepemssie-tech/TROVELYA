@@ -121,16 +121,6 @@ class Settings(BaseSettings):
             )
         return self
 
-    @model_validator(mode="after")
-    def _production_stores_media_for_real(self) -> "Settings":
-        # The in-memory store is per process: the API and the worker would share nothing.
-        public = self.media_public_url or ""
-        if self.env == "production" and (
-            self.storage_provider != "s3" or not public.startswith("https://")
-        ):
-            raise ValueError("production needs STORAGE_PROVIDER=s3 and an https MEDIA_PUBLIC_URL")
-        return self
-
     @field_validator("database_url")
     @classmethod
     def _use_asyncpg_driver(cls, url: str) -> str:

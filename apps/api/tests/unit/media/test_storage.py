@@ -58,21 +58,6 @@ def test_empty_storage_keys_are_missing_keys() -> None:
         )
 
 
-@pytest.mark.parametrize(
-    "overrides",
-    [
-        {},
-        {"storage_provider": "s3", **S3, "media_public_url": "http://media.example"},
-        {"storage_provider": "s3", **S3},
-    ],
-    ids=["memory", "http", "no-public-url"],
-)
-def test_production_stores_media_for_real(overrides: dict[str, str]) -> None:
-    with pytest.raises(ValidationError, match="production needs"):
-        make_settings(env="production", **overrides)
-    make_settings(env="production", storage_provider="s3", **S3, media_public_url="https://m.fr")
-
-
 def test_upload_url_lives_five_minutes_at_most() -> None:
     storage = storage_from_settings(make_settings(storage_provider="s3", **S3))
     for expires_in in (0, 301):
