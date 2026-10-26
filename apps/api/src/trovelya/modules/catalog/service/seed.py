@@ -6,8 +6,8 @@ the file's header explains; this module resolves the inheritance once, so every 
 carries its complete list of attributes.
 """
 
+import math
 import re
-import unicodedata
 from collections.abc import Callable, Mapping, Sequence
 from dataclasses import dataclass
 from importlib import resources
@@ -28,27 +28,10 @@ SEED_VERSION = 1
 _KEY = re.compile(r"^[a-z0-9_]+(\.[a-z0-9_]+)*$")
 _ATTRIBUTE_KEY = re.compile(r"^[a-z][a-z0-9_]*$")
 _VALUE_KEY = re.compile(r"^[a-z0-9_]+$")
-_NODE_FIELDS = frozenset(
-    {
-        "key",
-        "fr",
-        "icon",
-        "vertical",
-        "model",
-        "shipping",
-        "max_photos",
-        "brand",
-        "restricted",
-        "conditions",
-        "attributes",
-        "attributes_replace",
-        "children",
-        "active",
-        "moved",
-    }
-)
 _INHERITED = ("vertical", "model", "shipping", "max_photos", "brand", "restricted", "conditions")
 _ROOT_REQUIRED = ("vertical", "model", "shipping", "max_photos", "brand")
+_OWN_FIELDS = ("key", "fr", "icon", "attributes", "attributes_replace", "children", "active")
+_NODE_FIELDS = frozenset((*_INHERITED, *_OWN_FIELDS, "moved"))
 _ATTRIBUTE_FIELDS = frozenset({"fr", "type", "values", "unit", "min", "max", "step", "max_length"})
 _CONSTRAINTS = ("min", "max", "step", "max_length")
 
@@ -112,19 +95,37 @@ class CatalogSeed:
         return next(a for a in self.attributes if a.key == key)
 
 
+class _StrictLoader(yaml.SafeLoader):
+    """Refuses a key written twice in one mapping (PyYAML keeps the last one silently)."""
+
+
+def _mapping_without_duplicates(loader: _StrictLoader, node: yaml.MappingNode) -> dict[Any, Any]:
+    keys: list[object] = [
+        loader.construct_object(key)  # pyright: ignore[reportUnknownMemberType]
+        for key, _ in node.value
+    ]
+    if duplicates := sorted({str(k) for k in keys if keys.count(k) > 1}):
+        raise SeedError(f"clé écrite deux fois {duplicates} ({node.start_mark})")
+    return loader.construct_mapping(node)  # pyright: ignore[reportUnknownMemberType]
+
+
+_StrictLoader.add_constructor(
+    yaml.resolver.BaseResolver.DEFAULT_MAPPING_TAG, _mapping_without_duplicates
+)
+
+
+def parse_yaml(source: str) -> Any:
+    return yaml.load(source, Loader=_StrictLoader)  # noqa: S506 — a SafeLoader subclass
+
+
 def read_seed_file(name: str) -> Any:
     """A YAML file of `catalog/seed`, shipped inside the package."""
     source = resources.files("trovelya.modules.catalog").joinpath("seed", name)
-    return yaml.safe_load(source.read_text(encoding="utf-8"))
+    return parse_yaml(source.read_text(encoding="utf-8"))
 
 
 def load_seed() -> CatalogSeed:
     return parse_seed(read_seed_file("categories.yaml"))
-
-
-def slugify(name: str) -> str:
-    ascii_name = unicodedata.normalize("NFKD", name).encode("ascii", "ignore").decode()
-    return re.sub(r"[^a-z0-9]+", "-", ascii_name.lower()).strip("-")
 
 
 def _labels(value: object, where: str) -> dict[str, str]:
@@ -159,13 +160,7 @@ def _parse_attribute(key: object, spec: object) -> SeedAttribute:
         enum_values = tuple(parsed)
     elif values is not None:
         raise SeedError(f"attribut {key} : values réservées au type enum")
-    constraints: dict[str, int | float] = {}
-    for name in _CONSTRAINTS:
-        if name in spec:
-            bound = spec[name]
-            if isinstance(bound, bool) or not isinstance(bound, int | float):
-                raise SeedError(f"attribut {key} : {name} doit être un nombre")
-            constraints[name] = bound
+    constraints = _parse_constraints(key, str(data_type), spec)
     unit = spec.get("unit")
     if unit is not None and not isinstance(unit, str):
         raise SeedError(f"attribut {key} : unit doit être un texte")
@@ -182,7 +177,10 @@ def _parse_attribute(key: object, spec: object) -> SeedAttribute:
 def _is_conditions(value: object) -> bool:
     if not isinstance(value, list) or not value:
         return False
-    return all(c in ItemCondition.__members__.values() for c in cast(list[object], value))
+    conditions = cast(list[object], value)
+    return len(set(map(str, conditions))) == len(conditions) and all(
+        c in ItemCondition.__members__.values() for c in conditions
+    )
 
 
 _SETTING_CHECKS: dict[str, Callable[[object], bool]] = {
@@ -194,6 +192,42 @@ _SETTING_CHECKS: dict[str, Callable[[object], bool]] = {
     "max_photos": lambda v: isinstance(v, int) and not isinstance(v, bool) and 1 <= v <= 50,
     "conditions": _is_conditions,
 }
+
+
+_ALLOWED_CONSTRAINTS: dict[str, frozenset[str]] = {
+    "text": frozenset({"max_length"}),
+    "int": frozenset({"min", "max", "step"}),
+    "decimal": frozenset({"min", "max", "step"}),
+    "year": frozenset({"min", "max"}),
+    "enum": frozenset(),
+    "bool": frozenset(),
+}
+
+
+def _parse_constraints(key: str, data_type: str, spec: Mapping[str, Any]) -> dict[str, int | float]:
+    """Bounds that fit the type: whole numbers for int, year and max_length, finite numbers,
+    min ≤ max, a positive step."""
+    constraints: dict[str, int | float] = {}
+    for name in _CONSTRAINTS:
+        if name not in spec:
+            continue
+        if name not in _ALLOWED_CONSTRAINTS[data_type]:
+            raise SeedError(f"attribut {key} : {name} ne convient pas au type {data_type}")
+        bound = spec[name]
+        whole = data_type in {"int", "year"} or name == "max_length"
+        if (
+            isinstance(bound, bool)
+            or not isinstance(bound, int | float)
+            or not math.isfinite(bound)
+            or (whole and not isinstance(bound, int))
+        ):
+            raise SeedError(f"attribut {key} : {name} invalide ({bound!r})")
+        constraints[name] = bound
+    if "min" in constraints and "max" in constraints and constraints["min"] > constraints["max"]:
+        raise SeedError(f"attribut {key} : min supérieur à max")
+    if constraints.get("step", 1) <= 0 or constraints.get("max_length", 1) <= 0:
+        raise SeedError(f"attribut {key} : step et max_length doivent être positifs")
+    return constraints
 
 
 def _check_setting(key: str, field: str, value: object) -> None:
@@ -306,6 +340,21 @@ def parse_seed(document: object) -> CatalogSeed:
         active = node.get("active", True)
         if not isinstance(active, bool):
             raise SeedError(f"{key} : active doit être vrai ou faux")
+        # Retiring a category retires its subtree; an active category keeps an active child or
+        # becomes a leaf, so the tree served never changes shape by accident.
+        if parent is not None and not parent.is_active:
+            active = False
+        if (
+            active
+            and children
+            and all(
+                isinstance(c, dict) and cast(dict[str, object], c).get("active") is False
+                for c in children
+            )
+        ):
+            raise SeedError(
+                f"{key} : tous ses enfants sont retirés ; retirer aussi {key} ou garder un enfant"
+            )
         icon = node.get("icon")
         if icon is not None and not isinstance(icon, str):
             raise SeedError(f"{key} : icon doit être un texte")
@@ -335,25 +384,3 @@ def parse_seed(document: object) -> CatalogSeed:
     for index, root in enumerate(cast(list[object], roots)):
         visit(root, None, {"attrs": ()}, index)
     return CatalogSeed(attributes=tuple(attributes.values()), categories=tuple(categories))
-
-
-def parse_brands(document: object) -> tuple[tuple[str, str], ...]:
-    """(name, slug) pairs of `seed/brands.yaml`; raise `SeedError`."""
-    if not isinstance(document, dict) or cast(dict[str, Any], document).get("version") != 1:
-        raise SeedError("brands.yaml : version 1 attendue")
-    names = cast(dict[str, Any], document).get("brands")
-    if not isinstance(names, list):
-        raise SeedError("brands.yaml : liste brands manquante")
-    pairs: list[tuple[str, str]] = []
-    seen_names: set[str] = set()
-    seen_slugs: set[str] = set()
-    for name in cast(list[object], names):
-        if not isinstance(name, str) or not 1 <= len(name) <= 80:
-            raise SeedError(f"brands.yaml : nom invalide {name!r}")
-        slug = slugify(name)
-        if not slug or name.casefold() in seen_names or slug in seen_slugs:
-            raise SeedError(f"brands.yaml : {name!r} en doublon ou sans slug")
-        seen_names.add(name.casefold())
-        seen_slugs.add(slug)
-        pairs.append((name, slug))
-    return tuple(pairs)

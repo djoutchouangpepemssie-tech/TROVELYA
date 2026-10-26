@@ -1,11 +1,13 @@
-# Graine du catalogue TROVÉLYA (P2-T01) — PROPOSITION À VALIDER PAR ARCEL.
+# Graine du catalogue TROVÉLYA (P2-T01) — validée par Arcel le 26 octobre 2026 (plan P2, Q2).
 #
 # Source de vérité de l'arbre des catégories et de leurs attributs (cahier 7.5 et 8.19).
 # Rejouable sans perte : chaque catégorie est identifiée par sa `key`, jamais par son nom ni
 # par sa place. Renommer = changer `fr`. Déplacer = ranger le nœud sous un autre parent en
 # gardant sa `key` et en ajoutant `moved: true` (le chemin ltree est recalculé, les annonces
-# gardent leur catégorie). Une clé n'est jamais réutilisée. Retirer = `active: false`, ou
-# retirer le nœud du fichier : la catégorie est désactivée, jamais supprimée.
+# gardent leur catégorie). Une clé n'est jamais réutilisée pour autre chose ; la remettre
+# dans le fichier réactive la même catégorie. Retirer = `active: false` (toute la descendance
+# est retirée avec elle) ou retirer le nœud du fichier : désactivée, jamais supprimée.
+# Une clé écrite deux fois dans un même bloc est refusée.
 #
 # Notation
 # - Clés en snake_case ; la clé d'une catégorie nouvelle reprend celle de son parent
