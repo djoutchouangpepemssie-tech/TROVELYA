@@ -8,8 +8,9 @@ export function sentryIngestOrigin(dsn: string | undefined): string {
   }
 }
 
-// Sign-in and staff enrolment links carry a live token (#token=… or ?token=…).
-const TOKEN = /(token=)[^&#\s"'\\]+/gi;
+// Sign-in and staff enrolment links carry a live token (#token=… or ?token=…); a presigned
+// upload URL (photos, ADR-0019) its signature and the storage key id.
+const TOKEN = /((?:token|X-Amz-Signature|X-Amz-Credential)=)[^&#\s"'\\]+/gi;
 
 /** Removes the tokens from anything sent to Sentry (URLs in breadcrumbs, events, traces). */
 export function scrubSecrets<T>(value: T): T | null {

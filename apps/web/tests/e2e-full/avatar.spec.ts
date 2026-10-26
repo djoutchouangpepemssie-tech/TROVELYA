@@ -19,11 +19,14 @@ test("profile photo: choose, preview, save, shown in the header", async ({ page 
 
   await page.locator('input[type="file"]').setInputFiles(PHOTO);
   await expect(page.getByText(avatar.preview)).toBeVisible({ timeout: 60_000 });
+  // Focus follows the buttons that replace the one used (WCAG 2.4.3).
+  await expect(page.getByRole("button", { name: avatar.save })).toBeFocused();
   await page.getByRole("button", { name: avatar.save }).click();
   await expect(page.getByRole("status")).toContainText(avatar.saved);
+  await expect(page.getByRole("button", { name: avatar.change })).toBeFocused();
 
   // The header shows the photo, loaded from the public variants (CSP and storage allow it).
-  const photo = page.getByRole("banner").getByRole("img", { name });
+  const photo = page.getByRole("banner").locator(`img[alt="${name}"]`);
   await expect(photo).toBeVisible();
   await expect
     .poll(() => photo.evaluate((img: HTMLImageElement) => img.naturalWidth))
@@ -41,5 +44,5 @@ test("profile photo: choose, preview, save, shown in the header", async ({ page 
   // Removed: the initials come back.
   await page.getByRole("button", { name: avatar.remove }).click();
   await expect(page.getByRole("status")).toContainText(avatar.removed);
-  await expect(page.getByRole("banner").getByRole("img", { name })).toHaveCount(0);
+  await expect(page.getByRole("banner").locator("img")).toHaveCount(0);
 });

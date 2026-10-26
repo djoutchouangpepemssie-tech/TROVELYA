@@ -2,12 +2,12 @@
 
 import { Button } from "@trovelya/ui";
 import { useTranslations } from "next-intl";
-import { type ChangeEvent, useId, useRef, useState } from "react";
+import { type ChangeEvent, useEffect, useId, useRef, useState } from "react";
 
 import { MemberAvatar } from "@/components/Avatar";
 import { useSession } from "@/components/SessionProvider";
 import { apiCall } from "@/lib/api";
-import { type Media, uploadPhoto, type Variant } from "@/lib/media";
+import { ACCEPTED_TYPES, type Media, uploadPhoto, type Variant } from "@/lib/media";
 
 export type AvatarProfile = {
   display_name: string;
@@ -15,9 +15,6 @@ export type AvatarProfile = {
   version: number;
   flags: Record<string, boolean>;
 };
-
-// The types the API accepts (ADR-0019); the file is checked again once in storage.
-const ACCEPT = "image/jpeg,image/png,image/webp,image/avif";
 
 /**
  * The profile photo (W20, P2-T02c): chosen, sent and processed, shown for confirmation, then
@@ -27,20 +24,34 @@ const ACCEPT = "image/jpeg,image/png,image/webp,image/avif";
 export function AvatarField<P extends AvatarProfile>({
   profile,
   onStored,
+  onConflict,
   onSaved,
 }: {
   profile: P | null;
   /** The profile as the API stored it: its new version and photo. */
   onStored: (stored: P) => void;
+  /** Changed elsewhere meanwhile: the form takes the fresh profile and says so. */
+  onConflict: (fresh: P) => void;
   onSaved: (message: string) => void;
 }) {
   const t = useTranslations("Account.profile.avatar");
   const { refresh } = useSession();
   const input = useRef<HTMLInputElement>(null);
+  const chooseButton = useRef<HTMLButtonElement>(null);
+  const saveButton = useRef<HTMLButtonElement>(null);
   const hintId = useId();
   const [pending, setPending] = useState<Media | null>(null);
   const [busy, setBusy] = useState<"sending" | "saving" | null>(null);
   const [problem, setProblem] = useState<string | null>(null);
+  // Focus follows the buttons that replace the one just used (WCAG 2.4.3).
+  const [focus, setFocus] = useState<"save" | "choose" | null>(null);
+  const upload = useRef<AbortController | null>(null);
+
+  useEffect(() => () => upload.current?.abort(), []);
+  useEffect(() => {
+    if (focus === "save") saveButton.current?.focus();
+    if (focus === "choose") chooseButton.current?.focus();
+  }, [focus, pending]);
 
   const canUpload = Boolean(profile?.flags["media.uploads"]);
   const shown = pending ? pending.variants : (profile?.avatar ?? null);
@@ -52,10 +63,16 @@ export function AvatarField<P extends AvatarProfile>({
     setProblem(null);
     onSaved("");
     setBusy("sending");
-    const result = await uploadPhoto(file, "avatar");
+    upload.current = new AbortController();
+    const result = await uploadPhoto(file, "avatar", undefined, upload.current.signal);
+    if (!result.ok && result.reason === "aborted") return; // the page was left
     setBusy(null);
-    if (result.ok) setPending(result.media);
-    else setProblem(t(`errors.${result.reason}`));
+    if (result.ok) {
+      setPending(result.media);
+      setFocus("save");
+    } else {
+      setProblem(t(`errors.${result.reason}`));
+    }
   }
 
   async function save(mediaId: string | null) {
@@ -70,6 +87,7 @@ export function AvatarField<P extends AvatarProfile>({
     setBusy(null);
     if (result.ok) {
       setPending(null);
+      setFocus("choose");
       onStored(result.data);
       onSaved(t(mediaId ? "saved" : "removed"));
       await refresh(); // the header shows the new photo
@@ -77,8 +95,8 @@ export function AvatarField<P extends AvatarProfile>({
     }
     if (result.status === 412) {
       const fresh = await apiCall<P>("/v1/me");
-      if (fresh.ok) onStored(fresh.data);
-      setProblem(t("errors.stale"));
+      if (fresh.ok) onConflict(fresh.data);
+      else setProblem(t("errors.error"));
       return;
     }
     setProblem(t("errors.error"));
@@ -91,23 +109,26 @@ export function AvatarField<P extends AvatarProfile>({
         <MemberAvatar name={profile?.display_name ?? ""} avatar={shown} size={96} />
         <div className="flex flex-col items-start gap-2">
           {pending ? (
-            <>
-              <p className="text-sm">{t("preview")}</p>
-              <div className="flex flex-wrap gap-2">
-                <Button disabled={busy !== null} onClick={() => void save(pending.id)}>
-                  {busy === "saving" ? t("saving") : t("save")}
-                </Button>
-                <Button
-                  variant="secondary"
-                  disabled={busy !== null}
-                  onClick={() => {
-                    setPending(null);
-                  }}
-                >
-                  {t("cancel")}
-                </Button>
-              </div>
-            </>
+            <div className="flex flex-wrap gap-2">
+              <Button
+                ref={saveButton}
+                disabled={busy !== null}
+                onClick={() => void save(pending.id)}
+              >
+                {busy === "saving" ? t("saving") : t("save")}
+              </Button>
+              <Button
+                variant="secondary"
+                disabled={busy !== null}
+                onClick={() => {
+                  setPending(null);
+                  setProblem(null);
+                  setFocus("choose");
+                }}
+              >
+                {t("cancel")}
+              </Button>
+            </div>
           ) : (
             <div className="flex flex-wrap gap-2">
               {canUpload && (
@@ -115,13 +136,14 @@ export function AvatarField<P extends AvatarProfile>({
                   <input
                     ref={input}
                     type="file"
-                    accept={ACCEPT}
+                    accept={ACCEPTED_TYPES.join(",")}
                     className="sr-only"
                     tabIndex={-1}
                     aria-hidden="true"
                     onChange={(event) => void choose(event)}
                   />
                   <Button
+                    ref={chooseButton}
                     variant="secondary"
                     disabled={!profile || busy !== null}
                     onClick={() => input.current?.click()}
@@ -146,8 +168,10 @@ export function AvatarField<P extends AvatarProfile>({
       <p className="trv-field-hint" id={hintId}>
         {canUpload ? t("hint") : t("unavailable")}
       </p>
-      <div aria-live="polite">
-        {busy === "sending" && <p className="text-sm">{t("processing")}</p>}
+      {/* Announced: the photo being prepared, then the preview to confirm. */}
+      <div aria-live="polite" className="text-sm">
+        {busy === "sending" && <p>{t("processing")}</p>}
+        {pending && <p>{t("preview")}</p>}
       </div>
       {problem && (
         <p role="alert" className="text-sm text-danger-ink">

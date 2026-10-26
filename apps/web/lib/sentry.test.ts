@@ -36,6 +36,16 @@ describe("scrubSecrets", () => {
     expect(scrubbed).toContain("&x=2");
   });
 
+  it("removes the signature of a presigned upload URL (photos, ADR-0019)", () => {
+    const url =
+      "https://r2.example/originals/k?X-Amz-Algorithm=AWS4-HMAC-SHA256" +
+      "&X-Amz-Credential=KEYID%2F20261026%2Fauto%2Fs3%2Faws4_request&X-Amz-Signature=c0ffee12";
+    const scrubbed = JSON.stringify(scrubSecrets({ breadcrumbs: [{ data: { url } }] }));
+    expect(scrubbed).not.toContain("c0ffee12");
+    expect(scrubbed).not.toContain("KEYID");
+    expect(scrubbed).toContain("X-Amz-Algorithm=AWS4-HMAC-SHA256");
+  });
+
   it("leaves an event without a token unchanged", () => {
     const event = { message: "erreur réseau", tags: { page: "/fr/compte" } };
     expect(scrubSecrets(event)).toEqual(event);

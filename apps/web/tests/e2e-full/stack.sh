@@ -1,9 +1,10 @@
 #!/usr/bin/env bash
 # The full stack of journey 1 (P1 gate, G1), as deployed: our PostgreSQL image, Redis, Mailpit
 # for the e-mails, Garage for the photos (as R2, ADR-0019), then the API and the arq worker
-# from the image Railway runs. The web app
-# (production build) is started by Playwright (playwright.full.config.ts). Idempotent; used by
-# CI and locally. `bash tests/e2e-full/stack.sh down` removes everything.
+# from the image Railway runs. The web app (production build) is started by Playwright
+# (playwright.full.config.ts). Idempotent; used by CI and locally. `bash tests/e2e-full/stack.sh
+# down` removes everything. Garage keeps its ports 3900 and 3902 (the signed URLs name them,
+# inside Docker and outside alike): stop the development Garage (infra/docker-compose.yml) first.
 set -euo pipefail
 
 ROOT="$(cd "$(dirname "$0")/../../../.." && pwd)"

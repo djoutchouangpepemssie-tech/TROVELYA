@@ -8,7 +8,8 @@ set -euo pipefail
 CONTAINER="${1:-trovelya-garage-1}"
 ENDPOINT="${GARAGE_ENDPOINT:-http://localhost:3900}"
 CORS_ORIGIN="${GARAGE_CORS_ORIGIN:-http://localhost:3000}"
-PYTHON="${GARAGE_PYTHON:-uv run --project $(dirname "$0")/../../apps/api python}"
+API_PROJECT="$(cd "$(dirname "$0")/../../apps/api" && pwd)"
+PYTHON="${GARAGE_PYTHON:-uv run --project $API_PROJECT python}"
 garage() { docker exec -e RUST_LOG=warn "$CONTAINER" /garage "$@"; }
 
 for _ in $(seq 1 30); do garage status >/dev/null 2>&1 && break; sleep 1; done

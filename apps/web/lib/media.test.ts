@@ -93,6 +93,54 @@ describe("uploadPhoto", () => {
   });
 });
 
+describe("uploadPhoto, robustness", () => {
+  it("tolerates a passing error while waiting for processing", async () => {
+    const d = deps([
+      { ok: true, data: UPLOAD },
+      { ok: false, status: 502, code: "unknown" },
+      { ok: false, status: 0, code: "network" },
+      { ok: true, data: media("ready") },
+    ]);
+    expect(await uploadPhoto(FILE, "avatar", d)).toEqual({ ok: true, media: media("ready") });
+  });
+
+  it("gives up after errors in a row", async () => {
+    const failed: ApiResult<unknown> = { ok: false, status: 502, code: "unknown" };
+    const d = deps([{ ok: true, data: UPLOAD }, failed, failed, failed, failed]);
+    expect(await uploadPhoto(FILE, "avatar", d)).toEqual({ ok: false, reason: "error" });
+  });
+
+  it("refuses an empty file or a type not accepted before any call", async () => {
+    for (const [file, reason] of [
+      [new File([], "vide.jpg", { type: "image/jpeg" }), "empty"],
+      [new File(["x"], "doc.pdf", { type: "application/pdf" }), "type"],
+    ] as const) {
+      const d = deps([]);
+      expect(await uploadPhoto(file, "avatar", d)).toEqual({ ok: false, reason });
+      expect(d.api).not.toHaveBeenCalled();
+    }
+  });
+
+  it("stops once aborted (the page was left)", async () => {
+    const controller = new AbortController();
+    const d = deps([
+      { ok: true, data: UPLOAD },
+      { ok: true, data: media("processing") },
+    ]);
+    d.sleep.mockImplementation(() => {
+      controller.abort();
+      return Promise.resolve();
+    });
+    expect(await uploadPhoto(FILE, "avatar", d, controller.signal)).toEqual({
+      ok: false,
+      reason: "aborted",
+    });
+    expect(d.api).toHaveBeenCalledTimes(2);
+    const [, putInit] = d.put.mock.calls[0] as [string, RequestInit];
+    expect(putInit.signal).toBe(controller.signal);
+  });
+});
+
 describe("pickVariant", () => {
   const variants: Variant[] = [
     { format: "avif", width: 320, height: 320, url: "https://m/a320" },

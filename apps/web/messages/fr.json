@@ -325,13 +325,13 @@
         "saved": "Photo de profil enregistrée.",
         "removed": "Photo de profil retirée.",
         "errors": {
+          "empty": "Ce fichier est vide. Choisissez une photo.",
           "unavailable": "L'envoi de photos n'est pas encore ouvert.",
           "too_large": "Cette photo est trop lourde. Choisissez une image plus légère.",
           "type": "Ce format n'est pas accepté : choisissez une image JPEG, PNG, WebP ou AVIF.",
           "rate_limited": "Vous avez envoyé beaucoup de photos récemment. Réessayez plus tard.",
           "rejected": "Cette image n'a pas pu être utilisée. Essayez avec une autre photo.",
           "timeout": "La préparation de la photo prend plus de temps que prévu. Réessayez dans un instant.",
-          "stale": "Votre profil a été modifié ailleurs entre-temps. Réessayez.",
           "error": "L'envoi n'a pas abouti. Réessayez dans un instant."
         }
       }

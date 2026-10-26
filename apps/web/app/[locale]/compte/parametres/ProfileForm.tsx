@@ -121,7 +121,16 @@ export function ProfileForm({ onSaved }: { onSaved: (message: string) => void })
   return (
     <div className="flex flex-col gap-6">
       {/* Saved on its own: what is typed below stays as it is. */}
-      <AvatarField profile={profile} onStored={setProfile} onSaved={onSaved} />
+      <AvatarField
+        profile={profile}
+        onStored={setProfile}
+        onConflict={(fresh) => {
+          // As for the form's own 412: what was typed stays, the member checks it.
+          setProfile(fresh);
+          fail({ field: null, key: "stale" });
+        }}
+        onSaved={onSaved}
+      />
       <form onSubmit={(event) => void submit(event)} noValidate className="flex flex-col gap-4">
         <Input
           ref={usernameRef}
