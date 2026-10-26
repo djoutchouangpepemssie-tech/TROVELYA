@@ -211,16 +211,27 @@ async def test_invalid_file_changes_nothing(db: AsyncSession) -> None:
 async def test_brands_seeded_once_and_existing_kept(db: AsyncSession) -> None:
     await db.execute(
         text(
-            "INSERT INTO brands (id, name, slug, is_verified) VALUES (gen_random_uuid(),"
-            " 'hermès', 'hermes', true)"
+            "INSERT INTO brands (id, name, slug, is_verified)"
+            " VALUES (gen_random_uuid(), 'marque graine', 'marque-graine', true)"
         )
     )
+    brands = [("Marque Graine", "marque-graine"), ("Autre Graine", "autre-graine")]
+    await apply_brands(db, brands)
+    await apply_brands(db, brands)
+    rows = await db.execute(
+        text(
+            "SELECT name::text, is_verified FROM brands"
+            " WHERE slug IN ('marque-graine', 'autre-graine') ORDER BY slug"
+        )
+    )
+    assert [tuple(r) for r in rows] == [("Autre Graine", False), ("marque graine", True)]
+
+
+async def test_real_brands_file_loads(db: AsyncSession) -> None:
     brands = parse_brands(read_seed_file("brands.yaml"))
     await apply_brands(db, brands)
-    await apply_brands(db, brands)
-    count = await db.execute(text("SELECT count(*) FROM brands"))
-    assert count.scalar_one() >= len(brands)
-    kept = await db.execute(
-        text("SELECT name::text, is_verified FROM brands WHERE slug = 'hermes'")
+    found = await db.execute(
+        text("SELECT count(*) FROM brands WHERE slug = ANY(:slugs)"),
+        {"slugs": [slug for _, slug in brands]},
     )
-    assert tuple(kept.one()) == ("hermès", True)
+    assert found.scalar_one() == len(brands)
