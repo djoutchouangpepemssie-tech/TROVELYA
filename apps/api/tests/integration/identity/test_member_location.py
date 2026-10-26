@@ -24,6 +24,7 @@ async def make_address(
     country_code: str = "FR",
     placed: bool = True,
     deleted: bool = False,
+    at: tuple[float, float] = (45.77, 4.88),
 ) -> UUID:
     address_id = new_id()
     async with sessionmaker() as db:
@@ -32,7 +33,7 @@ async def make_address(
                 "INSERT INTO addresses (id, user_id, full_name, line1, postal_code, city,"
                 " country_code, location, deleted_at)"
                 " VALUES (:id, :u, 'Lucie Martin', '12 rue des Lilas', :pc, :city, :cc,"
-                " CASE WHEN :placed THEN ST_MakePoint(4.88, 45.77)::geography END,"
+                " CASE WHEN :placed THEN ST_MakePoint(:lon, :lat)::geography END,"
                 " CASE WHEN :deleted THEN now() END)"
             ),
             {
@@ -43,22 +44,29 @@ async def make_address(
                 "cc": country_code,
                 "placed": placed,
                 "deleted": deleted,
+                "lat": at[0],
+                "lon": at[1],
             },
         )
         await db.commit()
     return address_id
 
 
-async def make_zone(sessionmaker: Session, user_id: UUID) -> UUID:
+async def make_zone(
+    sessionmaker: Session,
+    user_id: UUID,
+    *,
+    at: tuple[float, float] = (45.74, 4.84),
+    place_name: str = "Lyon 7e",
+) -> UUID:
     zone_id = new_id()
     async with sessionmaker() as db:
         await db.execute(
             text(
                 "INSERT INTO search_zones (id, user_id, label, place_name, center, radius_m)"
-                " VALUES (:id, :u, 'Maison', 'Lyon 7e', ST_MakePoint(4.84, 45.74)::geography,"
-                " 5000)"
+                " VALUES (:id, :u, 'Maison', :name, ST_MakePoint(:lon, :lat)::geography, 5000)"
             ),
-            {"id": zone_id, "u": user_id},
+            {"id": zone_id, "u": user_id, "name": place_name, "lat": at[0], "lon": at[1]},
         )
         await db.commit()
     return zone_id
@@ -98,6 +106,13 @@ async def test_address_named_after_its_city(sessionmaker: Session) -> None:
         ("69100", "Villeurbanne", "Villeurbanne"),
         ("13090", "Aix-en-Provence", "Aix-en-Provence"),
         ("75021", "Paris", "Paris"),  # not an arrondissement: the city
+        ("75 008", "Paris", "Paris 8e"),  # typed with a space
+        (" 69003 ", "Lyon", "Lyon 3e"),
+        ("42000", "Saint-Étienne", "Saint-Étienne"),
+        ("94240", "L'Haÿ-les-Roses", "L'Haÿ-les-Roses"),
+        # A city that is not only a name never goes public: the postal code instead.
+        ("69100", "Villeurbanne, 12 rue des Lilas", "69100"),
+        ("69100", "12 rue des Lilas", "69100"),
     ],
 )
 async def test_arrondissement_from_the_postal_code(
@@ -108,7 +123,7 @@ async def test_arrondissement_from_the_postal_code(
     place = await _place(sessionmaker, member.id, "address", address)
     assert place is not None
     assert place.place_name == name
-    assert "rue" not in place.place_name and "12" not in place.place_name
+    assert "rue des Lilas" not in place.place_name
 
 
 async def test_foreign_address_keeps_its_city_and_country(sessionmaker: Session) -> None:
@@ -119,6 +134,17 @@ async def test_foreign_address_keeps_its_city_and_country(sessionmaker: Session)
     place = await _place(sessionmaker, member.id, "address", address)
     assert place is not None
     assert (place.place_name, place.country_code) == ("Bruxelles", "BE")
+
+
+@pytest.mark.parametrize("name", ["Lyon 7e, 12 rue des Lilas", "12 rue des Lilas", "Lyon\n7e"])
+async def test_zone_with_more_than_a_place_name_is_refused(
+    sessionmaker: Session, name: str
+) -> None:
+    """A zone's name is sent by the client; one that is not a mere place name never goes
+    public (section 8.11: never an exact address)."""
+    member = await make_account(sessionmaker, completed=True)
+    zone = await make_zone(sessionmaker, member.id, place_name=name)
+    assert await _place(sessionmaker, member.id, "zone", zone) is None
 
 
 async def test_no_position_without_a_placed_own_source(sessionmaker: Session) -> None:

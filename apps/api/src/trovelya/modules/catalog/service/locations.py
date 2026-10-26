@@ -3,6 +3,10 @@
 The seller picks one of their addresses or search zones; the listing takes its real position,
 place name and country, the public position shared by every listing of that source, and the
 H3 cells of the real position.
+
+The offset is drawn once per place of the seller (Q20, E18): a source within `REUSE_M` of a
+place already used by the seller takes that place's offset, so an address and a zone at home,
+or a zone deleted and recreated, never scatter points around the home.
 """
 
 from dataclasses import dataclass
@@ -14,12 +18,15 @@ from sqlalchemy.ext.asyncio import AsyncSession
 
 from trovelya.modules.catalog import repository
 from trovelya.modules.catalog.service.positions import (
-    SYSTEM_RANDOM,
     MAX_LATITUDE,
+    SYSTEM_RANDOM,
     h3_cells,
     public_offset,
 )
 from trovelya.modules.identity.service import PlaceSource, member_place
+
+# Farther than any re-typed or re-geocoded address; much less than the smallest offset (200 m).
+REUSE_M = 50.0
 
 
 @dataclass(frozen=True, slots=True)
@@ -53,10 +60,9 @@ async def listing_location(
     public_lat, public_lon = await repository.public_position(
         db,
         seller_id=seller_id,
-        source=source,
-        source_id=source_id,
         real=(place.lat, place.lon),
         drawn=public_offset(place.lat, place.lon, rng),
+        reuse_m=REUSE_M,
         now=now,
     )
     h3_r7, h3_r9 = h3_cells(place.lat, place.lon)

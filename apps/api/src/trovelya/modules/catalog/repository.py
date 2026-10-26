@@ -256,11 +256,11 @@ _EXPORT_PRICE_WATCHES = text(
     " JOIN listings l ON l.id = w.listing_id WHERE w.user_id = :user_id ORDER BY w.created_at"
 )
 
-# Where the public positions were drawn from and when; never the positions (derived, and the
-# address or zone itself is in the identity export).
+# The member's places kept for public positions, with the date of the draw; not the public
+# position itself (derived). The place is kept even once its address or zone is gone.
 _EXPORT_PUBLIC_POSITIONS = text(
-    "SELECT location_source, location_source_id, drawn_at FROM listing_public_positions"
-    " WHERE seller_id = :user_id ORDER BY drawn_at, location_source_id"
+    "SELECT ST_Y(location::geometry) AS latitude, ST_X(location::geometry) AS longitude, drawn_at"
+    " FROM listing_public_positions WHERE seller_id = :user_id ORDER BY drawn_at, id"
 )
 
 
@@ -296,24 +296,23 @@ async def erase_catalog(db: AsyncSession, user_id: UUID) -> None:
     await db.execute(text("DELETE FROM listing_public_positions WHERE seller_id = :u"), params)
 
 
-# Q20: the source's draw is kept while the source stays put; a moved source gets the new draw.
-# ON CONFLICT DO UPDATE locks the row even when its WHERE is false, so concurrent listings of
-# one source read the same draw.
-_DRAW_PUBLIC_POSITION = text(
-    "INSERT INTO listing_public_positions AS p (location_source_id, location_source, seller_id,"
-    " location, location_public, drawn_at)"
-    " VALUES (:source_id, :source, :seller_id, ST_MakePoint(:lon, :lat)::geography,"
-    " ST_MakePoint(:public_lon, :public_lat)::geography, :now)"
-    " ON CONFLICT (location_source_id) DO UPDATE SET location = EXCLUDED.location,"
-    " location_public = EXCLUDED.location_public, drawn_at = EXCLUDED.drawn_at"
-    " WHERE ST_AsBinary(p.location) <> ST_AsBinary(EXCLUDED.location)"
-    " AND (p.seller_id, p.location_source) = (EXCLUDED.seller_id, EXCLUDED.location_source)"
+# Q20 and E18: one draw per place of the seller. Under the seller's lock, the nearest kept place
+# within REUSE_M lends its offset; otherwise the new draw is kept.
+_LOCK_SELLER_PLACES = text(
+    "SELECT pg_advisory_xact_lock(hashtextextended('trovelya.public_position:' || :seller_id, 0))"
 )
-_PUBLIC_POSITION = text(
-    "SELECT ST_Y(location_public::geometry) AS lat, ST_X(location_public::geometry) AS lon"
-    " FROM listing_public_positions WHERE location_source_id = :source_id"
-    " AND seller_id = :seller_id AND location_source = :source"
-    " AND ST_AsBinary(location) = ST_AsBinary(ST_MakePoint(:lon, :lat)::geography)"
+_NEAREST_PLACE = text(
+    "SELECT ST_Y(location::geometry) AS lat, ST_X(location::geometry) AS lon,"
+    " ST_Y(location_public::geometry) AS public_lat, ST_X(location_public::geometry) AS public_lon"
+    " FROM listing_public_positions"
+    " WHERE seller_id = :seller_id AND ST_DWithin(location, ST_MakePoint(:lon, :lat)::geography,"
+    " :reuse_m)"
+    " ORDER BY ST_Distance(location, ST_MakePoint(:lon, :lat)::geography), drawn_at, id LIMIT 1"
+)
+_KEEP_PLACE = text(
+    "INSERT INTO listing_public_positions (id, seller_id, location, location_public, drawn_at)"
+    " VALUES (:id, :seller_id, ST_MakePoint(:lon, :lat)::geography,"
+    " ST_MakePoint(:public_lon, :public_lat)::geography, :now)"
 )
 
 
@@ -321,24 +320,30 @@ async def public_position(
     db: AsyncSession,
     *,
     seller_id: UUID,
-    source: str,
-    source_id: UUID,
     real: tuple[float, float],
     drawn: tuple[float, float],
+    reuse_m: float,
     now: datetime,
 ) -> tuple[float, float]:
-    """The public position of the source: the one kept for it, or `drawn` when there is none
-    or the source moved."""
-    params = {
-        "source_id": source_id,
-        "source": source,
-        "seller_id": seller_id,
-        "lat": real[0],
-        "lon": real[1],
-        "public_lat": drawn[0],
-        "public_lon": drawn[1],
-        "now": now,
-    }
-    await db.execute(_DRAW_PUBLIC_POSITION, params)
-    row = (await db.execute(_PUBLIC_POSITION, params)).one()
-    return row.lat, row.lon
+    """The public position of `real`: the offset of the seller's nearest place within `reuse_m`
+    applied to it, else `drawn`, then kept."""
+    params = {"seller_id": str(seller_id), "lat": real[0], "lon": real[1], "reuse_m": reuse_m}
+    await db.execute(_LOCK_SELLER_PLACES, params)
+    near = (await db.execute(_NEAREST_PLACE, params)).one_or_none()
+    if near is not None and (near.lat, near.lon) == real:
+        return near.public_lat, near.public_lon  # the very place: the very point, bit for bit
+    if near is not None:
+        public_lon = real[1] + near.public_lon - near.lon
+        return real[0] + near.public_lat - near.lat, (public_lon + 180.0) % 360.0 - 180.0
+    await db.execute(
+        _KEEP_PLACE,
+        {
+            **params,
+            "id": new_id(),
+            "seller_id": seller_id,
+            "public_lat": drawn[0],
+            "public_lon": drawn[1],
+            "now": now,
+        },
+    )
+    return drawn
