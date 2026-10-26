@@ -1,5 +1,6 @@
 """arq worker. Run with: arq trovelya.workers.main.WorkerSettings"""
 
+import asyncio
 import socket
 from typing import Any, ClassVar
 from uuid import UUID
@@ -33,7 +34,11 @@ from trovelya.modules.identity.service import (
     purge_expired_magic_links,
 )
 from trovelya.modules.media.adapters.storage import storage_from_settings
-from trovelya.modules.media.tasks import PROCESS_JOB, PROCESS_TIMEOUT_S, process_media_job
+from trovelya.modules.media.tasks import (
+    PROCESS_JOB,
+    PROCESS_TIMEOUT_S,
+    process_media_job,
+)
 from trovelya.shared.clock import SystemClock
 from trovelya.workers.consumers import consume_events, ensure_group
 from trovelya.workers.email_jobs import MAX_TRIES, deliver_email
@@ -62,6 +67,9 @@ async def startup(ctx: Context) -> None:
     ctx["clock"] = SystemClock()
     ctx["settings"] = settings
     ctx["storage"] = storage_from_settings(settings)
+    # One image decoded at a time in this worker (memory); waiting happens outside the
+    # 60 s given to each image.
+    ctx["image_slot"] = asyncio.Semaphore(1)
     ctx["http"] = httpx.AsyncClient()
     ctx["email_sender"] = make_email_sender(settings, ctx["http"])
     # Handlers enqueue their e-mails on arq's own pool (ctx["redis"]).
@@ -138,7 +146,12 @@ class WorkerSettings:
     functions: ClassVar[list[Any]] = [
         func(deliver_email, max_tries=MAX_TRIES, timeout=60),
         func(build_data_export_job, name=EXPORT_JOB, max_tries=3, timeout=300),
-        func(process_media_job, name=PROCESS_JOB, max_tries=3, timeout=PROCESS_TIMEOUT_S),
+        func(
+            process_media_job,
+            name=PROCESS_JOB,
+            max_tries=1,  # replays come from `complete`; retries arrive with P2-T02b3
+            timeout=PROCESS_TIMEOUT_S,
+        ),
     ]
     cron_jobs: ClassVar[list[CronJob]] = [
         cron(relay_outbox, second=EVERY_SECOND, unique=True, timeout=30),

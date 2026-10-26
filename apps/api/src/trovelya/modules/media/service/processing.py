@@ -1,8 +1,10 @@
 """Worker job `process_media` (P2-T02b2, ADR-0019): `processing` → `ready` or `rejected`.
 
-1. The row must still be `processing` (a replayed or late job changes nothing).
-2. The stored size is read again (the presigned length is not trusted alone), then the file
-   is checked and re-encoded by `images.process_image`, in a thread.
+1. The row must still be `processing`. A late or replayed job on a decided media only makes
+   sure its original is gone (a deletion that failed after the commit is finished here).
+2. The stored size is read again (the presigned length is not trusted alone); the file is
+   checked and re-encoded by `images.process_image` in a thread, one image at a time per
+   worker.
 3. The variants are written under new random keys, then one transaction marks the media
    `ready` and emits `media.ready`. Two runs at once: the one whose update finds the row still
    `processing` wins; the other deletes the variants it wrote.
@@ -12,7 +14,6 @@ A file refused at any step ends `rejected` with its reason and `media.rejected`.
 """
 
 import asyncio
-import threading
 from typing import Any
 from uuid import UUID
 
@@ -34,16 +35,10 @@ logger = structlog.get_logger(__name__)
 # Plan P2 (T02b): an image this close (dHash bits) to one another member sent first is flagged
 # for moderation, never refused. The first sender re-using their own photo is not flagged.
 DUPLICATE_DISTANCE = 6
-# A 12 Mpx photo takes about 3 s (8 variants); the worker gives up after this and retries.
-PROCESS_TIMEOUT_S = 120
-# One image decoded at a time per worker process: a 50 Mpx image takes about 200 MB in RGBA.
-# A thread lock, taken inside the thread, so it belongs to no event loop.
-_ONE_IMAGE_AT_A_TIME = threading.Lock()
+# A 12 Mpx photo takes about 3 s, 49 Mpx about 2.5 s; past this the attempt is retried.
+IMAGE_TIMEOUT_S = 60
 
-
-def _process_one(data: bytes, mime_type: str, max_bytes: int) -> ProcessedImage:
-    with _ONE_IMAGE_AT_A_TIME:
-        return process_image(data, mime_type, max_bytes=max_bytes)
+Session = async_sessionmaker[AsyncSession]
 
 
 def _signed(value: int) -> int:
@@ -51,18 +46,18 @@ def _signed(value: int) -> int:
     return value - (1 << 64) if value >= 1 << 63 else value
 
 
-async def _status(sessionmaker: async_sessionmaker[AsyncSession], media_id: UUID) -> str:
+async def _status(sessionmaker: Session, media_id: UUID) -> str:
     async with sessionmaker() as db:
         row = await repository.media_to_process(db, media_id)
     return "gone" if row is None else row.status
 
 
-async def _reject(
-    sessionmaker: async_sessionmaker[AsyncSession],
-    storage: ObjectStorage,
-    row: Any,
-    reason: str,
-) -> str:
+async def _delete_variants(storage: ObjectStorage, keys: list[str]) -> None:
+    for key in keys:
+        await storage.delete("variants", key)
+
+
+async def _reject(sessionmaker: Session, storage: ObjectStorage, row: Any, reason: str) -> str:
     async with sessionmaker() as db:
         decided = await repository.mark_rejected(db, row.id, reason)
         if decided:
@@ -81,29 +76,22 @@ async def _reject(
     return "rejected"
 
 
-async def process_media(
-    sessionmaker: async_sessionmaker[AsyncSession], storage: ObjectStorage, media_id: UUID
-) -> str:
-    """Returns the media's status afterwards, or "gone" when it does not exist or was deleted."""
-    async with sessionmaker() as db:
-        row = await repository.media_to_process(db, media_id)
-        if row is None or row.status != "processing":
-            return "gone" if row is None else row.status
-        max_bytes = await repository.setting_int(db, "media.max_image_bytes")
-    try:
-        size = await storage.size("originals", row.storage_key)
-        if size is None:
-            raise ImageRejectedError("missing_file")
-        if size > max_bytes:
-            raise ImageRejectedError("too_large")
-        data = await storage.get("originals", row.storage_key)
-        image = await asyncio.to_thread(_process_one, data, row.mime_type, max_bytes)
-    except ImageRejectedError as rejected:
-        return await _reject(sessionmaker, storage, row, rejected.reason)
+async def _read(storage: ObjectStorage, row: Any, max_bytes: int) -> bytes:
+    size = await storage.size("originals", row.storage_key)
+    if size is None:
+        raise ImageRejectedError("missing_file")
+    if size > max_bytes:
+        raise ImageRejectedError("too_large")
+    return await storage.get("originals", row.storage_key)
 
+
+async def _write_variants(
+    storage: ObjectStorage, image: ProcessedImage, written: list[str]
+) -> list[dict[str, Any]]:
     variants: list[dict[str, Any]] = []
     for variant in image.variants:
         key = new_storage_key()
+        written.append(key)
         await storage.put("variants", key, variant.data, content_type=f"image/{variant.format}")
         variants.append(
             {
@@ -114,32 +102,74 @@ async def process_media(
                 "bytes": len(variant.data),
             }
         )
+    return variants
+
+
+async def _mark_ready(
+    db: AsyncSession, row: Any, image: ProcessedImage, variants: list[dict[str, Any]]
+) -> bool:
     perceptual_hash = _signed(image.dhash)
-    async with sessionmaker() as db:
+    duplicate = None
+    if row.purpose == "listing":
         first = await repository.oldest_similar_media(db, perceptual_hash, DUPLICATE_DISTANCE)
-        duplicate = first.id if first is not None and first.owner_id != row.owner_id else None
-        decided = await repository.mark_ready(
+        if first is not None and first.owner_id != row.owner_id:
+            duplicate = first.id
+    decided = await repository.mark_ready(
+        db,
+        row.id,
+        width=image.width,
+        height=image.height,
+        sha256=image.sha256,
+        perceptual_hash=perceptual_hash,
+        variants=variants,
+        moderation={"duplicate_of": str(duplicate)} if duplicate else {},
+    )
+    if decided:
+        await emit_event(
             db,
-            row.id,
-            width=image.width,
-            height=image.height,
-            sha256=image.sha256,
-            perceptual_hash=perceptual_hash,
-            variants=variants,
-            moderation={"duplicate_of": str(duplicate)} if duplicate else {},
+            type="media.ready",
+            aggregate_type="media",
+            aggregate_id=row.id,
+            payload={"media_id": str(row.id), "owner_id": str(row.owner_id)},
         )
-        if decided:
-            await emit_event(
-                db,
-                type="media.ready",
-                aggregate_type="media",
-                aggregate_id=row.id,
-                payload={"media_id": str(row.id), "owner_id": str(row.owner_id)},
+        await commit(db)
+    return decided
+
+
+async def process_media(
+    sessionmaker: Session,
+    storage: ObjectStorage,
+    media_id: UUID,
+    *,
+    image_slot: asyncio.Semaphore | None = None,
+) -> str:
+    """Returns the media's status afterwards, or "gone" when it does not exist or was deleted.
+    `image_slot` limits the images decoded at once (the worker shares one; one by default)."""
+    async with sessionmaker() as db:
+        row = await repository.media_to_process(db, media_id)
+        if row is None:
+            return "gone"
+        if row.status != "processing":
+            if row.status in {"ready", "rejected"}:
+                await storage.delete("originals", row.storage_key)
+            return row.status
+        max_bytes = await repository.setting_int(db, "media.max_image_bytes")
+    try:
+        data = await _read(storage, row, max_bytes)
+        async with image_slot or asyncio.Semaphore(1):
+            image = await asyncio.wait_for(
+                asyncio.to_thread(process_image, data, row.mime_type, max_bytes=max_bytes),
+                IMAGE_TIMEOUT_S,
             )
-            await commit(db)
-    if not decided:  # another run got there first: keep its variants, not ours
-        for variant in variants:
-            await storage.delete("variants", variant["key"])
+    except ImageRejectedError as rejected:
+        return await _reject(sessionmaker, storage, row, rejected.reason)
+
+    written: list[str] = []
+    variants = await _write_variants(storage, image, written)
+    async with sessionmaker() as db:
+        decided = await _mark_ready(db, row, image, variants)
+    if not decided:  # another run got there first, or the media was deleted meanwhile
+        await _delete_variants(storage, written)
         return await _status(sessionmaker, row.id)
     await storage.delete("originals", row.storage_key)
     logger.info("media.ready", media_id=str(row.id), variants=len(variants))

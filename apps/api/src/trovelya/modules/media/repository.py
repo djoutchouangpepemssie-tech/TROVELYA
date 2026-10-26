@@ -117,7 +117,7 @@ async def media_to_process(db: AsyncSession, media_id: UUID) -> Row[Any] | None:
     return (
         await db.execute(
             text(
-                "SELECT id, owner_id, status, mime_type, storage_key FROM media"
+                "SELECT id, owner_id, purpose, status, mime_type, storage_key FROM media"
                 " WHERE id = :id AND deleted_at IS NULL"
             ),
             {"id": media_id},
@@ -130,7 +130,7 @@ async def mark_rejected(db: AsyncSession, media_id: UUID, reason: str) -> bool:
     done = await db.scalar(
         text(
             "UPDATE media SET status = 'rejected', rejection_reason = :reason"
-            " WHERE id = :id AND status = 'processing' RETURNING id"
+            " WHERE id = :id AND status = 'processing' AND deleted_at IS NULL RETURNING id"
         ),
         {"id": media_id, "reason": reason},
     )
@@ -154,7 +154,7 @@ async def mark_ready(
             "UPDATE media SET status = 'ready', width = :width, height = :height,"
             " sha256 = :sha256, perceptual_hash = :hash, exif_stripped = true,"
             " variants = CAST(:variants AS jsonb), moderation = moderation || CAST(:mod AS jsonb)"
-            " WHERE id = :id AND status = 'processing' RETURNING id"
+            " WHERE id = :id AND status = 'processing' AND deleted_at IS NULL RETURNING id"
         ),
         {
             "id": media_id,
@@ -172,12 +172,15 @@ async def mark_ready(
 async def oldest_similar_media(
     db: AsyncSession, perceptual_hash: int, max_distance: int
 ) -> Row[Any] | None:
-    """The first ready image (id, owner_id) within `max_distance` bits of this dHash."""
+    """The first ready listing photo (id, owner_id) within `max_distance` bits of this dHash.
+
+    A full scan, fine while P2 holds few photos; before launch, index bands of the hash
+    (7 bands: two hashes 6 bits apart share at least one) — recorded in the P2 plan."""
     return (
         await db.execute(
             text(
                 "SELECT id, owner_id FROM media WHERE status = 'ready' AND deleted_at IS NULL"
-                " AND perceptual_hash IS NOT NULL"
+                " AND purpose = 'listing' AND perceptual_hash IS NOT NULL"
                 " AND bit_count((perceptual_hash # :hash)::bit(64)) <= :distance"
                 " ORDER BY created_at, id LIMIT 1"
             ),

@@ -36,6 +36,12 @@ def _photo(scene: int = 0) -> bytes:
     return out.getvalue()
 
 
+def _encode(image: Image.Image) -> bytes:
+    out = BytesIO()
+    image.save(out, "JPEG", quality=90)
+    return out.getvalue()
+
+
 async def _media(
     sessionmaker: Session,
     storage: MemoryStorage,
@@ -43,6 +49,7 @@ async def _media(
     data: bytes | None,
     mime: str = "image/jpeg",
     status: str = "processing",
+    purpose: str = "listing",
 ) -> tuple[UUID, str]:
     """A media row as `complete` leaves it, with its original in storage (None: never sent)."""
     media_id, key = new_id(), new_storage_key()
@@ -51,9 +58,10 @@ async def _media(
             text(
                 "INSERT INTO media (id, owner_id, kind, purpose, storage_key, mime_type, bytes,"
                 " status)"
-                " VALUES (:id, :owner, 'image', 'listing', :key, :mime, :bytes, 'processing')"
+                " VALUES (:id, :owner, 'image', :purpose, :key, :mime, :bytes, 'processing')"
             ),
             {
+                "purpose": purpose,
                 "id": media_id,
                 "owner": owner_id,
                 "key": key,
@@ -210,9 +218,12 @@ async def test_only_processing_media_is_processed(
     sessionmaker: Session, storage: MemoryStorage, status: str
 ) -> None:
     owner = await make_account(sessionmaker, completed=True)
+    """A decided media only has its original deleted (a deletion that failed after the commit is
+    finished by the replay); an upload not completed keeps it."""
     media_id, key = await _media(sessionmaker, storage, owner.id, _photo(), status=status)
     assert await process_media(sessionmaker, storage, media_id) == status
-    assert ("originals", key) in storage.objects and not _variant_keys(storage)
+    assert (("originals", key) in storage.objects) == (status == "uploading")
+    assert not _variant_keys(storage)
 
 
 async def test_deleted_or_unknown_media_is_left_alone(
@@ -242,8 +253,44 @@ async def test_duplicate_of_another_sellers_image_is_flagged(
     copy, _ = await _media(sessionmaker, storage, second_owner.id, _photo(101))
     again, _ = await _media(sessionmaker, storage, first_owner.id, _photo(101))
     other, _ = await _media(sessionmaker, storage, second_owner.id, _photo(103))
-    for media_id in (copy, again, other):
+    cropped = Image.open(BytesIO(_photo(101))).crop((8, 6, 792, 594))  # 2 % trimmed: 3 bits away
+    near, _ = await _media(sessionmaker, storage, second_owner.id, _encode(cropped))
+    avatar, _ = await _media(sessionmaker, storage, second_owner.id, _photo(101), purpose="avatar")
+    async with sessionmaker() as db:  # what moderation already noted is kept
+        await db.execute(
+            text("UPDATE media SET moderation = '{\"note\": 1}' WHERE id = :id"), {"id": near}
+        )
+        await db.commit()
+    for media_id in (copy, again, other, near, avatar):
         assert await process_media(sessionmaker, storage, media_id) == "ready"
     assert (await _row(sessionmaker, copy)).moderation == {"duplicate_of": str(original)}
+    assert (await _row(sessionmaker, near)).moderation == {
+        "note": 1,
+        "duplicate_of": str(original),
+    }
     assert (await _row(sessionmaker, again)).moderation == {}
     assert (await _row(sessionmaker, other)).moderation == {}
+    assert (await _row(sessionmaker, avatar)).moderation == {}  # only listing photos compared
+
+
+async def test_only_live_listing_photos_are_references(
+    sessionmaker: Session, storage: MemoryStorage
+) -> None:
+    first_owner = await make_account(sessionmaker, completed=True)
+    second_owner = await make_account(sessionmaker, completed=True)
+    original, _ = await _media(sessionmaker, storage, first_owner.id, _photo(105))
+    assert await process_media(sessionmaker, storage, original) == "ready"
+    async with sessionmaker() as db:
+        await db.execute(
+            text("UPDATE media SET deleted_at = now() WHERE id = :id"), {"id": original}
+        )
+        await db.commit()
+    copy, _ = await _media(sessionmaker, storage, second_owner.id, _photo(105))
+    assert await process_media(sessionmaker, storage, copy) == "ready"
+    assert (await _row(sessionmaker, copy)).moderation == {}
+    # Another member's avatar is not a listing photo: no reference either.
+    avatar, _ = await _media(sessionmaker, storage, first_owner.id, _photo(106), purpose="avatar")
+    listing, _ = await _media(sessionmaker, storage, second_owner.id, _photo(106))
+    for media_id in (avatar, listing):
+        assert await process_media(sessionmaker, storage, media_id) == "ready"
+    assert (await _row(sessionmaker, listing)).moderation == {}
