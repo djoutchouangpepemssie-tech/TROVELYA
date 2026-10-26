@@ -5,6 +5,9 @@ Every error is reported at once, as `(attribute key, code)`; the accepted values
 the category's order, text trimmed. Codes: `required`, `unknown` (not an attribute of the
 category), `type`, `not_in_list`, `too_small`, `too_large`, `step` (exact decimal arithmetic:
 0.1 + 0.2 is not a multiple of 0.1), `too_long`, `empty`, `invalid_characters`.
+
+Bounds beyond the seed's (plan P2, Q21): `int` and `year` fit in a signed 32-bit integer, and a
+`year` is at most the clock's year + 1 (next year's models are sold in advance).
 """
 
 import math
@@ -17,6 +20,9 @@ from typing import Any
 from trovelya.modules.catalog.models import AttributeType
 
 AttributeIssue = tuple[str, str]
+
+INT32_MIN = -(2**31)
+INT32_MAX = 2**31 - 1
 
 
 @dataclass(frozen=True)
@@ -57,7 +63,22 @@ def _check_bounds(value: int | float, constraints: Mapping[str, int | float]) ->
     return None
 
 
-def _check(rule: AttributeRule, value: Any) -> tuple[Any, str | None]:
+def _check_integer(rule: AttributeRule, value: int, current_year: int) -> str | None:
+    """32 bits first, then the seed's bounds, a year's maximum lowered to next year."""
+    if value < INT32_MIN:
+        return "too_small"
+    if value > INT32_MAX:
+        return "too_large"
+    constraints = rule.constraints
+    if rule.data_type == "year":
+        constraints = {
+            **constraints,
+            "max": min(constraints.get("max", math.inf), current_year + 1),
+        }
+    return _check_bounds(value, constraints)
+
+
+def _check(rule: AttributeRule, value: Any, current_year: int) -> tuple[Any, str | None]:
     """The value to store, or the error code."""
     match rule.data_type:
         case "enum":
@@ -80,7 +101,7 @@ def _check(rule: AttributeRule, value: Any) -> tuple[Any, str | None]:
         case "int" | "year":
             if not _is_number(value) or not isinstance(value, int):
                 return None, "type"
-            return value, _check_bounds(value, rule.constraints)
+            return value, _check_integer(rule, value, current_year)
         case "decimal":
             if not _is_number(value):
                 return None, "type"
@@ -90,9 +111,10 @@ def _check(rule: AttributeRule, value: Any) -> tuple[Any, str | None]:
 
 
 def validate_attributes(
-    values: Mapping[str, Any], rules: Sequence[AttributeRule]
+    values: Mapping[str, Any], rules: Sequence[AttributeRule], *, current_year: int
 ) -> tuple[dict[str, Any], list[AttributeIssue]]:
-    """Accepted values (category order) and every error found."""
+    """Accepted values (category order) and every error found; `current_year` comes from the
+    clock."""
     accepted: dict[str, Any] = {}
     errors: list[AttributeIssue] = []
     known = {rule.key for rule in rules}
@@ -103,7 +125,7 @@ def validate_attributes(
             if rule.is_required:
                 errors.append((rule.key, "required"))
             continue
-        stored, error = _check(rule, value)
+        stored, error = _check(rule, value, current_year)
         if error:
             errors.append((rule.key, error))
         else:
