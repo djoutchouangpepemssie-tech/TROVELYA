@@ -27,11 +27,20 @@ MAX_BYTES = 15 * 1024 * 1024
 
 
 class RecordingQueue:
-    def __init__(self) -> None:
+    """Records each job with the media status another connection sees at that moment: a job
+    pushed before commit would see `uploading`."""
+
+    def __init__(self, sessionmaker: async_sessionmaker[AsyncSession]) -> None:
+        self.sessionmaker = sessionmaker
         self.jobs: list[tuple[str, tuple[object, ...]]] = []
+        self.seen: list[str] = []
+        self.down = False
 
     async def enqueue_job(self, function: str, *args: object) -> None:
+        if self.down:
+            raise ConnectionError("queue unavailable")
         self.jobs.append((function, args))
+        self.seen.append((await _row(self.sessionmaker, str(args[0]))).status)
 
 
 @pytest.fixture
@@ -40,8 +49,8 @@ def clock() -> FixedClock:
 
 
 @pytest.fixture
-def queue() -> RecordingQueue:
-    return RecordingQueue()
+def queue(sessionmaker: async_sessionmaker[AsyncSession]) -> RecordingQueue:
+    return RecordingQueue(sessionmaker)
 
 
 @pytest.fixture
@@ -225,7 +234,7 @@ async def test_upload_needs_a_completed_profile(
     assert (response.status_code, response.json()["code"]) == (403, "profile_incomplete")
 
 
-async def test_complete_hands_the_file_to_the_worker_once(
+async def test_complete_hands_the_file_to_the_worker_after_commit(
     client: AsyncClient,
     sessionmaker: async_sessionmaker[AsyncSession],
     queue: RecordingQueue,
@@ -236,10 +245,58 @@ async def test_complete_hands_the_file_to_the_worker_once(
     assert done.status_code == 202
     assert done.json()["status"] == "processing"
     assert queue.jobs == [("process_media", (media_id,))]
-    again = await client.post(f"/v1/media/{media_id}/complete", headers=member.headers)
-    assert (again.status_code, again.json()["code"]) == (409, "media_already_completed")
+    assert queue.seen == ["processing"]  # pushed after commit
+
+
+async def test_complete_can_be_retried_until_the_worker_decides(
+    client: AsyncClient,
+    sessionmaker: async_sessionmaker[AsyncSession],
+    queue: RecordingQueue,
+) -> None:
+    """The queue fails after commit: the client's retry asks the worker again."""
+    member = await make_account(sessionmaker, completed=True)
+    media_id = (await _upload(client, member.headers)).json()["media_id"]
+    queue.down = True
+    failed = await client.post(f"/v1/media/{media_id}/complete", headers=member.headers)
+    assert failed.status_code == 500 and queue.jobs == []
+    queue.down = False
+    retried = await client.post(f"/v1/media/{media_id}/complete", headers=member.headers)
+    assert (retried.status_code, queue.jobs) == (202, [("process_media", (media_id,))])
+    for status, reason in (("rejected", "type_mismatch"), ("ready", None)):
+        async with sessionmaker() as db:
+            await db.execute(
+                text(
+                    "UPDATE media SET status = :s, rejection_reason = :r, sha256 = :h,"
+                    " exif_stripped = true, variants = CAST(:v AS jsonb) WHERE id = :id"
+                ),
+                {
+                    "s": status,
+                    "r": reason,
+                    "h": b"\x01" * 32,
+                    "v": '[{"format":"webp","width":1,"height":1,"key":"' + "c" * 32 + '"}]',
+                    "id": UUID(media_id),
+                },
+            )
+            await db.commit()
+        late = await client.post(f"/v1/media/{media_id}/complete", headers=member.headers)
+        assert (late.status_code, late.json()["code"]) == (409, "media_already_completed")
     assert len(queue.jobs) == 1
-    assert (await _row(sessionmaker, media_id)).status == "processing"
+
+
+async def test_deleted_media_is_not_found(
+    client: AsyncClient, sessionmaker: async_sessionmaker[AsyncSession], queue: RecordingQueue
+) -> None:
+    member = await make_account(sessionmaker, completed=True)
+    media_id = (await _upload(client, member.headers)).json()["media_id"]
+    async with sessionmaker() as db:
+        await db.execute(
+            text("UPDATE media SET deleted_at = now() WHERE id = :id"), {"id": UUID(media_id)}
+        )
+        await db.commit()
+    for method, path in (("POST", f"/{media_id}/complete"), ("GET", f"/{media_id}")):
+        response = await client.request(method, "/v1/media" + path, headers=member.headers)
+        assert response.status_code == 404, path
+    assert queue.jobs == []
 
 
 async def test_someone_elses_media_is_not_found(

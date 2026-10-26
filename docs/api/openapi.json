@@ -4406,7 +4406,7 @@
             "description": "Not the caller's"
           },
           "409": {
-            "description": "Already sent"
+            "description": "Already processed: ready or rejected"
           },
           "422": {
             "content": {

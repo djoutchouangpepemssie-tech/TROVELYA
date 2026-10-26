@@ -3591,7 +3591,7 @@ export interface operations {
                 };
                 content?: never;
             };
-            /** @description Already sent */
+            /** @description Already processed: ready or rejected */
             409: {
                 headers: {
                     [name: string]: unknown;

@@ -75,12 +75,14 @@ async def request_upload(
 async def complete_upload(
     db: AsyncSession, *, owner_id: UUID, media_id: UUID, queue: JobQueue
 ) -> None:
-    """The worker is asked once, after commit (it must find the row `processing`); a second
-    call answers 409 and asks nothing."""
+    """The worker is asked after commit (it must find the row `processing`). Calling again
+    while the media is still `processing` asks again: the client retries when the first
+    answer was lost or the queue failed after commit, and `process_media` is idempotent
+    (P2-T02b). Once the worker has decided (ready or rejected), 409."""
     outcome = await repository.start_processing(db, media_id, owner_id)
     if outcome is None:
         raise AppError(ErrorCode.NOT_FOUND, 404)
-    if outcome != "started":
+    if outcome not in {"started", "processing"}:
         raise AppError(ErrorCode.MEDIA_ALREADY_COMPLETED, 409)
 
     async def push() -> None:

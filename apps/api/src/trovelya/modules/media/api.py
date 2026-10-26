@@ -55,7 +55,7 @@ async def post_upload(
     "/{media_id}/complete",
     operation_id="media_complete",
     status_code=status.HTTP_202_ACCEPTED,
-    responses={404: {"description": "Not the caller's"}, 409: {"description": "Already sent"}},
+    responses={404: {"description": "Not the caller's"}, 409: {"description": "Already processed: ready or rejected"}},
 )
 async def post_complete(media_id: UUID, request: Request, db: Uow, me: Member) -> MediaOut:
     """The file is in storage: the worker checks and processes it."""
