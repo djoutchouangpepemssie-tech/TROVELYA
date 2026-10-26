@@ -215,8 +215,9 @@ async def search_brands(db: AsyncSession, *, prefix: str, q: str, limit: int) ->
     return (await db.execute(_SEARCH_BRANDS, {"prefix": prefix, "q": q, "limit": limit})).all()
 
 
-# GDPR export (ADR-0016): the member's listings. Not exported: the public position (an offset
-# of the real one), H3 cells, embedding and search document (derived, internal).
+# GDPR export (ADR-0016): the member's listings with their price and status histories (no
+# staff identity), their favorites and price watches. Not exported: the public position (an
+# offset of the real one), H3 cells, embedding and search document (derived, internal).
 _EXPORT_LISTINGS = text(
     "SELECT l.id, l.short_id, l.status::text AS status, l.title, l.description,"
     " c.key AS category, b.name::text AS brand, l.condition::text AS condition, l.attributes,"
@@ -225,19 +226,46 @@ _EXPORT_LISTINGS = text(
     " ST_Y(l.location::geometry) AS latitude, ST_X(l.location::geometry) AS longitude,"
     " l.place_name, l.country_code, l.location_source, l.sale_modes, l.open_to_swap,"
     " l.published_at, l.sold_at, l.expires_at, l.view_count, l.favorite_count,"
-    " l.created_at, l.updated_at, l.deleted_at"
+    " l.created_at, l.updated_at, l.deleted_at,"
+    " (SELECT coalesce(jsonb_agg(jsonb_build_object('price_minor', p.price_minor,"
+    " 'changed_at', p.changed_at) ORDER BY p.changed_at), '[]')"
+    " FROM listing_price_history p WHERE p.listing_id = l.id) AS price_history,"
+    " (SELECT coalesce(jsonb_agg(jsonb_build_object('from_status', h.from_status,"
+    " 'to_status', h.to_status, 'event', h.event, 'actor_kind', h.actor_kind,"
+    " 'reason_code', h.reason_code, 'reason_text', h.reason_text, 'created_at', h.created_at)"
+    " ORDER BY h.created_at), '[]')"
+    " FROM listing_status_history h WHERE h.listing_id = l.id) AS status_history"
     " FROM listings l JOIN categories c ON c.id = l.category_id"
     " LEFT JOIN brands b ON b.id = l.brand_id"
     " WHERE l.seller_id = :user_id ORDER BY l.created_at"
 )
+_EXPORT_FAVORITES = text(
+    "SELECT listing_id, created_at FROM favorites WHERE user_id = :user_id ORDER BY created_at"
+)
+_EXPORT_PRICE_WATCHES = text(
+    "SELECT listing_id, target_minor, created_at FROM price_watches WHERE user_id = :user_id"
+    " ORDER BY created_at"
+)
 
 
 async def export_catalog(db: AsyncSession, user_id: UUID) -> dict[str, list[dict[str, Any]]]:
-    rows = await db.execute(_EXPORT_LISTINGS, {"user_id": user_id})
-    return {"listings": [dict(row) for row in rows.mappings()]}
+    params = {"user_id": user_id}
+    return {
+        name: [dict(row) for row in (await db.execute(query, params)).mappings()]
+        for name, query in (
+            ("listings", _EXPORT_LISTINGS),
+            ("favorites", _EXPORT_FAVORITES),
+            ("price_watches", _EXPORT_PRICE_WATCHES),
+        )
+    }
 
 
 async def erase_catalog(db: AsyncSession, user_id: UUID) -> None:
     """GDPR eraser (within the account's erasure, plan P2 Q13): the member's listings are
-    deleted; their photos go with the media eraser and purge."""
-    await db.execute(text("DELETE FROM listings WHERE seller_id = :u"), {"u": user_id})
+    deleted with what hangs on them (photo links, other members' favorites and watches,
+    histories); the photos themselves go with the media eraser and purge. The member's own
+    favorites and price watches on other listings go too."""
+    params = {"u": user_id}
+    await db.execute(text("DELETE FROM favorites WHERE user_id = :u"), params)
+    await db.execute(text("DELETE FROM price_watches WHERE user_id = :u"), params)
+    await db.execute(text("DELETE FROM listings WHERE seller_id = :u"), params)
