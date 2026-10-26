@@ -7,7 +7,6 @@ import httpx
 from arq.connections import ArqRedis
 from fastapi import FastAPI
 
-import trovelya.modules.media.service  # noqa: F401  # pyright: ignore[reportUnusedImport]  (GDPR exporter)
 from trovelya.core import db, debug_routes, redis, testing_routes
 from trovelya.core.config import Settings, get_settings
 from trovelya.core.csrf import CsrfMiddleware
@@ -36,6 +35,8 @@ from trovelya.modules.identity.adapters.oidc import (
 from trovelya.modules.identity.adapters.turnstile import AlwaysPass, TurnstileVerifier
 from trovelya.modules.identity.api import router as identity_router
 from trovelya.modules.identity.api.testing import router as identity_testing_router
+from trovelya.modules.media.adapters.storage import storage_from_settings
+from trovelya.modules.media.api import router as media_router  # registers its GDPR exporter too
 from trovelya.shared.clock import SystemClock
 
 
@@ -123,6 +124,7 @@ def create_app(
     app.state.clock = SystemClock()
     app.state.oidc = _oidc_providers(settings)
     app.state.geocoder = _geocoder(settings)
+    app.state.storage = storage_from_settings(settings)
     app.state.captcha = (
         TurnstileVerifier(
             secret=settings.turnstile_secret_key.get_secret_value(), client=httpx.AsyncClient()
@@ -148,6 +150,7 @@ def create_app(
     app.include_router(csrf_router)
     app.include_router(identity_router)
     app.include_router(catalog_router)
+    app.include_router(media_router)
     if settings.env != "production":
         app.include_router(debug_routes.router)
     if settings.env in {"local", "test"}:

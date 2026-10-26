@@ -61,6 +61,9 @@ forbidden_modules =
 [importlinter:contract:module-identity]
 name = Other modules use identity only through identity.service
 type = forbidden
+# Direct imports only: media.api depends on identity.service.auth (the signed-in member),
+# which reaches identity's own repository inside its module.
+allow_indirect_imports = True
 source_modules =
     trovelya.modules.ledger
     trovelya.modules.catalog
