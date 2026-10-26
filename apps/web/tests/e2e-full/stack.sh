@@ -55,7 +55,7 @@ GEOCODER_PROVIDER=fake
 PORT=8000
 ENV
 
-docker run --rm --network "$NETWORK" --env-file "$ENV_FILE" trovelya/api alembic upgrade head >/dev/null
+docker run --rm --network "$NETWORK" --env-file "$ENV_FILE" trovelya/api sh -c "alembic upgrade head && python -m trovelya.scripts.seed_catalog" >/dev/null
 docker run -d --name trovelya-full-api --network "$NETWORK" --env-file "$ENV_FILE" \
   -p "$API_PORT:8000" trovelya/api >/dev/null
 docker run -d --name trovelya-full-worker --network "$NETWORK" --env-file "$ENV_FILE" \

@@ -12,13 +12,14 @@ from sqlalchemy import text
 from sqlalchemy.exc import IntegrityError
 from sqlalchemy.ext.asyncio import AsyncEngine, AsyncSession
 
+from trovelya.modules.catalog.service.brand_seed import parse_brands
 from trovelya.modules.catalog.service.seed import (
     SeedError,
     load_seed,
     parse_seed,
     read_seed_file,
 )
-from trovelya.modules.catalog.service.seed_writer import apply_seed
+from trovelya.modules.catalog.service.seed_writer import apply_brands, apply_seed
 from trovelya.modules.catalog.universes import UNIVERSE_KEYS
 
 
@@ -289,3 +290,32 @@ async def test_commit_time_violation_leaves_the_tree_as_it_was(db: AsyncSession)
         await _check_deferred(db)
     await savepoint.rollback()
     assert await _snapshot(db) == before
+
+
+async def test_brands_seeded_once_and_existing_kept(db: AsyncSession) -> None:
+    await db.execute(
+        text(
+            "INSERT INTO brands (id, name, slug, is_verified)"
+            " VALUES (gen_random_uuid(), 'marque graine', 'marque-graine', true)"
+        )
+    )
+    brands = [("Marque Graine", "marque-graine"), ("Autre Graine", "autre-graine")]
+    await apply_brands(db, brands)
+    await apply_brands(db, brands)
+    rows = await db.execute(
+        text(
+            "SELECT name::text, is_verified FROM brands"
+            " WHERE slug IN ('marque-graine', 'autre-graine') ORDER BY slug"
+        )
+    )
+    assert [tuple(r) for r in rows] == [("Autre Graine", False), ("marque graine", True)]
+
+
+async def test_real_brands_file_loads(db: AsyncSession) -> None:
+    brands = parse_brands(read_seed_file("brands.yaml"))
+    await apply_brands(db, brands)
+    found = await db.execute(
+        text("SELECT count(*) FROM brands WHERE slug = ANY(:slugs)"),
+        {"slugs": [slug for _, slug in brands]},
+    )
+    assert found.scalar_one() == len(brands)
