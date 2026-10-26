@@ -64,6 +64,7 @@ Stockage objet Cloudflare R2 en juridiction UE (MinIO en local et en CI), deux b
 | E14 | 7.5 `listings` | Le statut et ses transitions ne gardent pas trace de la source de la position. | Colonnes `location_source TEXT CHECK (IN ('address','zone'))` et `location_source_id UUID` (adresse ou zone du vendeur). Changer de source tire un nouveau décalage ; relire n'en tire jamais. | — |
 | E15 | 7.5 `listings` | La légende de la photo (pour l'embedding) et la raison de refus n'ont pas de colonne. | `media.moderation` garde la légende et les étiquettes de classification ; `listing_status_history.reason_code` + `reason_text` gardent les motifs. | — |
 | E16 | 11.5 rattachement des photos | Aucune route ne dit comment attacher des photos à une annonce. | Champ `media_ids` (liste ordonnée, 1 à 12) dans `POST` et `PATCH /listings` ; aucune route nouvelle. | — |
+| E17 | 7.5 `listings` | Les contrôles de valeurs ne sont pas tous écrits. | Seulement des formats et des bornes déjà dans le cahier : code pays et devise, modes de vente de la section 4, compteurs et score 0-100, montants `>= 0` (7.1). Aucune règle entre colonnes (offre minimale et prix, statut et dates, remise et livraison) : la machine à états (T04) et le service (T03b) les portent. `version` et `updated_at` ne suivent que le contenu de l'annonce (ni compteurs, ni score, ni données de recherche). | — |
 
 ### 0.3 ADR produits par cette phase
 
@@ -406,9 +407,11 @@ tout ── T12 (parcours 2, démo, porte)
 
 ### P2-T03a — Tables des annonces
 
+*Livrée en deux PR (limite de 600 lignes) : T03a1, la table `listings` avec l'exportateur et l'effaceur RGPD du catalogue (exigés dès qu'une table référence `users`) ; T03a2, les tables liées (migration 0013).*
+
 **Branche :** `feat/P2-T03a-tables-annonces`.
 
-**Fichiers :** `modules/catalog/migrations/versions/0009_catalog_listings.py`, `models.py`, `tests/integration/catalog/test_listing_schema.py`, `docs/data/PII.md`.
+**Fichiers :** `modules/catalog/migrations/versions/0012_catalog_listings.py`, `models.py`, `tests/integration/catalog/test_listing_schema.py`, `docs/data/PII.md`.
 
 **Contenu :**
 - Tables `listings` (7.5 + `short_id`, `location_source`, `location_source_id`, `embedding VECTOR(1024)`, `embedding_model`, E5, E10, E14), `listing_media`, `favorites`, `price_watches`, `listing_price_history`.

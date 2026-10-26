@@ -12,6 +12,7 @@ from arq import cron, func
 from arq.connections import RedisSettings
 from arq.cron import CronJob
 
+import trovelya.modules.catalog.service  # pyright: ignore[reportUnusedImport]  (GDPR registries)
 import trovelya.modules.media.service  # noqa: F401  # pyright: ignore[reportUnusedImport]  (GDPR exporter)
 from trovelya.core.config import get_settings
 from trovelya.core.db import make_engine, make_sessionmaker

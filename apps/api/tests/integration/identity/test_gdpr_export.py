@@ -162,7 +162,7 @@ async def test_every_identity_table_exported(
     _, export, _ = await _exported(client, sessionmaker, account, clock=clock, queue=queue)
     exported = {table for section in export.values() for table in section}
     assert tables | {"users"} <= exported
-    assert set(registered_exporters()) >= {"identity", "media"}
+    assert set(registered_exporters()) >= {"identity", "media", "catalog"}
 
 
 async def test_export_excludes_secrets_and_other_peoples_data(
