@@ -215,11 +215,15 @@ async def search_brands(db: AsyncSession, *, prefix: str, q: str, limit: int) ->
     return (await db.execute(_SEARCH_BRANDS, {"prefix": prefix, "q": q, "limit": limit})).all()
 
 
-# GDPR export (ADR-0016): the member's listings. Not exported: the public position (an offset
-# of the real one), H3 cells, embedding and search document (derived, internal).
+# GDPR export (ADR-0016): the member's listings, every column they provided or that describes
+# them. Not exported, being derived or internal: the public position (an offset of the real
+# one), H3 cells, embedding, search document, quality score, the id of the address or zone the
+# position came from (the address itself is in the identity export), and the links of later
+# phases (shop, product variant, passport, resale, boost).
 _EXPORT_LISTINGS = text(
     "SELECT l.id, l.short_id, l.status::text AS status, l.title, l.description,"
-    " c.key AS category, b.name::text AS brand, l.condition::text AS condition, l.attributes,"
+    " c.key AS category, c.names->>'fr' AS category_name, b.name::text AS brand,"
+    " l.condition::text AS condition, l.attributes,"
     " l.price_minor, l.currency, l.original_price_minor, l.quantity, l.accepts_offers,"
     " l.min_offer_minor, l.handover_enabled, l.shipping_enabled, l.parcel_size, l.weight_g,"
     " ST_Y(l.location::geometry) AS latitude, ST_X(l.location::geometry) AS longitude,"

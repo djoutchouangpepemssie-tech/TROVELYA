@@ -47,7 +47,7 @@ async def _listing(sessionmaker: Session, seller: UUID, category: UUID, title: s
                 " country_code, location_source, location_source_id)"
                 " VALUES (:id, :short_id, :seller, :title, 'Une description assez longue.',"
                 " :category, 'good', 2500, ST_GeogFromText('POINT(4.84 45.75)'),"
-                " ST_GeogFromText('POINT(4.85 45.76)'), 1, 2, 'Lyon 7e', 'FR', 'zone', :source)"
+                " ST_GeogFromText('POINT(4.84 45.7527)'), 1, 2, 'Lyon 7e', 'FR', 'zone', :source)"
             ),
             {
                 "id": listing_id,
@@ -77,6 +77,7 @@ async def test_catalog_exported(sessionmaker: Session, category: UUID) -> None:
         "Lyon 7e",
     )
     assert (listing["latitude"], listing["longitude"]) == (45.75, 4.84)
+    assert listing["category_name"] == "x"  # its French name, beside its key
     assert listing["category"].startswith("t_gdpr_")
     # Derived or internal data never leaves: no embedding, cells or public offset.
     assert not {"embedding", "search_document", "h3_r7", "h3_r9", "location_public"} & set(listing)
