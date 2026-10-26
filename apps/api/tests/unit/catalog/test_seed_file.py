@@ -1,5 +1,6 @@
 """The category seed file: validation and inheritance (P2-T01b, P2 plan review point 1)."""
 
+import math
 from collections.abc import Callable
 from typing import Any
 
@@ -10,10 +11,9 @@ from trovelya.modules.catalog.service.seed import (
     EnumValue,
     SeedError,
     load_seed,
-    parse_brands,
     parse_seed,
+    parse_yaml,
     read_seed_file,
-    slugify,
 )
 from trovelya.modules.catalog.universes import UNIVERSE_KEYS
 
@@ -76,28 +76,20 @@ def test_inherited_attributes_resolved() -> None:
         ("material", False, True),
         ("clothing_size", True, True),
     ]
-    assert (dresses.vertical, dresses.transaction_model, dresses.shipping_allowed) == (
-        "goods",
-        "protected_purchase",
-        True,
-    )
+    expected = ("goods", "protected_purchase", True)
+    assert (dresses.vertical, dresses.transaction_model, dresses.shipping_allowed) == expected
 
 
 def test_settings_overridden_below() -> None:
     seed = load_seed()
     assert seed.category("maison_jardin.meubles.canapes_fauteuils").shipping_allowed is False
     parts = seed.category("vehicules.pieces.auto")
-    assert (parts.transaction_model, parts.shipping_allowed, parts.max_photos) == (
-        "protected_purchase",
-        True,
-        12,
-    )
+    expected = ("protected_purchase", True, 12)
+    assert (parts.transaction_model, parts.shipping_allowed, parts.max_photos) == expected
     assert seed.category("vehicules.voitures").max_photos == 30
     assert seed.category("collection.militaria.insignes").is_restricted is True
-    assert seed.category("beaute_bien_etre.soins_maquillage.maquillage").allowed_conditions == (
-        "new_with_tags",
-        "new_without_tags",
-    )
+    cosmetics = seed.category("beaute_bien_etre.soins_maquillage.maquillage")
+    assert cosmetics.allowed_conditions == ("new_with_tags", "new_without_tags")
 
 
 def test_attributes_replace_starts_afresh() -> None:
@@ -156,6 +148,19 @@ _INVALID: list[tuple[Change, str]] = [
     (lambda d: d["attributes"].update(size={"fr": "Taille", "type": "date"}), "type"),
     (lambda d: d["attributes"].update(Size={"fr": "Taille", "type": "text"}), "clé"),
     (lambda d: d["attributes"]["color"].update(values={"noir": 3}), "values"),
+    (lambda d: d["categories"][0].update(conditions=["good", "good"]), "conditions"),
+    (lambda d: d["attributes"]["isbn"].update(max_length=3.5), "max_length invalide"),
+    (lambda d: d["attributes"]["isbn"].update(max_length=0), "positifs"),
+    (lambda d: d["attributes"]["isbn"].update(min=1), "ne convient pas"),
+    (lambda d: d["attributes"]["color"].update(max=3), "ne convient pas"),
+    (lambda d: d["attributes"].update(n={"fr": "N", "type": "int", "min": 1.5}), "invalide"),
+    (lambda d: d["attributes"].update(n={"fr": "N", "type": "decimal", "min": math.inf}), "inval"),
+    (
+        lambda d: d["attributes"].update(n={"fr": "N", "type": "decimal", "min": 3, "max": 2}),
+        "min supérieur",
+    ),
+    (lambda d: d["attributes"].update(n={"fr": "N", "type": "decimal", "step": 0}), "positifs"),
+    (lambda d: d["categories"][0]["children"][0].update(active=False), "tous ses enfants"),
 ]
 
 
@@ -176,11 +181,21 @@ def test_moved_category_keeps_its_key() -> None:
     assert (moved.parent_key, moved.path) == ("montres_bijoux", "montres_bijoux.ancienne_feuille")
 
 
-def test_inactive_category_kept_in_seed() -> None:
+def test_retired_category_retires_its_subtree() -> None:
     document = _document()
     retired = {"key": "mode.retiree", "fr": "R", "active": False}
+    retired["children"] = [{"key": "mode.retiree.feuille", "fr": "F"}]  # type: ignore[assignment]
     document["categories"][0]["children"].append(retired)
-    assert parse_seed(document).category("mode.retiree").is_active is False
+    seed = parse_seed(document)
+    assert seed.category("mode.retiree").is_active is False
+    assert seed.category("mode.retiree.feuille").is_active is False
+
+
+def test_yaml_key_written_twice_refused() -> None:
+    with pytest.raises(SeedError, match="deux fois"):
+        parse_yaml("attributes:\n  color: {fr: A, type: bool}\n  color: {fr: B, type: bool}\n")
+    with pytest.raises(SeedError, match="deux fois"):
+        parse_yaml("{key: a, fr: A, fr: B}")
 
 
 def test_yaml_numbers_as_keys_refused() -> None:
@@ -193,32 +208,3 @@ def test_yaml_numbers_as_keys_refused() -> None:
 
 def test_read_seed_file_ships_with_the_package() -> None:
     assert read_seed_file("categories.yaml")["version"] == 1
-
-
-@pytest.mark.parametrize(
-    ("name", "slug"),
-    [
-        ("Hermès", "hermes"),
-        ("Saint Laurent", "saint-laurent"),
-        ("A.P.C.", "a-p-c"),
-        ("Dr. Martens", "dr-martens"),
-        ("H&M", "h-m"),
-    ],
-)
-def test_slugify(name: str, slug: str) -> None:
-    assert slugify(name) == slug
-
-
-def test_brands_file_valid() -> None:
-    brands = parse_brands(read_seed_file("brands.yaml"))
-    assert len(brands) == 372
-    assert ("Hermès", "hermes") in brands and ("& Other Stories", "other-stories") in brands
-
-
-@pytest.mark.parametrize(
-    "names",
-    [["Apple", "apple"], ["H&M", "H-M"], ["", "Zara"], ["x" * 81], [3]],
-)
-def test_brands_duplicates_and_invalid_names_refused(names: list[object]) -> None:
-    with pytest.raises(SeedError):
-        parse_brands({"version": 1, "brands": names})
