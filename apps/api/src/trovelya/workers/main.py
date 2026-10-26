@@ -166,8 +166,9 @@ class WorkerSettings:
         cron(purge_idempotency_keys_job, hour=4, minute=30, unique=True, timeout=600),
         cron(purge_magic_links_job, hour=4, minute=45, unique=True, timeout=600),
         cron(purge_data_exports_job, hour=5, minute=0, unique=True, timeout=600),
-        # After the erasures (4:00): an erased account's photos leave storage the same night.
-        cron(purge_media_job, hour=4, minute=20, unique=True, timeout=1800),
+        # Every hour (ADR-0019: a withdrawn photo leaves storage at once), so at 4:20 right
+        # after the erasures of 4:00.
+        cron(purge_media_job, minute=20, unique=True, timeout=1800),
     ]
     on_startup = startup
     on_shutdown = shutdown

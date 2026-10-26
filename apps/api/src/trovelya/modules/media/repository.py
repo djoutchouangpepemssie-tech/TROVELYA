@@ -239,28 +239,64 @@ async def erase_media(db: AsyncSession, user_id: UUID) -> None:
     )
 
 
-async def media_to_purge(
-    db: AsyncSession, *, deleted_before: datetime, abandoned_before: datetime, limit: int
-) -> list[Row[Any]]:
-    """Deleted media past their retention (at once for an erased account), uploads never
-    completed, avatar photos never chosen, old refusals: (id, storage_key, variants)."""
+def _rowcount(result: Any) -> int:
+    return result.rowcount
+
+
+async def mark_for_purge(
+    db: AsyncSession, *, now: datetime, abandoned_before: datetime, refused_before: datetime
+) -> int:
+    """Purge, step 1: uploads never completed and avatar photos never chosen after 24 hours,
+    refusals past retention are marked deleted, so a worker can no longer make them ready."""
+    params = {"now": now, "abandoned_before": abandoned_before, "refused_before": refused_before}
+    marked = 0
+    for query in (
+        "UPDATE media SET deleted_at = :now WHERE deleted_at IS NULL"
+        " AND status = 'uploading' AND created_at < :abandoned_before",
+        "UPDATE media SET deleted_at = :now WHERE deleted_at IS NULL"
+        " AND status = 'rejected' AND created_at < :refused_before",
+        "UPDATE media m SET deleted_at = :now WHERE m.deleted_at IS NULL"
+        " AND m.purpose = 'avatar' AND m.created_at < :abandoned_before"
+        " AND NOT EXISTS (SELECT 1 FROM users u WHERE u.avatar_media_id = m.id)",
+    ):
+        marked += _rowcount(await db.execute(text(query), params))
+    return marked
+
+
+async def files_to_delete(db: AsyncSession, *, after: UUID | None, limit: int) -> list[Row[Any]]:
+    """Purge, step 2: deleted media whose files are still stored, in id order from `after`:
+    (id, storage_key, variants). Deleted means final: their variants no longer change."""
     rows = await db.execute(
         text(
-            "SELECT m.id, m.storage_key, m.variants FROM media m JOIN users u ON u.id = m.owner_id"
-            " WHERE (m.deleted_at IS NOT NULL"
-            "        AND (m.deleted_at < :deleted_before OR u.status = 'deleted'))"
-            " OR (m.status = 'uploading' AND m.created_at < :abandoned_before)"
-            " OR (m.purpose = 'avatar' AND m.deleted_at IS NULL"
-            "     AND m.created_at < :abandoned_before"
-            "     AND NOT EXISTS (SELECT 1 FROM users a WHERE a.avatar_media_id = m.id))"
-            " OR (m.status = 'rejected' AND m.created_at < :deleted_before)"
-            " ORDER BY m.id LIMIT :limit"
+            "SELECT id, storage_key, variants FROM media"
+            " WHERE deleted_at IS NOT NULL AND files_deleted_at IS NULL"
+            " AND (CAST(:after AS uuid) IS NULL OR id > :after) ORDER BY id LIMIT :limit"
         ),
-        {"deleted_before": deleted_before, "abandoned_before": abandoned_before, "limit": limit},
+        {"after": after, "limit": limit},
     )
     return list(rows)
 
 
-async def delete_media_row(db: AsyncSession, media_id: UUID) -> None:
-    """Once its files are gone; an avatar pointing at it is cleared (ON DELETE SET NULL)."""
-    await db.execute(text("DELETE FROM media WHERE id = :id"), {"id": media_id})
+async def mark_files_deleted(db: AsyncSession, media_id: UUID, now: datetime) -> None:
+    await db.execute(
+        text(
+            "UPDATE media SET files_deleted_at = :now WHERE id = :id AND files_deleted_at IS NULL"
+        ),
+        {"id": media_id, "now": now},
+    )
+
+
+async def delete_purged_rows(db: AsyncSession, *, deleted_before: datetime) -> int:
+    """Purge, step 3: rows whose files are gone, once the retention has passed, at once for
+    an erased account or a media that never became a photo. An avatar pointing at one is
+    cleared (ON DELETE SET NULL)."""
+    result = await db.execute(
+        text(
+            "DELETE FROM media m WHERE m.files_deleted_at IS NOT NULL"
+            " AND (m.deleted_at < :deleted_before OR m.status <> 'ready'"
+            "      OR EXISTS (SELECT 1 FROM users u WHERE u.id = m.owner_id"
+            "                 AND u.status = 'deleted'))"
+        ),
+        {"deleted_before": deleted_before},
+    )
+    return _rowcount(result)
