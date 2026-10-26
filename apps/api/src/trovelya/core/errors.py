@@ -54,6 +54,7 @@ class ErrorCode(StrEnum):
     MEDIA_ALREADY_COMPLETED = "media_already_completed"
     MEDIA_NOT_READY = "media_not_ready"
     MEDIA_NOT_AVATAR = "media_not_avatar"
+    MEDIA_REJECTED = "media_rejected"
 
 
 # French titles by default (section 2); translation by Accept-Language arrives with P1.
@@ -95,6 +96,7 @@ _TITLES: dict[ErrorCode, str] = {
     ErrorCode.MEDIA_ALREADY_COMPLETED: "Ce fichier a déjà été envoyé",
     ErrorCode.MEDIA_NOT_READY: "Cette photo est encore en cours de traitement",
     ErrorCode.MEDIA_NOT_AVATAR: "Cette photo n'a pas été envoyée comme photo de profil",
+    ErrorCode.MEDIA_REJECTED: "Cette photo a été refusée, envoyez-en une autre",
 }
 
 _STATUS_CODES: dict[int, ErrorCode] = {
