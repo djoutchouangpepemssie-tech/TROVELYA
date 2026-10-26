@@ -1,0 +1,20 @@
+# Garage (S3-compatible object storage, https://garagehq.deuxfleurs.fr) for local development
+# and tests only: it stands for Cloudflare R2 (ADR-0019). One node, no replication.
+# The RPC secret below is a fixed development value, never used outside a developer machine
+# or a CI container.
+metadata_dir = "/var/lib/garage/meta"
+data_dir = "/var/lib/garage/data"
+db_engine = "sqlite"
+replication_factor = 1
+rpc_bind_addr = "0.0.0.0:3901"
+rpc_public_addr = "127.0.0.1:3901"
+rpc_secret = "1111111111111111111111111111111111111111111111111111111111111111"
+
+[s3_api]
+s3_region = "garage"
+api_bind_addr = "0.0.0.0:3900"
+root_domain = ".s3.garage.localhost"
+
+[s3_web]
+bind_addr = "0.0.0.0:3902"
+root_domain = ".web.garage.localhost"

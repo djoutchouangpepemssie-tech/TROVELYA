@@ -1,5 +1,6 @@
 # Local development stack (docs/CAHIER_DES_CHARGES.md section 5.7, environment "local").
-# Object storage (S3) is added in P2 with the chosen EU provider's local equivalent.
+# Object storage: Garage stands for Cloudflare R2 (ADR-0019); after `up`, run
+# `bash infra/garage/init.sh` once and copy the printed variables into apps/api/.env.
 # Usage: docker compose -f infra/docker-compose.yml up -d --build
 name: trovelya
 
@@ -34,6 +35,15 @@ services:
       timeout: 3s
       retries: 20
 
+  garage:
+    image: dxflrs/garage:v2.1.0
+    ports:
+      - "3900:3900" # S3 API
+      - "3902:3902" # public variants (website endpoint)
+    volumes:
+      - ./garage/garage.toml:/etc/garage.toml:ro
+      - garage-data:/var/lib/garage
+
   mailpit:
     image: axllent/mailpit:v1.32.0
     ports:
@@ -43,3 +53,4 @@ services:
 volumes:
   postgres-data:
   redis-data:
+  garage-data:

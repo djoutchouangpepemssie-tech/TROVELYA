@@ -13,6 +13,7 @@ MIN_PROXY_SECRET_LENGTH = 32
 MIN_FIELD_KEY_LENGTH = 32
 EmailProvider = Literal["smtp", "resend", "fake"]
 GeocoderProvider = Literal["geoplateforme", "fake"]
+StorageProvider = Literal["s3", "memory"]
 
 
 def asyncpg_url(url: str) -> str:
@@ -59,6 +60,17 @@ class Settings(BaseSettings):
     webauthn_rp_id: str | None = None
     webauthn_rp_name: str = "TROVÉLYA"
     webauthn_origins: list[str] = Field(default_factory=list[str])
+    # Object storage (ADR-0019): s3 = Cloudflare R2 (EU jurisdiction) on Railway, Garage
+    # locally and in tests; memory for unit tests and environments without storage yet.
+    storage_provider: StorageProvider = "memory"
+    storage_endpoint: str | None = None
+    storage_region: str = "auto"  # R2 takes "auto"; Garage "garage"
+    storage_access_key_id: SecretStr | None = None
+    storage_secret_access_key: SecretStr | None = None
+    storage_bucket_originals: str = "trovelya-originals"
+    storage_bucket_variants: str = "trovelya-variants"
+    # Public base URL of the variants bucket (r2.dev on staging, media.trovelya.com later).
+    media_public_url: str | None = None
     sentry_dsn: str | None = None
     otel_exporter_otlp_endpoint: str | None = None
     feature_flags_default: dict[str, bool] = Field(default_factory=dict[str, bool])
@@ -92,6 +104,16 @@ class Settings(BaseSettings):
         if any(v is None for v in values) and any(v is not None for v in values):
             raise ValueError(
                 "OAUTH_APPLE_CLIENT_ID, _TEAM_ID, _KEY_ID and _PRIVATE_KEY go together"
+            )
+        return self
+
+    @model_validator(mode="after")
+    def _s3_needs_endpoint_and_keys(self) -> "Settings":
+        values = (self.storage_endpoint, self.storage_access_key_id, self.storage_secret_access_key)
+        if self.storage_provider == "s3" and any(v is None for v in values):
+            raise ValueError(
+                "STORAGE_ENDPOINT, STORAGE_ACCESS_KEY_ID and STORAGE_SECRET_ACCESS_KEY are"
+                " required when STORAGE_PROVIDER=s3"
             )
         return self
 
