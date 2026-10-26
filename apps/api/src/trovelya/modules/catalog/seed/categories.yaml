@@ -585,7 +585,9 @@ categories:
         attributes: [model_name]
         children:
           - { key: culture_loisirs.instruments.guitares, fr: Guitares et basses }
-          - { key: culture_loisirs.instruments.claviers, fr: Pianos et claviers }
+          # Piano droit ou à queue : main propre ou transporteur spécialisé.
+          - { key: culture_loisirs.instruments.pianos, fr: Pianos, shipping: false }
+          - { key: culture_loisirs.instruments.claviers, fr: Claviers et synthétiseurs }
           - { key: culture_loisirs.instruments.batteries, fr: Batteries et percussions }
           - { key: culture_loisirs.instruments.vents, fr: Instruments à vent }
           - { key: culture_loisirs.instruments.cordes, fr: Instruments à cordes }
@@ -690,7 +692,7 @@ categories:
         children:
           - { key: enfants_bebe.poussettes.poussettes, fr: Poussettes }
           - { key: enfants_bebe.poussettes.accessoires, fr: Accessoires de poussette }
-      # Équipement de sécurité : toujours vérifié par un humain.
+      # Équipement de sécurité (décision du 26/10/2026) : toujours vérifié par un humain.
       - key: enfants_bebe.sieges_auto
         fr: Sièges auto
         restricted: true
@@ -904,8 +906,8 @@ categories:
           - { key: animaux.equitation.soins, fr: Soins et écurie }
 
   # 12 ────────────────────────────────────────────────────────────────────────────────
-  # « Achat protégé (ou contact au-delà du plafond) » (8.19) : plafond non défini en P2,
-  # achat protégé partout jusqu'à sa définition.
+  # « Achat protégé (ou contact au-delà du plafond) » (8.19) : le plafond n'est chiffré nulle
+  # part ; achat protégé partout en P2, plafond à fixer en [PARAM] avec le paiement (P4).
   - key: materiel_pro
     fr: Matériel professionnel
     icon: materiel_pro
