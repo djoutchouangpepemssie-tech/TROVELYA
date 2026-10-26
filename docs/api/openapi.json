@@ -633,6 +633,35 @@
         "title": "AuthMethods",
         "type": "object"
       },
+      "AvatarVariant": {
+        "description": "One square size of the avatar, in AVIF or WebP (variants of P2-T02b).",
+        "properties": {
+          "format": {
+            "title": "Format",
+            "type": "string"
+          },
+          "height": {
+            "title": "Height",
+            "type": "integer"
+          },
+          "url": {
+            "title": "Url",
+            "type": "string"
+          },
+          "width": {
+            "title": "Width",
+            "type": "integer"
+          }
+        },
+        "required": [
+          "format",
+          "width",
+          "height",
+          "url"
+        ],
+        "title": "AvatarVariant",
+        "type": "object"
+      },
       "BlockList": {
         "properties": {
           "data": {
@@ -1255,6 +1284,32 @@
       "MeOut": {
         "description": "The signed-in person's own account. Never shown to anybody else.",
         "properties": {
+          "avatar": {
+            "anyOf": [
+              {
+                "items": {
+                  "$ref": "#/components/schemas/AvatarVariant"
+                },
+                "type": "array"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Avatar"
+          },
+          "avatar_media_id": {
+            "anyOf": [
+              {
+                "format": "uuid",
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Avatar Media Id"
+          },
           "bio": {
             "anyOf": [
               {
@@ -1358,6 +1413,8 @@
           "username",
           "display_name",
           "bio",
+          "avatar",
+          "avatar_media_id",
           "locale",
           "country_code",
           "profile_completed",
@@ -1721,6 +1778,18 @@
         "additionalProperties": false,
         "description": "Only the fields sent are changed; `bio` set to blank clears it.",
         "properties": {
+          "avatar_media_id": {
+            "anyOf": [
+              {
+                "format": "uuid",
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Avatar Media Id"
+          },
           "bio": {
             "anyOf": [
               {
@@ -1778,6 +1847,20 @@
       "PublicProfile": {
         "description": "What anybody can see. Never the e-mail, location, age or account status.",
         "properties": {
+          "avatar": {
+            "anyOf": [
+              {
+                "items": {
+                  "$ref": "#/components/schemas/AvatarVariant"
+                },
+                "type": "array"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Avatar"
+          },
           "bio": {
             "anyOf": [
               {
@@ -3384,7 +3467,7 @@
         ]
       },
       "patch": {
-        "description": "Change the username, display name, bio or language. `If-Match: <version>` required.",
+        "description": "Change the username, display name, bio, language or avatar. `If-Match: <version>`\nrequired.",
         "operationId": "me_update",
         "requestBody": {
           "content": {

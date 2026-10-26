@@ -373,3 +373,20 @@ def test_unreadable_file_is_logged_by_error_type(monkeypatch: pytest.MonkeyPatch
     assert recorder.events == [
         ("media.image_unreadable", {"error": "OSError", "mime": "image/jpeg"})
     ]
+
+
+def test_avatar_cropped_to_its_centred_square() -> None:
+    image = Image.new("RGB", (1200, 800), (0, 0, 255))
+    image.paste((255, 0, 0), (200, 0, 1000, 800))  # the centred 800 x 800 square is red
+    result = process_image(_encode(image, "PNG"), "image/png", max_bytes=MAX_BYTES, square=True)
+    assert (result.width, result.height) == (1200, 800)  # the file's own dimensions
+    assert [(v.format, v.width, v.height) for v in result.variants] == [
+        ("avif", 320, 320),
+        ("avif", 640, 640),
+        ("webp", 320, 320),
+        ("webp", 640, 640),
+    ]
+    with Image.open(BytesIO(result.variants[-1].data)) as decoded:
+        for corner in ((2, 2), (637, 637)):
+            red, _, blue = decoded.convert("RGB").getpixel(corner)  # type: ignore[misc]
+            assert red > 200 and blue < 60

@@ -98,6 +98,15 @@ class Counters(BaseModel):
     notifications: int
 
 
+class AvatarVariant(BaseModel):
+    """One square size of the avatar, in AVIF or WebP (variants of P2-T02b)."""
+
+    format: str
+    width: int
+    height: int
+    url: str
+
+
 class MeOut(BaseModel):
     """The signed-in person's own account. Never shown to anybody else."""
 
@@ -106,6 +115,8 @@ class MeOut(BaseModel):
     username: str
     display_name: str
     bio: str | None
+    avatar: list[AvatarVariant] | None  # None: no avatar
+    avatar_media_id: UUID | None
     locale: str
     country_code: str
     profile_completed: bool
@@ -147,6 +158,8 @@ class ProfilePatch(BaseModel):
     display_name: str | None = Field(default=None, min_length=1, max_length=60)
     bio: str | None = Field(default=None, max_length=500)
     locale: Literal["fr-FR"] | None = None  # French only for now (web i18n/routing.ts)
+    # An own photo sent as an avatar and processed (P2-T02c); null removes the avatar.
+    avatar_media_id: UUID | None = None
 
     @model_validator(mode="after")
     def _normalise(self) -> "ProfilePatch":
@@ -163,7 +176,7 @@ class ProfilePatch(BaseModel):
                 raise ValueError("display name cannot be blank")
         return self
 
-    def changes(self) -> dict[str, str | None]:
+    def changes(self) -> dict[str, Any]:
         sent = self.model_dump(exclude_unset=True)
         if "bio" in sent:
             sent["bio"] = (sent["bio"] or "").strip() or None
@@ -184,6 +197,7 @@ class PublicProfile(BaseModel):
     username: str
     display_name: str
     bio: str | None
+    avatar: list[AvatarVariant] | None = None
     member_since: date
     followers_count: int
     following_count: int

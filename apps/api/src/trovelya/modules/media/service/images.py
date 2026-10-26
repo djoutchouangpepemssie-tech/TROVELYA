@@ -20,6 +20,8 @@ logger = structlog.get_logger(__name__)
 # 50 Mpx: a 12 Mpx phone photo passes with room to spare; a decompression bomb does not.
 MAX_PIXELS = 50_000_000
 WIDTHS = (320, 640, 1080, 1600)  # section 11.5, never enlarged
+# An avatar is cropped to its centred square (plan P2, T02c) and shown small.
+AVATAR_WIDTHS = (320, 640)
 FORMATS = ("avif", "webp")
 # Work at no more than twice the largest variant: a JPEG is decoded at reduced scale, any other
 # image reduced right after decoding (memory and time stay those of a 12 Mpx photo).
@@ -137,10 +139,10 @@ def _dhash(image: Image.Image) -> int:
     return bits
 
 
-def _sizes(width: int, height: int) -> list[tuple[int, int]]:
+def _sizes(width: int, height: int, standard: tuple[int, ...]) -> list[tuple[int, int]]:
     """One size per standard width below the image's own, then the image's width capped at the
     largest; each fitted within MAX_SIDE in height and never enlarged."""
-    widths = [w for w in WIDTHS if w < min(width, WIDTHS[-1])] + [min(width, WIDTHS[-1])]
+    widths = [w for w in standard if w < min(width, standard[-1])] + [min(width, standard[-1])]
     sizes: list[tuple[int, int]] = []
     for target in widths:
         scale = min(target / width, MAX_SIDE / height, 1.0)
@@ -156,15 +158,24 @@ def _encode(image: Image.Image, fmt: str) -> bytes:
     return out.getvalue()
 
 
-def _variants(image: Image.Image) -> list[Variant]:
+def _square(image: Image.Image) -> Image.Image:
+    side = min(image.size)
+    left, top = (image.width - side) // 2, (image.height - side) // 2
+    return image.crop((left, top, left + side, top + side))
+
+
+def _variants(image: Image.Image, standard: tuple[int, ...]) -> list[Variant]:
     resized = [
         image if size == image.size else image.resize(size, Image.Resampling.LANCZOS)  # pyright: ignore[reportUnknownMemberType]
-        for size in _sizes(image.width, image.height)
+        for size in _sizes(image.width, image.height, standard)
     ]
     return [Variant(fmt, r.width, r.height, _encode(r, fmt)) for fmt in FORMATS for r in resized]
 
 
-def process_image(data: bytes, declared_type: str, *, max_bytes: int) -> ProcessedImage:
+def process_image(
+    data: bytes, declared_type: str, *, max_bytes: int, square: bool = False
+) -> ProcessedImage:
+    """`square`: an avatar, cropped to its centred square, in AVATAR_WIDTHS."""
     if len(data) > max_bytes:
         raise ImageRejectedError("too_large")
     if declared_type not in _PIL_FORMAT or detect_type(data) != declared_type:
@@ -173,7 +184,9 @@ def process_image(data: bytes, declared_type: str, *, max_bytes: int) -> Process
         decoded, (width, height) = _decode(data, declared_type)
         with decoded:
             image = _prepare(decoded)
-        variants = _variants(image)
+        if square:
+            image = _square(image)
+        variants = _variants(image, AVATAR_WIDTHS if square else WIDTHS)
         dhash = _dhash(image)
     except (ImageRejectedError, MemoryError):
         raise

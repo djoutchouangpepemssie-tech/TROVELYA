@@ -403,7 +403,8 @@ async def delete_passkey(db: AsyncSession, *, passkey_id: UUID, user_id: UUID) -
 
 _ME = text(
     "SELECT u.id, u.email::text AS email, u.username::text AS username, u.display_name, u.bio,"
-    " u.locale, u.country_code, u.birth_year, u.profile_completed_at IS NOT NULL"
+    " u.avatar_media_id, u.locale, u.country_code, u.birth_year,"
+    " u.profile_completed_at IS NOT NULL"
     " AS profile_completed, u.erasure_requested_at, u.version,"
     " coalesce(array_agg(r.role_key ORDER BY r.role_key)"
     "   FILTER (WHERE r.role_key IS NOT NULL), '{}') AS roles"
@@ -526,13 +527,15 @@ _UPDATE_PROFILE = text(
     " username = CASE WHEN :set_username THEN :username ELSE username END,"
     " display_name = CASE WHEN :set_display_name THEN :display_name ELSE display_name END,"
     " bio = CASE WHEN :set_bio THEN :bio ELSE bio END,"
-    " locale = CASE WHEN :set_locale THEN :locale ELSE locale END"
+    " locale = CASE WHEN :set_locale THEN :locale ELSE locale END,"
+    " avatar_media_id = CASE WHEN :set_avatar_media_id THEN CAST(:avatar_media_id AS uuid)"
+    " ELSE avatar_media_id END"
     " WHERE id = :id AND version = :version RETURNING id"
 )
-_EDITABLE = ("username", "display_name", "bio", "locale")
+_EDITABLE = ("username", "display_name", "bio", "locale", "avatar_media_id")
 
 _PUBLIC_PROFILE = text(
-    "SELECT u.id, u.username::text AS username, u.display_name, u.bio,"
+    "SELECT u.id, u.username::text AS username, u.display_name, u.bio, u.avatar_media_id,"
     " (u.created_at AT TIME ZONE 'Europe/Paris')::date AS member_since,"
     " (SELECT count(*) FROM follows f WHERE f.followee_user_id = u.id) AS followers_count,"
     " (SELECT count(*) FROM follows f WHERE f.follower_id = u.id) AS following_count"
@@ -542,7 +545,7 @@ _PUBLIC_PROFILE = text(
 
 
 async def update_profile(
-    db: AsyncSession, *, user_id: UUID, version: int, changes: dict[str, str | None]
+    db: AsyncSession, *, user_id: UUID, version: int, changes: dict[str, Any]
 ) -> bool:
     """False when `version` is not the current one (optimistic locking, 11.1). Raises
     IntegrityError if the new username is taken."""

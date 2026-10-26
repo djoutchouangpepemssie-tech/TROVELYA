@@ -207,3 +207,21 @@ async def stuck_in_processing(db: AsyncSession, before: datetime) -> list[tuple[
         {"before": before},
     )
     return [(row[0], row[1]) for row in rows]
+
+
+async def mark_deleted(db: AsyncSession, media_id: UUID, now: datetime) -> None:
+    """Withdrawn from view now; its files go with the purge (P2-T02c)."""
+    await db.execute(
+        text("UPDATE media SET deleted_at = :now WHERE id = :id AND deleted_at IS NULL"),
+        {"id": media_id, "now": now},
+    )
+
+
+async def ready_variants(db: AsyncSession, media_id: UUID) -> list[dict[str, Any]] | None:
+    """The variants of a ready, not deleted media; None otherwise."""
+    return await db.scalar(
+        text(
+            "SELECT variants FROM media WHERE id = :id AND status = 'ready' AND deleted_at IS NULL"
+        ),
+        {"id": media_id},
+    )
