@@ -1,4 +1,4 @@
-"""Uploading a photo (P2-T02a3, ADR-0019): a presigned URL, then « complete » hands the file
+"""Uploading a photo (P2-T02a3a and b, ADR-0019): a presigned URL, then « complete » hands the file
 to the worker; the member reads its status. Nobody else ever sees it."""
 
 from collections.abc import AsyncIterator
