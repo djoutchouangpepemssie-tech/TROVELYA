@@ -36,17 +36,50 @@ attributes:
     fr: Couleur
     type: enum
     values:
-      { noir: Noir, blanc: Blanc, gris: Gris, beige: Beige, marron: Marron, bleu: Bleu,
-        bleu_marine: Bleu marine, vert: Vert, rouge: Rouge, rose: Rose, violet: Violet,
-        jaune: Jaune, orange: Orange, dore: Doré, argente: Argenté, multicolore: Multicolore }
+      {
+        noir: Noir,
+        blanc: Blanc,
+        gris: Gris,
+        beige: Beige,
+        marron: Marron,
+        bleu: Bleu,
+        bleu_marine: Bleu marine,
+        vert: Vert,
+        rouge: Rouge,
+        rose: Rose,
+        violet: Violet,
+        jaune: Jaune,
+        orange: Orange,
+        dore: Doré,
+        argente: Argenté,
+        multicolore: Multicolore,
+      }
   material:
     fr: Matière
     type: enum
     values:
-      { coton: Coton, lin: Lin, laine: Laine, soie: Soie, cachemire: Cachemire, cuir: Cuir,
-        daim: Daim, denim: Jean, synthetique: Synthétique, bois: Bois, metal: Métal,
-        verre: Verre, ceramique: Céramique, porcelaine: Porcelaine, plastique: Plastique,
-        tissu: Tissu, marbre: Marbre, pierre: Pierre, rotin: Rotin, autre: Autre }
+      {
+        coton: Coton,
+        lin: Lin,
+        laine: Laine,
+        soie: Soie,
+        cachemire: Cachemire,
+        cuir: Cuir,
+        daim: Daim,
+        denim: Jean,
+        synthetique: Synthétique,
+        bois: Bois,
+        metal: Métal,
+        verre: Verre,
+        ceramique: Céramique,
+        porcelaine: Porcelaine,
+        plastique: Plastique,
+        tissu: Tissu,
+        marbre: Marbre,
+        pierre: Pierre,
+        rotin: Rotin,
+        autre: Autre,
+      }
   gender:
     fr: Pour
     type: enum
@@ -55,15 +88,42 @@ attributes:
     fr: Taille
     type: enum
     values:
-      { xxs: XXS, xs: XS, s: S, m: M, l: L, xl: XL, xxl: XXL, xxxl: 3XL, xxxxl: 4XL,
-        unique: Taille unique }
+      {
+        xxs: XXS,
+        xs: XS,
+        s: S,
+        m: M,
+        l: L,
+        xl: XL,
+        xxl: XXL,
+        xxxl: 3XL,
+        xxxxl: 4XL,
+        unique: Taille unique,
+      }
   kids_size:
     fr: Taille enfant
     type: enum
     values:
-      { naissance: Naissance, m1: 1 mois, m3: 3 mois, m6: 6 mois, m9: 9 mois, m12: 12 mois,
-        m18: 18 mois, m24: 24 mois, a2: 2 ans, a3: 3 ans, a4: 4 ans, a5: 5 ans, a6: 6 ans,
-        a8: 8 ans, a10: 10 ans, a12: 12 ans, a14: 14 ans, a16: 16 ans }
+      {
+        naissance: Naissance,
+        m1: 1 mois,
+        m3: 3 mois,
+        m6: 6 mois,
+        m9: 9 mois,
+        m12: 12 mois,
+        m18: 18 mois,
+        m24: 24 mois,
+        a2: 2 ans,
+        a3: 3 ans,
+        a4: 4 ans,
+        a5: 5 ans,
+        a6: 6 ans,
+        a8: 8 ans,
+        a10: 10 ans,
+        a12: 12 ans,
+        a14: 14 ans,
+        a16: 16 ans,
+      }
   shoe_eu:
     fr: Pointure (EU)
     type: decimal
@@ -74,8 +134,16 @@ attributes:
     fr: Époque
     type: enum
     values:
-      { avant_1900: Avant 1900, "1900_1940": 1900-1940, 1950s: Années 50, 1960s: Années 60,
-        1970s: Années 70, 1980s: Années 80, 1990s: Années 90, 2000s: Années 2000 }
+      {
+        avant_1900: Avant 1900,
+        "1900_1940": 1900-1940,
+        1950s: Années 50,
+        1960s: Années 60,
+        1970s: Années 70,
+        1980s: Années 80,
+        1990s: Années 90,
+        2000s: Années 2000,
+      }
   width_cm: { fr: Largeur, type: int, unit: cm, min: 1, max: 2000 }
   depth_cm: { fr: Profondeur, type: int, unit: cm, min: 1, max: 2000 }
   height_cm: { fr: Hauteur, type: int, unit: cm, min: 1, max: 2000 }
@@ -83,9 +151,16 @@ attributes:
     fr: Style
     type: enum
     values:
-      { contemporain: Contemporain, scandinave: Scandinave, industriel: Industriel,
-        vintage: Vintage, campagne: Campagne, classique: Classique, art_deco: Art déco,
-        boheme: Bohème }
+      {
+        contemporain: Contemporain,
+        scandinave: Scandinave,
+        industriel: Industriel,
+        vintage: Vintage,
+        campagne: Campagne,
+        classique: Classique,
+        art_deco: Art déco,
+        boheme: Bohème,
+      }
   energy_class:
     fr: Classe énergétique
     type: enum
@@ -94,20 +169,41 @@ attributes:
     fr: Métal
     type: enum
     values:
-      { or_jaune: Or jaune, or_blanc: Or blanc, or_rose: Or rose, argent: Argent,
-        platine: Platine, acier: Acier, titane: Titane, plaque_or: Plaqué or,
-        fantaisie: Fantaisie }
+      {
+        or_jaune: Or jaune,
+        or_blanc: Or blanc,
+        or_rose: Or rose,
+        argent: Argent,
+        platine: Platine,
+        acier: Acier,
+        titane: Titane,
+        plaque_or: Plaqué or,
+        fantaisie: Fantaisie,
+      }
   stone:
     fr: Pierre
     type: enum
     values:
-      { aucune: Aucune, diamant: Diamant, saphir: Saphir, rubis: Rubis, emeraude: Émeraude,
-        perle: Perle, autre: Autre }
+      {
+        aucune: Aucune,
+        diamant: Diamant,
+        saphir: Saphir,
+        rubis: Rubis,
+        emeraude: Émeraude,
+        perle: Perle,
+        autre: Autre,
+      }
   ring_size: { fr: Tour de doigt, type: int, unit: mm, min: 40, max: 75 }
   movement:
     fr: Mouvement
     type: enum
-    values: { automatique: Automatique, mecanique: Mécanique (remontage manuel), quartz: Quartz, solaire: Solaire }
+    values:
+      {
+        automatique: Automatique,
+        mecanique: Mécanique (remontage manuel),
+        quartz: Quartz,
+        solaire: Solaire,
+      }
   case_diameter_mm: { fr: Diamètre du boîtier, type: int, unit: mm, min: 10, max: 70 }
   box_and_papers: { fr: Boîte et papiers, type: bool }
   model_name: { fr: Modèle, type: text, max_length: 80 }
@@ -115,8 +211,17 @@ attributes:
     fr: Stockage
     type: enum
     values:
-      { g16: 16 Go, g32: 32 Go, g64: 64 Go, g128: 128 Go, g256: 256 Go, g512: 512 Go,
-        t1: 1 To, t2: 2 To, t4: 4 To }
+      {
+        g16: 16 Go,
+        g32: 32 Go,
+        g64: 64 Go,
+        g128: 128 Go,
+        g256: 256 Go,
+        g512: 512 Go,
+        t1: 1 To,
+        t2: 2 To,
+        t4: 4 To,
+      }
   ram_gb:
     fr: Mémoire vive
     type: enum
@@ -128,16 +233,32 @@ attributes:
     fr: Plateforme
     type: enum
     values:
-      { ps5: PlayStation 5, ps4: PlayStation 4, ps_retro: PlayStation (anciennes),
-        xbox_series: Xbox Series, xbox_one: Xbox One, switch: Nintendo Switch,
-        nintendo_retro: Nintendo (anciennes), pc: PC, autre: Autre }
+      {
+        ps5: PlayStation 5,
+        ps4: PlayStation 4,
+        ps_retro: PlayStation (anciennes),
+        xbox_series: Xbox Series,
+        xbox_one: Xbox One,
+        switch: Nintendo Switch,
+        nintendo_retro: Nintendo (anciennes),
+        pc: PC,
+        autre: Autre,
+      }
   lens_mount:
     fr: Monture
     type: enum
     values:
-      { canon_ef: Canon EF, canon_rf: Canon RF, nikon_f: Nikon F, nikon_z: Nikon Z,
-        sony_e: Sony E, fuji_x: Fujifilm X, micro_43: Micro 4/3, leica_m: Leica M,
-        autre: Autre }
+      {
+        canon_ef: Canon EF,
+        canon_rf: Canon RF,
+        nikon_f: Nikon F,
+        nikon_z: Nikon Z,
+        sony_e: Sony E,
+        fuji_x: Fujifilm X,
+        micro_43: Micro 4/3,
+        leica_m: Leica M,
+        autre: Autre,
+      }
   focal_length: { fr: Focale, type: text, max_length: 30 }
   author: { fr: Auteur, type: text, max_length: 120 }
   publisher: { fr: Éditeur, type: text, max_length: 120 }
@@ -149,8 +270,15 @@ attributes:
     fr: Langue
     type: enum
     values:
-      { fr: Français, en: Anglais, de: Allemand, es: Espagnol, it: Italien, ja: Japonais,
-        autre: Autre }
+      {
+        fr: Français,
+        en: Anglais,
+        de: Allemand,
+        es: Espagnol,
+        it: Italien,
+        ja: Japonais,
+        autre: Autre,
+      }
   book_format:
     fr: Format
     type: enum
@@ -158,15 +286,27 @@ attributes:
   music_format:
     fr: Format
     type: enum
-    values: { lp_33: 33 tours, single_45: 45 tours, maxi_45: Maxi 45 tours, cd: CD, cassette: Cassette }
+    values:
+      { lp_33: 33 tours, single_45: 45 tours, maxi_45: Maxi 45 tours, cd: CD, cassette: Cassette }
   music_genre:
     fr: Genre
     type: enum
     values:
-      { rock: Rock, pop: Pop, jazz: Jazz, classique: Classique, rap_hiphop: Rap et hip-hop,
-        electro: Électro, chanson_francaise: Chanson française, soul_funk: Soul et funk,
-        reggae: Reggae, metal: Métal, musiques_du_monde: Musiques du monde,
-        bande_originale: Bande originale, autre: Autre }
+      {
+        rock: Rock,
+        pop: Pop,
+        jazz: Jazz,
+        classique: Classique,
+        rap_hiphop: Rap et hip-hop,
+        electro: Électro,
+        chanson_francaise: Chanson française,
+        soul_funk: Soul et funk,
+        reggae: Reggae,
+        metal: Métal,
+        musiques_du_monde: Musiques du monde,
+        bande_originale: Bande originale,
+        autre: Autre,
+      }
   video_format:
     fr: Format
     type: enum
@@ -175,16 +315,30 @@ attributes:
     fr: Âge
     type: enum
     values:
-      { m0_12: 0-12 mois, a1_3: 1-3 ans, a3_6: 3-6 ans, a6_9: 6-9 ans, a9_12: 9-12 ans,
-        a12_plus: 12 ans et plus, adulte: Adulte }
+      {
+        m0_12: 0-12 mois,
+        a1_3: 1-3 ans,
+        a3_6: 3-6 ans,
+        a6_9: 6-9 ans,
+        a9_12: 9-12 ans,
+        a12_plus: 12 ans et plus,
+        adulte: Adulte,
+      }
   players: { fr: Nombre de joueurs, type: text, max_length: 20 }
   piece_count: { fr: Nombre de pièces, type: int, min: 1, max: 100000 }
   card_game:
     fr: Jeu
     type: enum
     values:
-      { pokemon: Pokémon, magic: Magic, yugioh: Yu-Gi-Oh!, one_piece: One Piece,
-        lorcana: Lorcana, sport: Sport, autre: Autre }
+      {
+        pokemon: Pokémon,
+        magic: Magic,
+        yugioh: Yu-Gi-Oh!,
+        one_piece: One Piece,
+        lorcana: Lorcana,
+        sport: Sport,
+        autre: Autre,
+      }
   grading:
     fr: Gradation
     type: enum
@@ -201,8 +355,13 @@ attributes:
     fr: Groupe
     type: enum
     values:
-      { g0: Groupe 0+ (0-13 kg), g01: Groupe 0+/1, g1: Groupe 1 (9-18 kg),
-        g23: Groupe 2/3 (15-36 kg), evolutif: Évolutif }
+      {
+        g0: Groupe 0+ (0-13 kg),
+        g01: Groupe 0+/1,
+        g1: Groupe 1 (9-18 kg),
+        g23: Groupe 2/3 (15-36 kg),
+        evolutif: Évolutif,
+      }
   frame_size:
     fr: Taille du cadre
     type: enum
@@ -216,10 +375,20 @@ attributes:
     fr: Technique
     type: enum
     values:
-      { huile: Huile, acrylique: Acrylique, aquarelle: Aquarelle, gouache: Gouache,
-        pastel: Pastel, dessin: Dessin, gravure: Gravure, lithographie: Lithographie,
-        serigraphie: Sérigraphie, photographie: Photographie, technique_mixte: Technique mixte,
-        autre: Autre }
+      {
+        huile: Huile,
+        acrylique: Acrylique,
+        aquarelle: Aquarelle,
+        gouache: Gouache,
+        pastel: Pastel,
+        dessin: Dessin,
+        gravure: Gravure,
+        lithographie: Lithographie,
+        serigraphie: Sérigraphie,
+        photographie: Photographie,
+        technique_mixte: Technique mixte,
+        autre: Autre,
+      }
   certificate: { fr: Certificat d'authenticité, type: bool }
   framed: { fr: Encadré, type: bool }
   volume_ml: { fr: Contenance, type: int, unit: ml, min: 1, max: 5000 }
@@ -228,13 +397,28 @@ attributes:
     fr: Animal
     type: enum
     values:
-      { chien: Chien, chat: Chat, rongeur: Rongeur, oiseau: Oiseau, poisson: Poisson,
-        reptile: Reptile, cheval: Cheval, autre: Autre }
+      {
+        chien: Chien,
+        chat: Chat,
+        rongeur: Rongeur,
+        oiseau: Oiseau,
+        poisson: Poisson,
+        reptile: Reptile,
+        cheval: Cheval,
+        autre: Autre,
+      }
   power_w: { fr: Puissance, type: int, unit: W, min: 1, max: 100000 }
   voltage:
     fr: Alimentation
     type: enum
-    values: { v230: 230 V, v400: 400 V triphasé, batterie: Batterie, thermique: Thermique, manuel: Manuel }
+    values:
+      {
+        v230: 230 V,
+        v400: 400 V triphasé,
+        batterie: Batterie,
+        thermique: Thermique,
+        manuel: Manuel,
+      }
 
 categories:
   # 1 ─────────────────────────────────────────────────────────────────────────────────
@@ -362,7 +546,11 @@ categories:
         children:
           - { key: montres_bijoux.montres.homme, fr: Homme }
           - { key: montres_bijoux.montres.femme, fr: Femme }
-          - { key: montres_bijoux.montres.collection, fr: Montres de collection, attributes: [year] }
+          - {
+              key: montres_bijoux.montres.collection,
+              fr: Montres de collection,
+              attributes: [year],
+            }
       - key: montres_bijoux.bijoux
         fr: Bijoux
         attributes: [metal!, stone, color]
@@ -397,7 +585,11 @@ categories:
         attributes: [material, style, width_cm, depth_cm, height_cm]
         children:
           # Volumineux : main propre ou transporteur spécialisé (8.19).
-          - { key: maison_jardin.meubles.canapes_fauteuils, fr: Canapés et fauteuils, shipping: false }
+          - {
+              key: maison_jardin.meubles.canapes_fauteuils,
+              fr: Canapés et fauteuils,
+              shipping: false,
+            }
           - { key: maison_jardin.meubles.tables, fr: Tables, shipping: false }
           - { key: maison_jardin.meubles.chaises, fr: Chaises et tabourets }
           - { key: maison_jardin.meubles.rangements, fr: Rangements et commodes, shipping: false }
@@ -445,7 +637,12 @@ categories:
         brand: required
         attributes: [model_name]
         children:
-          - { key: maison_jardin.electromenager.gros, fr: Gros électroménager, shipping: false, attributes: [energy_class] }
+          - {
+              key: maison_jardin.electromenager.gros,
+              fr: Gros électroménager,
+              shipping: false,
+              attributes: [energy_class],
+            }
           - { key: maison_jardin.electromenager.cuisine, fr: Petit électroménager de cuisine }
           - { key: maison_jardin.electromenager.cafe, fr: Machines à café }
           - { key: maison_jardin.electromenager.entretien, fr: Aspirateurs et entretien }
@@ -461,9 +658,19 @@ categories:
       - key: maison_jardin.jardin
         fr: Jardin et piscine
         children:
-          - { key: maison_jardin.jardin.mobilier, fr: Mobilier de jardin, shipping: false, attributes: [material] }
+          - {
+              key: maison_jardin.jardin.mobilier,
+              fr: Mobilier de jardin,
+              shipping: false,
+              attributes: [material],
+            }
           - { key: maison_jardin.jardin.outils, fr: Outils de jardin, attributes: [voltage] }
-          - { key: maison_jardin.jardin.tondeuses, fr: Tondeuses et motoculture, shipping: false, attributes: [voltage] }
+          - {
+              key: maison_jardin.jardin.tondeuses,
+              fr: Tondeuses et motoculture,
+              shipping: false,
+              attributes: [voltage],
+            }
           - { key: maison_jardin.jardin.barbecues, fr: Barbecues et planchas }
           - { key: maison_jardin.jardin.piscine_spa, fr: Piscine et spa, shipping: false }
           - { key: maison_jardin.jardin.pots, fr: Pots et jardinières }
@@ -482,17 +689,33 @@ categories:
       - key: high_tech.telephones
         fr: Téléphones
         children:
-          - { key: high_tech.telephones.smartphones, fr: Smartphones, attributes: [storage_gb!, unlocked, battery_health_pct] }
+          - {
+              key: high_tech.telephones.smartphones,
+              fr: Smartphones,
+              attributes: [storage_gb!, unlocked, battery_health_pct],
+            }
           - { key: high_tech.telephones.classiques, fr: Téléphones classiques }
           - { key: high_tech.telephones.accessoires, fr: Coques et accessoires, brand: optional }
       - key: high_tech.ordinateurs
         fr: Ordinateurs
         children:
-          - { key: high_tech.ordinateurs.portables, fr: Ordinateurs portables, attributes: [screen_in, storage_gb, ram_gb] }
-          - { key: high_tech.ordinateurs.fixes, fr: Ordinateurs fixes, attributes: [storage_gb, ram_gb] }
+          - {
+              key: high_tech.ordinateurs.portables,
+              fr: Ordinateurs portables,
+              attributes: [screen_in, storage_gb, ram_gb],
+            }
+          - {
+              key: high_tech.ordinateurs.fixes,
+              fr: Ordinateurs fixes,
+              attributes: [storage_gb, ram_gb],
+            }
           - { key: high_tech.ordinateurs.composants, fr: Composants }
           - { key: high_tech.ordinateurs.ecrans, fr: Écrans, attributes: [screen_in] }
-          - { key: high_tech.ordinateurs.peripheriques, fr: "Claviers, souris et périphériques", brand: optional }
+          - {
+              key: high_tech.ordinateurs.peripheriques,
+              fr: "Claviers, souris et périphériques",
+              brand: optional,
+            }
           - { key: high_tech.ordinateurs.imprimantes, fr: Imprimantes et scanners }
       - key: high_tech.tablettes
         fr: Tablettes et liseuses
@@ -503,7 +726,12 @@ categories:
       - key: high_tech.tv_video
         fr: TV et vidéo
         children:
-          - { key: high_tech.tv_video.televiseurs, fr: Téléviseurs, attributes: [screen_in!], shipping: false }
+          - {
+              key: high_tech.tv_video.televiseurs,
+              fr: Téléviseurs,
+              attributes: [screen_in!],
+              shipping: false,
+            }
           - { key: high_tech.tv_video.videoprojecteurs, fr: Vidéoprojecteurs }
           - { key: high_tech.tv_video.lecteurs, fr: Lecteurs et box }
       - key: high_tech.audio
@@ -517,16 +745,33 @@ categories:
         fr: Photo et vidéo
         children:
           - { key: high_tech.photo.appareils, fr: Appareils photo }
-          - { key: high_tech.photo.objectifs, fr: Objectifs, attributes: [lens_mount!, focal_length] }
+          - {
+              key: high_tech.photo.objectifs,
+              fr: Objectifs,
+              attributes: [lens_mount!, focal_length],
+            }
           - { key: high_tech.photo.cameras, fr: Caméras et caméras d'action }
           - { key: high_tech.photo.drones, fr: Drones }
           - { key: high_tech.photo.accessoires, fr: Accessoires photo, brand: optional }
       - key: high_tech.jeux_video
         fr: Consoles et jeux vidéo
         children:
-          - { key: high_tech.jeux_video.consoles, fr: Consoles, attributes: [game_platform!, storage_gb] }
-          - { key: high_tech.jeux_video.jeux, fr: Jeux vidéo, brand: optional, attributes: [game_platform!] }
-          - { key: high_tech.jeux_video.accessoires, fr: Manettes et accessoires, attributes: [game_platform] }
+          - {
+              key: high_tech.jeux_video.consoles,
+              fr: Consoles,
+              attributes: [game_platform!, storage_gb],
+            }
+          - {
+              key: high_tech.jeux_video.jeux,
+              fr: Jeux vidéo,
+              brand: optional,
+              attributes: [game_platform!],
+            }
+          - {
+              key: high_tech.jeux_video.accessoires,
+              fr: Manettes et accessoires,
+              attributes: [game_platform],
+            }
       - key: high_tech.objets_connectes
         fr: Objets connectés
         children:
@@ -710,14 +955,22 @@ categories:
           - { key: enfants_bebe.vetements.bodies_pyjamas, fr: Bodies et pyjamas }
           - { key: enfants_bebe.vetements.ensembles, fr: Ensembles }
           - { key: enfants_bebe.vetements.manteaux, fr: Manteaux et combinaisons }
-          - { key: enfants_bebe.vetements.chaussures, fr: Chaussons et chaussures, attributes: [shoe_eu] }
+          - {
+              key: enfants_bebe.vetements.chaussures,
+              fr: Chaussons et chaussures,
+              attributes: [shoe_eu],
+            }
       - key: enfants_bebe.jouets
         fr: Jouets
         attributes: [age_range]
         children:
           - { key: enfants_bebe.jouets.premier_age, fr: Premier âge et éveil }
           - { key: enfants_bebe.jouets.peluches_poupees, fr: Peluches et poupées }
-          - { key: enfants_bebe.jouets.construction, fr: Jeux de construction, attributes: [piece_count] }
+          - {
+              key: enfants_bebe.jouets.construction,
+              fr: Jeux de construction,
+              attributes: [piece_count],
+            }
           - { key: enfants_bebe.jouets.vehicules, fr: Véhicules et circuits }
           - { key: enfants_bebe.jouets.exterieur, fr: Jeux d'extérieur }
           - { key: enfants_bebe.jouets.educatifs, fr: Jeux éducatifs }
@@ -745,9 +998,17 @@ categories:
           - { key: sport_plein_air.velos.route, fr: Vélos de route }
           - { key: sport_plein_air.velos.vtt, fr: VTT }
           - { key: sport_plein_air.velos.ville, fr: Vélos de ville }
-          - { key: sport_plein_air.velos.vae, fr: Vélos à assistance électrique, attributes: [ebike_battery_wh] }
+          - {
+              key: sport_plein_air.velos.vae,
+              fr: Vélos à assistance électrique,
+              attributes: [ebike_battery_wh],
+            }
           - { key: sport_plein_air.velos.enfant, fr: Vélos enfant }
-          - { key: sport_plein_air.velos.pieces, fr: Pièces et accessoires vélo, attributes_replace: true }
+          - {
+              key: sport_plein_air.velos.pieces,
+              fr: Pièces et accessoires vélo,
+              attributes_replace: true,
+            }
       - key: sport_plein_air.fitness
         fr: Fitness et musculation
         children:
@@ -759,8 +1020,16 @@ categories:
         children:
           - { key: sport_plein_air.hiver.skis, fr: Skis, attributes: [ski_length_cm] }
           - { key: sport_plein_air.hiver.snowboards, fr: Snowboards, attributes: [ski_length_cm] }
-          - { key: sport_plein_air.hiver.chaussures, fr: Chaussures de ski et de snow, attributes: [shoe_eu] }
-          - { key: sport_plein_air.hiver.vetements, fr: Vêtements de ski, attributes: [clothing_size, gender] }
+          - {
+              key: sport_plein_air.hiver.chaussures,
+              fr: Chaussures de ski et de snow,
+              attributes: [shoe_eu],
+            }
+          - {
+              key: sport_plein_air.hiver.vetements,
+              fr: Vêtements de ski,
+              attributes: [clothing_size, gender],
+            }
       - key: sport_plein_air.glisse
         fr: Glisse
         children:
@@ -868,7 +1137,11 @@ categories:
         attributes: [model_name]
         children:
           - { key: beaute_bien_etre.coiffure.appareils, fr: "Sèche-cheveux, lisseurs et boucleurs" }
-          - { key: beaute_bien_etre.coiffure.accessoires, fr: Accessoires de coiffure, brand: optional }
+          - {
+              key: beaute_bien_etre.coiffure.accessoires,
+              fr: Accessoires de coiffure,
+              brand: optional,
+            }
       - key: beaute_bien_etre.accessoires
         fr: Accessoires
         brand: optional
@@ -905,7 +1178,11 @@ categories:
         fr: Équitation
         children:
           - { key: animaux.equitation.selles, fr: Selles et harnachement }
-          - { key: animaux.equitation.cavalier, fr: Équipement du cavalier, attributes: [clothing_size] }
+          - {
+              key: animaux.equitation.cavalier,
+              fr: Équipement du cavalier,
+              attributes: [clothing_size],
+            }
           - { key: animaux.equitation.soins, fr: Soins et écurie }
 
   # 12 ────────────────────────────────────────────────────────────────────────────────
@@ -925,12 +1202,21 @@ categories:
         fr: BTP
         children:
           - { key: materiel_pro.btp.engins, fr: Engins et machines, shipping: false }
-          - { key: materiel_pro.btp.outillage, fr: Outillage professionnel, attributes: [voltage, power_w] }
+          - {
+              key: materiel_pro.btp.outillage,
+              fr: Outillage professionnel,
+              attributes: [voltage, power_w],
+            }
           - { key: materiel_pro.btp.echafaudages, fr: Échafaudages et coffrages, shipping: false }
       - key: materiel_pro.restauration
         fr: Restauration
         children:
-          - { key: materiel_pro.restauration.cuisson, fr: Cuisson et fours, shipping: false, attributes: [voltage] }
+          - {
+              key: materiel_pro.restauration.cuisson,
+              fr: Cuisson et fours,
+              shipping: false,
+              attributes: [voltage],
+            }
           - { key: materiel_pro.restauration.froid, fr: Froid professionnel, shipping: false }
           - { key: materiel_pro.restauration.mobilier, fr: Mobilier de salle }
           - { key: materiel_pro.restauration.ustensiles, fr: Ustensiles et vaisselle pro }
@@ -947,7 +1233,11 @@ categories:
       - key: materiel_pro.commerce
         fr: Commerce et boutique
         children:
-          - { key: materiel_pro.commerce.agencement, fr: Agencement et présentoirs, shipping: false }
+          - {
+              key: materiel_pro.commerce.agencement,
+              fr: Agencement et présentoirs,
+              shipping: false,
+            }
           - { key: materiel_pro.commerce.caisse, fr: Caisse et encaissement }
       # Hors dispositifs médicaux réglementés (8.19) : toujours vérifié par un humain.
       - key: materiel_pro.medical
@@ -959,8 +1249,17 @@ categories:
       - key: materiel_pro.industrie
         fr: Industrie
         children:
-          - { key: materiel_pro.industrie.machines, fr: Machines industrielles, shipping: false, attributes: [voltage, power_w] }
-          - { key: materiel_pro.industrie.manutention, fr: Manutention et stockage, shipping: false }
+          - {
+              key: materiel_pro.industrie.machines,
+              fr: Machines industrielles,
+              shipping: false,
+              attributes: [voltage, power_w],
+            }
+          - {
+              key: materiel_pro.industrie.manutention,
+              fr: Manutention et stockage,
+              shipping: false,
+            }
           - { key: materiel_pro.industrie.fournitures, fr: Fournitures industrielles }
 
   # 13 ── Verticale (P9) ───────────────────────────────────────────────────────────────
