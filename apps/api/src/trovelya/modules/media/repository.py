@@ -100,9 +100,13 @@ async def start_processing(db: AsyncSession, media_id: UUID, owner_id: UUID) -> 
     )
 
 
-_OWNED_MEDIA = (
+_OWNED_MEDIA = text(
     "SELECT id, purpose, mime_type, status, width, height, variants, rejection_reason"
     " FROM media WHERE id = :id AND owner_id = :owner AND deleted_at IS NULL"
+)
+_OWNED_MEDIA_FOR_SHARE = text(
+    "SELECT id, purpose, mime_type, status, width, height, variants, rejection_reason"
+    " FROM media WHERE id = :id AND owner_id = :owner AND deleted_at IS NULL FOR SHARE"
 )
 
 
@@ -111,7 +115,7 @@ async def owned_media(
 ) -> Row[Any] | None:
     """`lock`: held FOR SHARE until the transaction ends, so the purge cannot delete a photo
     being chosen as an avatar (see `mark_for_purge`)."""
-    query = text(_OWNED_MEDIA + " FOR SHARE") if lock else text(_OWNED_MEDIA)
+    query = _OWNED_MEDIA_FOR_SHARE if lock else _OWNED_MEDIA
     return (await db.execute(query, {"id": media_id, "owner": owner_id})).one_or_none()
 
 
