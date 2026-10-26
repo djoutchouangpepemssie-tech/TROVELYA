@@ -128,7 +128,7 @@ En local et en CI, MinIO remplace R2 et des adaptateurs factices déterministes 
 |---|---|---|---|
 | Position | **I** Adresse du vendeur exposée | La position réelle vient d'une adresse ou d'une zone du vendeur (jamais du GPS sans accord) ; l'API ne renvoie **jamais** de coordonnées en P2, seulement `place_name` (commune ou arrondissement) et une distance arrondie (8.11) | T03b |
 | Position | **I** Triangulation par lectures répétées | Décalage de 200 à 500 m tiré **une fois** (générateur cryptographique) et conservé ; 1 000 lectures renvoient la même chose | T03b |
-| Position | **I** Trilatération en créant plusieurs zones (distances arrondies au km depuis plusieurs points) | Distance calculée sur la position publique décalée (écart E13, à valider), cellules H3 jamais exposées ; arrondis de 8.11 testés à chaque seuil | T03b, T10 |
+| Position | **I** Trilatération en créant plusieurs zones (distances arrondies au km depuis plusieurs points) | Distance calculée sur la position publique décalée (écart E13, validé le 26/10/2026), cellules H3 jamais exposées ; arrondis de 8.11 testés à chaque seuil | T03b, T10 |
 | Brouillons | **I** IDOR sur un brouillon, une annonce retirée, refusée ou en revue | Politiques `can_view_listing` / `can_edit_listing` ; tiers → 404 ; matrice d'accès étendue | T03b, T12 |
 | Modification | **T** Écrasement concurrent | `If-Match` sur `version` (412) ; idempotence de la création | T03b |
 | Publication | **D** Inondation d'annonces | 50 publications par jour par compte [PARAM `listings.max_publications_per_day`] ; limite par compte de 11.4 | T04 |

@@ -1,7 +1,7 @@
 # P2 — Catalogue et annonces : plan d'implémentation
 
 > **Pour les agents qui exécutent ce plan :** skill obligatoire `subagent-driven-development` (recommandé) ou `executing-plans`, tâche par tâche. Les étapes utilisent des cases à cocher (`- [ ]`).
-> Statut : **proposé le 26 octobre 2026, en attente de la validation d'Arcel.** Aucun code avant cette validation.
+> Statut : **validé par Arcel le 26 octobre 2026** (écart E13 et ordre modifié T11 → T06a → T10 compris).
 
 **Objectif :** un membre majeur au profil complété photographie un objet sur son téléphone et publie une annonce en moins de 60 secondes. L'IA propose le titre, la catégorie, la marque, l'état, les attributs et une fourchette de prix ; le vendeur valide. La modération bloque les interdits et masque les coordonnées. Les photos sont nettoyées (EXIF et GPS retirés) avant d'être servies. La fiche publique est rapide (LCP < 2,5 s sur mobile), bien référencée, et ne révèle jamais la position exacte du vendeur.
 
@@ -60,7 +60,7 @@ Stockage objet Cloudflare R2 en juridiction UE (MinIO en local et en CI), deux b
 | E10 | 6.4 W03 `/annonce/[slug]-[id]` | Un UUID complet rend l'URL longue et peu lisible. | Colonne `short_id` : 10 caractères base 62 aléatoires (≈ 59 bits), unique ; URL `/fr/annonce/[slug]-[short_id]` ; un slug faux redirige (308) vers le bon. | — |
 | E11 | 7.5 `media` | Les variantes et leurs clés ne sont pas modélisées. | `media.variants JSONB` (`[{format, width, height, key, bytes}]`) ; `storage_key` = clé aléatoire de l'original (supprimé après traitement). | 0019 |
 | E12 | 9.1 « 120 jours sans modification » | La date de départ n'est pas dite. | Q15 : `expires_at = max(published_at, renouvellement, dernière modification) + listings.expiry_days`. | — |
-| E13 | 8.11 « distance calculée sur la position réelle puis arrondie » | **À valider.** Un visiteur peut créer plusieurs zones (aucune limite en P1) et trilatérer la position réelle d'un vendeur à quelques centaines de mètres près avec des distances arrondies au kilomètre. | **Recommandation** : calculer la distance affichée sur `location_public` (décalée de 200 à 500 m) puis l'arrondir. Le décalage étant plus petit que l'arrondi, l'affichage ne change pas pour le visiteur, et la trilatération ne trouve plus que la position publique. Le filtrage par rayon (P3) reste sur la position réelle. | — |
+| E13 | 8.11 « distance calculée sur la position réelle puis arrondie » | Un visiteur peut créer plusieurs zones (aucune limite en P1) et trilatérer la position réelle d'un vendeur à quelques centaines de mètres près avec des distances arrondies au kilomètre. | **Validé par Arcel le 26/10/2026** : calculer la distance affichée sur `location_public` (décalée de 200 à 500 m) puis l'arrondir. Le décalage étant plus petit que l'arrondi, l'affichage ne change pas pour le visiteur, et la trilatération ne trouve plus que la position publique. Le filtrage par rayon (P3) reste sur la position réelle. | — |
 | E14 | 7.5 `listings` | Le statut et ses transitions ne gardent pas trace de la source de la position. | Colonnes `location_source TEXT CHECK (IN ('address','zone'))` et `location_source_id UUID` (adresse ou zone du vendeur). Changer de source tire un nouveau décalage ; relire n'en tire jamais. | — |
 | E15 | 7.5 `listings` | La légende de la photo (pour l'embedding) et la raison de refus n'ont pas de colonne. | `media.moderation` garde la légende et les étiquettes de classification ; `listing_status_history.reason_code` + `reason_text` gardent les motifs. | — |
 | E16 | 11.5 rattachement des photos | Aucune route ne dit comment attacher des photos à une annonce. | Champ `media_ids` (liste ordonnée, 1 à 12) dans `POST` et `PATCH /listings` ; aucune route nouvelle. | — |
@@ -207,7 +207,7 @@ tout ── T12 (parcours 2, démo, porte)
 
 - T02a peut commencer en parallèle de T01a (aucune dépendance).
 - T05a, T07, T08 et T11 sont parallélisables après T04.
-- **Ordre modifié par rapport à 17.3, à valider** : T11 (embeddings) passe avant T06a et T10, parce que les comparables de prix (T06) et les similaires (T10) en dépendent. Aucune tâche n'est retirée.
+- **Ordre modifié par rapport à 17.3, validé par Arcel le 26/10/2026** : T11 (embeddings) passe avant T06a et T10, parce que les comparables de prix (T06) et les similaires (T10) en dépendent. Aucune tâche n'est retirée.
 - Les écrans se testent en e2e avec les routes de test existantes (`POST /v1/_test/session`) et une nouvelle route de test `POST /v1/_test/process-media` (traitement synchrone, montée seulement en `local` et `test`).
 
 ---
@@ -844,7 +844,7 @@ Recalculé à chaque création ou modification. La réponse au propriétaire don
 
 ## 7. Actions qui reviennent à Arcel pendant P2
 
-1. Valider ce plan, l'écart **E13** (distance calculée sur la position publique) et l'**ordre modifié** (T11 avant T06a et T10).
+1. ~~Valider ce plan, l'écart E13 et l'ordre modifié~~ : fait le 26 octobre 2026.
 2. Avant T02a : créer le compte Cloudflare, deux buckets R2 en **juridiction UE** et un jeton limité à ces buckets (guidage pas à pas ; les clés vont directement dans Railway, jamais dans la conversation).
 3. Avant T06b : créer le compte AWS, ouvrir l'accès aux modèles Claude et au modèle d'embeddings dans une région UE, fixer un budget mensuel avec alerte, créer un utilisateur limité à Bedrock (guidage ; clés dans Railway seulement).
 4. Démonstrations sur staging : publier depuis son téléphone (G1), vérifier une photo nettoyée (G6), approuver une annonce dans la file de revue.
