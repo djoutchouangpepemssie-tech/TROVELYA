@@ -32,6 +32,7 @@ from trovelya.modules.media.service.images import (
     ProcessedImage,
     process_image,
 )
+from trovelya.modules.media.service.uploads import PROCESS_JOB
 from trovelya.shared.clock import Clock
 from trovelya.shared.events import emit_event
 
@@ -42,8 +43,11 @@ logger = structlog.get_logger(__name__)
 DUPLICATE_DISTANCE = 6
 # A 12 Mpx photo takes about 3 s, 49 Mpx about 2.5 s; past this the attempt is retried.
 IMAGE_TIMEOUT_S = 60
-# Longer than every retry together: a media still `processing` after this has lost its job.
-STUCK_AFTER = timedelta(minutes=30)
+# No attempt started for this long (three tries and their delays take under 10 minutes): the
+# job was lost (worker stopped or killed). It is enqueued again; after GIVE_UP the media is
+# rejected, so a photo never stays `processing` for ever.
+STUCK_AFTER = timedelta(minutes=15)
+GIVE_UP = timedelta(hours=24)
 PROCESSING_FAILED = "processing_failed"
 
 Session = async_sessionmaker[AsyncSession]
@@ -149,6 +153,26 @@ async def _mark_ready(
     return decided
 
 
+async def _decode(
+    slot: asyncio.Semaphore, data: bytes, mime_type: str, max_bytes: int
+) -> ProcessedImage:
+    """`process_image` in a thread, within IMAGE_TIMEOUT_S. A thread cannot be stopped: when the
+    wait gives up, the slot stays taken until the thread really ends, so a slow hostile file
+    never runs next to another decoding."""
+    await slot.acquire()
+    task = asyncio.ensure_future(
+        asyncio.to_thread(process_image, data, mime_type, max_bytes=max_bytes)
+    )
+
+    def release(done: asyncio.Future[ProcessedImage]) -> None:
+        slot.release()
+        if not done.cancelled():
+            done.exception()  # an abandoned attempt's error is retrieved, not reported twice
+
+    task.add_done_callback(release)
+    return await asyncio.wait_for(asyncio.shield(task), IMAGE_TIMEOUT_S)
+
+
 async def process_media(
     sessionmaker: Session,
     storage: ObjectStorage,
@@ -167,13 +191,11 @@ async def process_media(
                 await storage.delete("originals", row.storage_key)
             return row.status
         max_bytes = await repository.setting_int(db, "media.max_image_bytes")
+        await repository.mark_attempt(db, row.id)  # the recovery cron leaves it alone
+        await commit(db)
     try:
         data = await _read(storage, row, max_bytes)
-        async with image_slot or asyncio.Semaphore(1):
-            image = await asyncio.wait_for(
-                asyncio.to_thread(process_image, data, row.mime_type, max_bytes=max_bytes),
-                IMAGE_TIMEOUT_S,
-            )
+        image = await _decode(image_slot or asyncio.Semaphore(1), data, row.mime_type, max_bytes)
     except ImageRejectedError as rejected:
         return await _reject(sessionmaker, storage, row, rejected.reason)
 
@@ -197,19 +219,30 @@ async def fail_media(sessionmaker: Session, storage: ObjectStorage, media_id: UU
     """Gives up on a media still `processing`: `rejected` with `processing_failed`."""
     async with sessionmaker() as db:
         row = await repository.media_to_process(db, media_id)
-    if row is None or row.status != "processing":
-        return "gone" if row is None else row.status
+    if row is None:
+        return "gone"
+    if row.status != "processing":
+        if row.status in {"ready", "rejected"}:  # its deletion may have failed every time
+            await storage.delete("originals", row.storage_key)
+        return row.status
     return await _reject(sessionmaker, storage, row, PROCESSING_FAILED)
 
 
 async def recover_stuck_media(
-    sessionmaker: Session, storage: ObjectStorage, *, clock: Clock
+    sessionmaker: Session, storage: ObjectStorage, queue: Any, *, clock: Clock
 ) -> int:
-    """Cron: media whose job died (worker stopped, timeout) are rejected, originals deleted."""
+    """Cron: a media with no attempt for STUCK_AFTER lost its job; it is enqueued again (one
+    recovery job per media at a time), and rejected once GIVE_UP has passed since its upload."""
+    now = clock.now()
     async with sessionmaker() as db:
-        stuck = await repository.stuck_in_processing(db, clock.now() - STUCK_AFTER)
-    for media_id in stuck:
-        await fail_media(sessionmaker, storage, media_id)
+        stuck = await repository.stuck_in_processing(db, now - STUCK_AFTER)
+    for media_id, created_at in stuck:
+        if created_at < now - GIVE_UP:
+            await fail_media(sessionmaker, storage, media_id)
+        else:
+            await queue.enqueue_job(
+                PROCESS_JOB, str(media_id), _job_id=f"media-recovery:{media_id}"
+            )
     if stuck:
-        logger.warning("media.stuck_rejected", count=len(stuck))
+        logger.warning("media.stuck_recovered", count=len(stuck))
     return len(stuck)
