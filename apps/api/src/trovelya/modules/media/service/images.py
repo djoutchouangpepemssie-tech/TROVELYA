@@ -8,7 +8,6 @@ JPEG) are left behind.
 """
 
 import hashlib
-import warnings
 from dataclasses import dataclass
 from io import BytesIO
 from typing import cast
@@ -17,9 +16,12 @@ from PIL import Image, ImageCms, ImageOps
 
 # 50 Mpx: a 12 Mpx phone photo passes with room to spare; a decompression bomb does not.
 MAX_PIXELS = 50_000_000
-Image.MAX_IMAGE_PIXELS = MAX_PIXELS
 WIDTHS = (320, 640, 1080, 1600)  # section 11.5, never enlarged
 FORMATS = ("avif", "webp")
+# Work at no more than twice the largest variant: a JPEG is decoded at reduced scale, any other
+# image reduced right after decoding (memory and time stay those of a 12 Mpx photo).
+WORK_SIDE = 3200
+MAX_SIDE = 16_383  # WebP's limit; a very tall variant is fitted inside it
 _PIL_FORMAT = {"image/jpeg": "JPEG", "image/png": "PNG", "image/webp": "WEBP", "image/avif": "AVIF"}
 _SAVE = {
     "avif": {"quality": 60, "speed": 8},
@@ -28,6 +30,9 @@ _SAVE = {
 _SRGB = ImageCms.ImageCmsProfile(
     ImageCms.createProfile("sRGB")  # pyright: ignore[reportUnknownMemberType, reportUnknownArgumentType]
 )
+_ORIENTATION_TAG = 0x0112
+_QUARTER_TURNS = {5, 6, 7, 8}  # EXIF orientations that swap width and height
+_HIGH_DEPTH = {"I", "I;16", "I;16B", "I;16L", "I;16N", "F"}
 
 
 class ImageRejectedError(Exception):
@@ -56,15 +61,20 @@ class ProcessedImage:
 
 
 def detect_type(data: bytes) -> str | None:
-    """The type the first bytes announce, among the accepted ones."""
+    """The type the first bytes announce, among the accepted ones. An AVIF still image says
+    `avif` as its major brand, or `mif1` with `avif` among its compatible brands; an image
+    sequence (`avis`) is not a photo and is refused."""
     if data[:3] == b"\xff\xd8\xff":
         return "image/jpeg"
     if data[:8] == b"\x89PNG\r\n\x1a\n":
         return "image/png"
     if data[:4] == b"RIFF" and data[8:12] == b"WEBP":
         return "image/webp"
-    if data[4:8] == b"ftyp" and data[8:12] in {b"avif", b"avis"}:
-        return "image/avif"
+    if data[4:8] == b"ftyp":
+        box_end = min(int.from_bytes(data[:4]), len(data), 64)
+        compatible = {data[i : i + 4] for i in range(16, box_end - 3, 4)}
+        if data[8:12] == b"avif" or (data[8:12] == b"mif1" and b"avif" in compatible):
+            return "image/avif"
     return None
 
 
@@ -72,40 +82,38 @@ def hamming(a: int, b: int) -> int:
     return (a ^ b).bit_count()
 
 
-def _decode(data: bytes, mime: str) -> Image.Image:
-    try:
-        with warnings.catch_warnings():
-            warnings.simplefilter("error", Image.DecompressionBombWarning)
-            image = Image.open(BytesIO(data), formats=[_PIL_FORMAT[mime]])
-            if image.width * image.height > MAX_PIXELS:
-                raise ImageRejectedError("too_many_pixels")
-            image.load()
-    except ImageRejectedError:
-        raise
-    except (Image.DecompressionBombError, Image.DecompressionBombWarning):
-        raise ImageRejectedError("too_many_pixels") from None
-    except (OSError, SyntaxError, ValueError, EOFError):
-        raise ImageRejectedError("unreadable") from None
-    return image
+def _decode(data: bytes, mime: str) -> tuple[Image.Image, tuple[int, int]]:
+    """The decoded image (possibly at reduced scale) and the file's own dimensions."""
+    image = Image.open(BytesIO(data), formats=[_PIL_FORMAT[mime]])
+    size = image.size
+    if size[0] * size[1] > MAX_PIXELS:
+        raise ImageRejectedError("too_many_pixels")
+    if image.format == "JPEG":
+        image.draft("RGB", (WORK_SIDE, WORK_SIDE))  # DCT scaling, never below these sides
+    image.load()
+    return image, size
 
 
-def _to_srgb(image: Image.Image) -> Image.Image:
-    """Oriented, in sRGB, RGB or RGBA, with no metadata attached."""
+def _prepare(image: Image.Image) -> Image.Image:
+    """Reduced to the working size, oriented, in sRGB, 8-bit RGB or RGBA, with no metadata."""
+    factor = min(image.width, image.height) // WORK_SIDE
+    if factor > 1:
+        image = image.reduce(factor)
     image = ImageOps.exif_transpose(image)
-    alpha = image.mode in {"RGBA", "LA", "PA"} or "transparency" in image.info
+    if image.mode in _HIGH_DEPTH:  # 16-bit greyscale: scale to 8 bits, do not clip
+        image = image.convert("I").point(lambda v: v / 256).convert("L")  # pyright: ignore[reportUnknownMemberType, reportUnknownLambdaType, reportOperatorIssue]
+    alpha = image.mode in {"RGBA", "LA", "PA", "RGBa", "La"} or "transparency" in image.info
     mode = "RGBA" if alpha else "RGB"
     icc = image.info.get("icc_profile")
+    image = image.convert(mode)
     if icc:
         try:
             source = ImageCms.ImageCmsProfile(BytesIO(icc))
-            image = (
-                ImageCms.profileToProfile(image.convert(mode), source, _SRGB, outputMode=mode)
-                or image
-            )
+            image = ImageCms.profileToProfile(image, source, _SRGB, outputMode=mode) or image
         except (ImageCms.PyCMSError, OSError):
             pass  # an unusable profile: the pixels are taken as sRGB
     clean = Image.new(mode, image.size)
-    clean.paste(image.convert(mode))
+    clean.paste(image)
     return clean
 
 
@@ -122,9 +130,17 @@ def _dhash(image: Image.Image) -> int:
     return bits
 
 
-def _widths(width: int) -> list[int]:
-    """The standard widths below the image's own, then the image's width capped at the largest."""
-    return [w for w in WIDTHS if w < min(width, WIDTHS[-1])] + [min(width, WIDTHS[-1])]
+def _sizes(width: int, height: int) -> list[tuple[int, int]]:
+    """One size per standard width below the image's own, then the image's width capped at the
+    largest; each fitted within MAX_SIDE in height and never enlarged."""
+    widths = [w for w in WIDTHS if w < min(width, WIDTHS[-1])] + [min(width, WIDTHS[-1])]
+    sizes: list[tuple[int, int]] = []
+    for target in widths:
+        scale = min(target / width, MAX_SIDE / height, 1.0)
+        size = (max(1, round(width * scale)), max(1, round(height * scale)))
+        if size not in sizes:
+            sizes.append(size)
+    return sizes
 
 
 def _encode(image: Image.Image, fmt: str) -> bytes:
@@ -133,27 +149,37 @@ def _encode(image: Image.Image, fmt: str) -> bytes:
     return out.getvalue()
 
 
+def _variants(image: Image.Image) -> list[Variant]:
+    resized = [
+        image if size == image.size else image.resize(size, Image.Resampling.LANCZOS)  # pyright: ignore[reportUnknownMemberType]
+        for size in _sizes(image.width, image.height)
+    ]
+    return [Variant(fmt, r.width, r.height, _encode(r, fmt)) for fmt in FORMATS for r in resized]
+
+
 def process_image(data: bytes, declared_type: str, *, max_bytes: int) -> ProcessedImage:
     if len(data) > max_bytes:
         raise ImageRejectedError("too_large")
     if declared_type not in _PIL_FORMAT or detect_type(data) != declared_type:
         raise ImageRejectedError("type_mismatch")
-    with _decode(data, declared_type) as decoded:
-        image = _to_srgb(decoded)
-    variants: list[Variant] = []
-    for fmt in FORMATS:
-        for width in _widths(image.width):
-            height = max(1, round(image.height * width / image.width))
-            resized = (
-                image
-                if width == image.width
-                else image.resize((width, height), Image.Resampling.LANCZOS)  # pyright: ignore[reportUnknownMemberType]
-            )
-            variants.append(Variant(fmt, width, height, _encode(resized, fmt)))
+    try:
+        decoded, (width, height) = _decode(data, declared_type)
+        with decoded:
+            if decoded.getexif().get(_ORIENTATION_TAG) in _QUARTER_TURNS:
+                width, height = height, width
+            image = _prepare(decoded)
+        variants = _variants(image)
+        dhash = _dhash(image)
+    except (ImageRejectedError, MemoryError):
+        raise
+    except Image.DecompressionBombError:
+        raise ImageRejectedError("too_many_pixels") from None
+    except Exception:  # noqa: BLE001 — any decoder error on a hostile or broken file: refused
+        raise ImageRejectedError("unreadable") from None
     return ProcessedImage(
-        width=image.width,
-        height=image.height,
+        width=width,
+        height=height,
         sha256=hashlib.sha256(data).digest(),
-        dhash=_dhash(image),
+        dhash=dhash,
         variants=variants,
     )
