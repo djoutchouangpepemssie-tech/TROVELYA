@@ -1,0 +1,1066 @@
+# Graine du catalogue TROVÉLYA (P2-T01) — PROPOSITION À VALIDER PAR ARCEL.
+#
+# Source de vérité de l'arbre des catégories et de leurs attributs (cahier 7.5 et 8.19).
+# Rejouable sans perte : chaque catégorie est identifiée par sa `key`, jamais par son nom ni
+# par sa place. Renommer = changer `fr`. Déplacer = ranger le nœud sous un autre parent en
+# gardant sa `key` et en ajoutant `moved: true` (le chemin ltree est recalculé, les annonces
+# gardent leur catégorie). Une clé n'est jamais réutilisée. Retirer = `active: false`, ou
+# retirer le nœud du fichier : la catégorie est désactivée, jamais supprimée.
+#
+# Notation
+# - Clés en snake_case ; la clé d'une catégorie nouvelle reprend celle de son parent
+#   (`mode.femme.robes`) et sert aussi de chemin ltree (sauf catégorie déplacée).
+# - Les 16 univers (racines) reprennent exactement les clés de P1 (E11) :
+#   préférences d'intérêts déjà enregistrées.
+# - Héritage : `vertical`, `model`, `shipping`, `max_photos`, `brand`, `restricted`,
+#   `conditions` et `attributes` s'appliquent à toute la descendance, sauf redéfinition.
+#   Les attributs d'un nœud s'ajoutent à ceux de ses parents (`attributes_replace: true`
+#   pour repartir de zéro).
+# - Une annonce se publie uniquement dans une feuille (catégorie sans enfant).
+# - Attributs : `clé` = facultatif et filtrable ; `clé!` = obligatoire et filtrable ;
+#   `clé~` = facultatif et non filtrable.
+# - `brand` : required | optional | none (champ « Marque » de l'annonce, table `brands`).
+# - `conditions` : états autorisés (`item_condition`) ; absent = tous.
+# - `model` : protected_purchase | contact | mixed ; `shipping` : envoi autorisé.
+# - Verticales (immobilier, véhicules, services) : arbre jusqu'au niveau 3, masqué par le
+#   drapeau `verticals` ; leurs attributs spécialisés arrivent en P9 (8.20 à 8.22).
+# - Correspondance avec les tailles de l'accueil (P1) : préférence `top` ↔ attribut
+#   `clothing_size` (hauts) ; préférence `shoe_eu` ↔ attribut `shoe_eu`.
+
+version: 1
+
+attributes:
+  color:
+    fr: Couleur
+    type: enum
+    values:
+      { noir: Noir, blanc: Blanc, gris: Gris, beige: Beige, marron: Marron, bleu: Bleu,
+        bleu_marine: Bleu marine, vert: Vert, rouge: Rouge, rose: Rose, violet: Violet,
+        jaune: Jaune, orange: Orange, dore: Doré, argente: Argenté, multicolore: Multicolore }
+  material:
+    fr: Matière
+    type: enum
+    values:
+      { coton: Coton, lin: Lin, laine: Laine, soie: Soie, cachemire: Cachemire, cuir: Cuir,
+        daim: Daim, denim: Jean, synthetique: Synthétique, bois: Bois, metal: Métal,
+        verre: Verre, ceramique: Céramique, porcelaine: Porcelaine, plastique: Plastique,
+        tissu: Tissu, marbre: Marbre, pierre: Pierre, rotin: Rotin, autre: Autre }
+  gender:
+    fr: Pour
+    type: enum
+    values: { femme: Femme, homme: Homme, mixte: Mixte, enfant: Enfant }
+  clothing_size:
+    fr: Taille
+    type: enum
+    values:
+      { xxs: XXS, xs: XS, s: S, m: M, l: L, xl: XL, xxl: XXL, xxxl: 3XL, xxxxl: 4XL,
+        unique: Taille unique }
+  kids_size:
+    fr: Taille enfant
+    type: enum
+    values:
+      { naissance: Naissance, m1: 1 mois, m3: 3 mois, m6: 6 mois, m9: 9 mois, m12: 12 mois,
+        m18: 18 mois, m24: 24 mois, a2: 2 ans, a3: 3 ans, a4: 4 ans, a5: 5 ans, a6: 6 ans,
+        a8: 8 ans, a10: 10 ans, a12: 12 ans, a14: 14 ans, a16: 16 ans }
+  shoe_eu:
+    fr: Pointure (EU)
+    type: decimal
+    min: 15
+    max: 52
+    step: 0.5
+  era:
+    fr: Époque
+    type: enum
+    values:
+      { avant_1900: Avant 1900, "1900_1940": 1900-1940, 1950s: Années 50, 1960s: Années 60,
+        1970s: Années 70, 1980s: Années 80, 1990s: Années 90, 2000s: Années 2000 }
+  width_cm: { fr: Largeur, type: int, unit: cm, min: 1, max: 2000 }
+  depth_cm: { fr: Profondeur, type: int, unit: cm, min: 1, max: 2000 }
+  height_cm: { fr: Hauteur, type: int, unit: cm, min: 1, max: 2000 }
+  style:
+    fr: Style
+    type: enum
+    values:
+      { contemporain: Contemporain, scandinave: Scandinave, industriel: Industriel,
+        vintage: Vintage, campagne: Campagne, classique: Classique, art_deco: Art déco,
+        boheme: Bohème }
+  energy_class:
+    fr: Classe énergétique
+    type: enum
+    values: { a: A, b: B, c: C, d: D, e: E, f: F, g: G }
+  metal:
+    fr: Métal
+    type: enum
+    values:
+      { or_jaune: Or jaune, or_blanc: Or blanc, or_rose: Or rose, argent: Argent,
+        platine: Platine, acier: Acier, titane: Titane, plaque_or: Plaqué or,
+        fantaisie: Fantaisie }
+  stone:
+    fr: Pierre
+    type: enum
+    values:
+      { aucune: Aucune, diamant: Diamant, saphir: Saphir, rubis: Rubis, emeraude: Émeraude,
+        perle: Perle, autre: Autre }
+  ring_size: { fr: Tour de doigt, type: int, unit: mm, min: 40, max: 75 }
+  movement:
+    fr: Mouvement
+    type: enum
+    values: { automatique: Automatique, mecanique: Mécanique (remontage manuel), quartz: Quartz, solaire: Solaire }
+  case_diameter_mm: { fr: Diamètre du boîtier, type: int, unit: mm, min: 10, max: 70 }
+  box_and_papers: { fr: Boîte et papiers, type: bool }
+  model_name: { fr: Modèle, type: text, max_length: 80 }
+  storage_gb:
+    fr: Stockage
+    type: enum
+    values:
+      { g16: 16 Go, g32: 32 Go, g64: 64 Go, g128: 128 Go, g256: 256 Go, g512: 512 Go,
+        t1: 1 To, t2: 2 To, t4: 4 To }
+  ram_gb:
+    fr: Mémoire vive
+    type: enum
+    values: { g2: 2 Go, g4: 4 Go, g8: 8 Go, g16: 16 Go, g32: 32 Go, g64: 64 Go }
+  screen_in: { fr: Taille d'écran, type: decimal, unit: pouces, min: 1, max: 120, step: 0.1 }
+  unlocked: { fr: Débloqué tout opérateur, type: bool }
+  battery_health_pct: { fr: État de la batterie, type: int, unit: "%", min: 1, max: 100 }
+  game_platform:
+    fr: Plateforme
+    type: enum
+    values:
+      { ps5: PlayStation 5, ps4: PlayStation 4, ps_retro: PlayStation (anciennes),
+        xbox_series: Xbox Series, xbox_one: Xbox One, switch: Nintendo Switch,
+        nintendo_retro: Nintendo (anciennes), pc: PC, autre: Autre }
+  lens_mount:
+    fr: Monture
+    type: enum
+    values:
+      { canon_ef: Canon EF, canon_rf: Canon RF, nikon_f: Nikon F, nikon_z: Nikon Z,
+        sony_e: Sony E, fuji_x: Fujifilm X, micro_43: Micro 4/3, leica_m: Leica M,
+        autre: Autre }
+  focal_length: { fr: Focale, type: text, max_length: 30 }
+  author: { fr: Auteur, type: text, max_length: 120 }
+  publisher: { fr: Éditeur, type: text, max_length: 120 }
+  isbn: { fr: ISBN, type: text, max_length: 17 }
+  edition_year: { fr: Année d'édition, type: year, min: 1450 }
+  first_edition: { fr: Édition originale, type: bool }
+  signed: { fr: Signé ou dédicacé, type: bool }
+  language:
+    fr: Langue
+    type: enum
+    values:
+      { fr: Français, en: Anglais, de: Allemand, es: Espagnol, it: Italien, ja: Japonais,
+        autre: Autre }
+  book_format:
+    fr: Format
+    type: enum
+    values: { broche: Broché, relie: Relié, poche: Poche, coffret: Coffret }
+  music_format:
+    fr: Format
+    type: enum
+    values: { lp_33: 33 tours, single_45: 45 tours, maxi_45: Maxi 45 tours, cd: CD, cassette: Cassette }
+  music_genre:
+    fr: Genre
+    type: enum
+    values:
+      { rock: Rock, pop: Pop, jazz: Jazz, classique: Classique, rap_hiphop: Rap et hip-hop,
+        electro: Électro, chanson_francaise: Chanson française, soul_funk: Soul et funk,
+        reggae: Reggae, metal: Métal, musiques_du_monde: Musiques du monde,
+        bande_originale: Bande originale, autre: Autre }
+  video_format:
+    fr: Format
+    type: enum
+    values: { dvd: DVD, bluray: Blu-ray, bluray_4k: Blu-ray 4K, vhs: VHS }
+  age_range:
+    fr: Âge
+    type: enum
+    values:
+      { m0_12: 0-12 mois, a1_3: 1-3 ans, a3_6: 3-6 ans, a6_9: 6-9 ans, a9_12: 9-12 ans,
+        a12_plus: 12 ans et plus, adulte: Adulte }
+  players: { fr: Nombre de joueurs, type: text, max_length: 20 }
+  piece_count: { fr: Nombre de pièces, type: int, min: 1, max: 100000 }
+  card_game:
+    fr: Jeu
+    type: enum
+    values:
+      { pokemon: Pokémon, magic: Magic, yugioh: Yu-Gi-Oh!, one_piece: One Piece,
+        lorcana: Lorcana, sport: Sport, autre: Autre }
+  grading:
+    fr: Gradation
+    type: enum
+    values: { aucune: Non gradée, psa: PSA, bgs: BGS, cgc: CGC, pca: PCA, autre: Autre }
+  grade: { fr: Note de gradation, type: decimal, min: 1, max: 10, step: 0.5 }
+  year: { fr: Année, type: year, min: 1 }
+  country: { fr: Pays, type: text, max_length: 60 }
+  scale: { fr: Échelle, type: text, max_length: 20 }
+  car_seat_norm:
+    fr: Norme
+    type: enum
+    values: { r129: R129 (i-Size), r44_04: R44/04, autre: Autre }
+  car_seat_group:
+    fr: Groupe
+    type: enum
+    values:
+      { g0: Groupe 0+ (0-13 kg), g01: Groupe 0+/1, g1: Groupe 1 (9-18 kg),
+        g23: Groupe 2/3 (15-36 kg), evolutif: Évolutif }
+  frame_size:
+    fr: Taille du cadre
+    type: enum
+    values: { xs: XS, s: S, m: M, l: L, xl: XL, enfant: Enfant }
+  wheel_size_in: { fr: Taille des roues, type: decimal, unit: pouces, min: 10, max: 30, step: 0.5 }
+  ebike_battery_wh: { fr: Batterie, type: int, unit: Wh, min: 100, max: 2000 }
+  ski_length_cm: { fr: Longueur, type: int, unit: cm, min: 60, max: 220 }
+  weight_kg: { fr: Poids, type: decimal, unit: kg, min: 0.1, max: 500, step: 0.1 }
+  artist: { fr: Artiste, type: text, max_length: 120 }
+  art_technique:
+    fr: Technique
+    type: enum
+    values:
+      { huile: Huile, acrylique: Acrylique, aquarelle: Aquarelle, gouache: Gouache,
+        pastel: Pastel, dessin: Dessin, gravure: Gravure, lithographie: Lithographie,
+        serigraphie: Sérigraphie, photographie: Photographie, technique_mixte: Technique mixte,
+        autre: Autre }
+  certificate: { fr: Certificat d'authenticité, type: bool }
+  framed: { fr: Encadré, type: bool }
+  volume_ml: { fr: Contenance, type: int, unit: ml, min: 1, max: 5000 }
+  sealed: { fr: Neuf sous emballage scellé, type: bool }
+  animal:
+    fr: Animal
+    type: enum
+    values:
+      { chien: Chien, chat: Chat, rongeur: Rongeur, oiseau: Oiseau, poisson: Poisson,
+        reptile: Reptile, cheval: Cheval, autre: Autre }
+  power_w: { fr: Puissance, type: int, unit: W, min: 1, max: 100000 }
+  voltage:
+    fr: Alimentation
+    type: enum
+    values: { v230: 230 V, v400: 400 V triphasé, batterie: Batterie, thermique: Thermique, manuel: Manuel }
+
+categories:
+  # 1 ─────────────────────────────────────────────────────────────────────────────────
+  - key: mode
+    fr: Mode
+    icon: mode
+    vertical: goods
+    model: protected_purchase
+    shipping: true
+    max_photos: 12
+    brand: optional
+    attributes: [color, material]
+    children:
+      - key: mode.femme
+        fr: Femme
+        attributes: [clothing_size!]
+        children:
+          - { key: mode.femme.robes, fr: Robes }
+          - { key: mode.femme.hauts, fr: Hauts et t-shirts }
+          - { key: mode.femme.chemises_blouses, fr: Chemises et blouses }
+          - { key: mode.femme.pulls_gilets, fr: Pulls et gilets }
+          - { key: mode.femme.sweats, fr: Sweats }
+          - { key: mode.femme.manteaux_vestes, fr: Manteaux et vestes }
+          - { key: mode.femme.pantalons, fr: Pantalons }
+          - { key: mode.femme.jeans, fr: Jeans }
+          - { key: mode.femme.jupes, fr: Jupes }
+          - { key: mode.femme.shorts, fr: Shorts }
+          - { key: mode.femme.combinaisons, fr: Combinaisons }
+          - { key: mode.femme.tailleurs, fr: Tailleurs et costumes }
+          - { key: mode.femme.sport, fr: Vêtements de sport }
+          - { key: mode.femme.maillots_de_bain, fr: Maillots de bain }
+          - { key: mode.femme.nuit, fr: Pyjamas et nuit }
+          - { key: mode.femme.grossesse, fr: Grossesse }
+      - key: mode.homme
+        fr: Homme
+        attributes: [clothing_size!]
+        children:
+          - { key: mode.homme.tshirts_polos, fr: T-shirts et polos }
+          - { key: mode.homme.chemises, fr: Chemises }
+          - { key: mode.homme.pulls_gilets, fr: Pulls et gilets }
+          - { key: mode.homme.sweats, fr: Sweats }
+          - { key: mode.homme.manteaux_vestes, fr: Manteaux et vestes }
+          - { key: mode.homme.costumes_blazers, fr: Costumes et blazers }
+          - { key: mode.homme.pantalons, fr: Pantalons }
+          - { key: mode.homme.jeans, fr: Jeans }
+          - { key: mode.homme.shorts, fr: Shorts }
+          - { key: mode.homme.sport, fr: Vêtements de sport }
+          - { key: mode.homme.maillots_de_bain, fr: Maillots de bain }
+          - { key: mode.homme.nuit, fr: Pyjamas et nuit }
+      # Vêtements de 2 à 16 ans ; les 0-24 mois sont dans Enfants et bébé (pas de doublon).
+      - key: mode.enfant
+        fr: Enfant (2-16 ans)
+        attributes: [kids_size!, gender]
+        children:
+          - { key: mode.enfant.hauts, fr: Hauts et t-shirts }
+          - { key: mode.enfant.pulls_sweats, fr: Pulls et sweats }
+          - { key: mode.enfant.manteaux_vestes, fr: Manteaux et vestes }
+          - { key: mode.enfant.pantalons_jeans, fr: Pantalons et jeans }
+          - { key: mode.enfant.robes_jupes, fr: Robes et jupes }
+          - { key: mode.enfant.ensembles, fr: Ensembles }
+          - { key: mode.enfant.sport, fr: Vêtements de sport }
+          - { key: mode.enfant.deguisements, fr: Déguisements }
+      - key: mode.chaussures
+        fr: Chaussures
+        attributes: [shoe_eu!]
+        children:
+          - { key: mode.chaussures.femme, fr: Femme }
+          - { key: mode.chaussures.homme, fr: Homme }
+          - { key: mode.chaussures.enfant, fr: Enfant }
+      - key: mode.sneakers
+        fr: Sneakers
+        attributes: [shoe_eu!, gender, model_name]
+        children:
+          - { key: mode.sneakers.basses, fr: Basses }
+          - { key: mode.sneakers.montantes, fr: Montantes }
+          - { key: mode.sneakers.editions_limitees, fr: Éditions limitées }
+      - key: mode.sacs_maroquinerie
+        fr: Sacs et maroquinerie
+        children:
+          - { key: mode.sacs_maroquinerie.sacs_a_main, fr: Sacs à main }
+          - { key: mode.sacs_maroquinerie.sacs_a_dos, fr: Sacs à dos }
+          - { key: mode.sacs_maroquinerie.pochettes, fr: Pochettes }
+          - { key: mode.sacs_maroquinerie.portefeuilles, fr: Portefeuilles et porte-cartes }
+          - { key: mode.sacs_maroquinerie.bagages, fr: Bagages et valises }
+      - key: mode.accessoires
+        fr: Accessoires
+        attributes: [gender]
+        children:
+          - { key: mode.accessoires.ceintures, fr: Ceintures }
+          - { key: mode.accessoires.chapeaux, fr: Chapeaux et casquettes }
+          - { key: mode.accessoires.echarpes_foulards, fr: Écharpes et foulards }
+          - { key: mode.accessoires.lunettes_de_soleil, fr: Lunettes de soleil }
+          - { key: mode.accessoires.gants, fr: Gants }
+          - { key: mode.accessoires.cravates, fr: Cravates et nœuds papillon }
+      - key: mode.vintage
+        fr: Mode vintage
+        attributes: [gender!, era, clothing_size]
+        children:
+          - { key: mode.vintage.vetements, fr: Vêtements }
+          - { key: mode.vintage.chaussures, fr: Chaussures }
+          - { key: mode.vintage.accessoires, fr: Sacs et accessoires }
+      - key: mode.luxe
+        fr: Luxe
+        brand: required
+        attributes: [gender, box_and_papers]
+        children:
+          - { key: mode.luxe.vetements, fr: Vêtements, attributes: [clothing_size!] }
+          - { key: mode.luxe.sacs, fr: Sacs }
+          - { key: mode.luxe.chaussures, fr: Chaussures, attributes: [shoe_eu!] }
+          - { key: mode.luxe.accessoires, fr: Accessoires }
+
+  # 2 ─────────────────────────────────────────────────────────────────────────────────
+  - key: montres_bijoux
+    fr: Montres et bijoux
+    icon: montres_bijoux
+    vertical: goods
+    model: protected_purchase
+    shipping: true
+    max_photos: 12
+    brand: optional
+    children:
+      - key: montres_bijoux.montres
+        fr: Montres
+        attributes: [gender, movement, case_diameter_mm, metal, box_and_papers, model_name]
+        children:
+          - { key: montres_bijoux.montres.homme, fr: Homme }
+          - { key: montres_bijoux.montres.femme, fr: Femme }
+          - { key: montres_bijoux.montres.collection, fr: Montres de collection, attributes: [year] }
+      - key: montres_bijoux.bijoux
+        fr: Bijoux
+        attributes: [metal!, stone, color]
+        children:
+          - { key: montres_bijoux.bijoux.bagues, fr: Bagues, attributes: [ring_size] }
+          - { key: montres_bijoux.bijoux.colliers, fr: Colliers et pendentifs }
+          - { key: montres_bijoux.bijoux.bracelets, fr: Bracelets }
+          - { key: montres_bijoux.bijoux.boucles_oreilles, fr: Boucles d'oreilles }
+          - { key: montres_bijoux.bijoux.broches, fr: Broches }
+          - { key: montres_bijoux.bijoux.parures, fr: Parures }
+      - key: montres_bijoux.bijoux_anciens
+        fr: Bijoux anciens
+        attributes: [metal!, stone, era]
+        children:
+          - { key: montres_bijoux.bijoux_anciens.bagues, fr: Bagues, attributes: [ring_size] }
+          - { key: montres_bijoux.bijoux_anciens.colliers, fr: Colliers et pendentifs }
+          - { key: montres_bijoux.bijoux_anciens.autres, fr: Autres bijoux anciens }
+
+  # 3 ─────────────────────────────────────────────────────────────────────────────────
+  - key: maison_jardin
+    fr: Maison et jardin
+    icon: maison_jardin
+    vertical: goods
+    model: protected_purchase
+    shipping: true
+    max_photos: 12
+    brand: optional
+    attributes: [color]
+    children:
+      - key: maison_jardin.meubles
+        fr: Meubles
+        attributes: [material, style, width_cm, depth_cm, height_cm]
+        children:
+          # Volumineux : main propre ou transporteur spécialisé (8.19).
+          - { key: maison_jardin.meubles.canapes_fauteuils, fr: Canapés et fauteuils, shipping: false }
+          - { key: maison_jardin.meubles.tables, fr: Tables, shipping: false }
+          - { key: maison_jardin.meubles.chaises, fr: Chaises et tabourets }
+          - { key: maison_jardin.meubles.rangements, fr: Rangements et commodes, shipping: false }
+          - { key: maison_jardin.meubles.lits, fr: Lits et têtes de lit, shipping: false }
+          - { key: maison_jardin.meubles.bureaux, fr: Bureaux, shipping: false }
+          - { key: maison_jardin.meubles.etageres, fr: Étagères et bibliothèques }
+      - key: maison_jardin.decoration
+        fr: Décoration
+        attributes: [material, style]
+        children:
+          - { key: maison_jardin.decoration.miroirs, fr: Miroirs }
+          - { key: maison_jardin.decoration.cadres_affiches, fr: Cadres et affiches }
+          - { key: maison_jardin.decoration.vases, fr: Vases et cache-pots }
+          - { key: maison_jardin.decoration.tapis, fr: Tapis, attributes: [width_cm, depth_cm] }
+          - { key: maison_jardin.decoration.horloges, fr: Horloges }
+          - { key: maison_jardin.decoration.bougies, fr: Bougies et senteurs }
+          - { key: maison_jardin.decoration.objets, fr: Objets de décoration }
+      - key: maison_jardin.arts_de_la_table
+        fr: Céramique et arts de la table
+        attributes: [material]
+        children:
+          - { key: maison_jardin.arts_de_la_table.vaisselle, fr: Vaisselle }
+          - { key: maison_jardin.arts_de_la_table.verrerie, fr: Verres et carafes }
+          - { key: maison_jardin.arts_de_la_table.couverts, fr: Couverts }
+          - { key: maison_jardin.arts_de_la_table.ceramique, fr: Céramique artisanale }
+          - { key: maison_jardin.arts_de_la_table.linge_de_table, fr: Linge de table }
+      - key: maison_jardin.luminaires
+        fr: Luminaires
+        attributes: [material, style]
+        children:
+          - { key: maison_jardin.luminaires.lampes, fr: Lampes à poser }
+          - { key: maison_jardin.luminaires.suspensions, fr: Suspensions }
+          - { key: maison_jardin.luminaires.lampadaires, fr: Lampadaires }
+          - { key: maison_jardin.luminaires.appliques, fr: Appliques }
+      - key: maison_jardin.linge
+        fr: Linge de maison
+        attributes: [material]
+        children:
+          - { key: maison_jardin.linge.lit, fr: Linge de lit }
+          - { key: maison_jardin.linge.bain, fr: Linge de bain }
+          - { key: maison_jardin.linge.rideaux, fr: Rideaux et voilages }
+          - { key: maison_jardin.linge.coussins_plaids, fr: Coussins et plaids }
+      - key: maison_jardin.electromenager
+        fr: Électroménager
+        brand: required
+        attributes: [model_name]
+        children:
+          - { key: maison_jardin.electromenager.gros, fr: Gros électroménager, shipping: false, attributes: [energy_class] }
+          - { key: maison_jardin.electromenager.cuisine, fr: Petit électroménager de cuisine }
+          - { key: maison_jardin.electromenager.cafe, fr: Machines à café }
+          - { key: maison_jardin.electromenager.entretien, fr: Aspirateurs et entretien }
+          - { key: maison_jardin.electromenager.climatisation, fr: Chauffage et climatisation }
+      - key: maison_jardin.bricolage
+        fr: Bricolage et outillage
+        attributes: [voltage, power_w]
+        children:
+          - { key: maison_jardin.bricolage.outils_electroportatifs, fr: Outils électroportatifs }
+          - { key: maison_jardin.bricolage.outils_a_main, fr: Outils à main }
+          - { key: maison_jardin.bricolage.materiaux, fr: Matériaux et quincaillerie }
+          - { key: maison_jardin.bricolage.echelles, fr: Échelles et échafaudages, shipping: false }
+      - key: maison_jardin.jardin
+        fr: Jardin et piscine
+        children:
+          - { key: maison_jardin.jardin.mobilier, fr: Mobilier de jardin, shipping: false, attributes: [material] }
+          - { key: maison_jardin.jardin.outils, fr: Outils de jardin, attributes: [voltage] }
+          - { key: maison_jardin.jardin.tondeuses, fr: Tondeuses et motoculture, shipping: false, attributes: [voltage] }
+          - { key: maison_jardin.jardin.barbecues, fr: Barbecues et planchas }
+          - { key: maison_jardin.jardin.piscine_spa, fr: Piscine et spa, shipping: false }
+          - { key: maison_jardin.jardin.pots, fr: Pots et jardinières }
+
+  # 4 ─────────────────────────────────────────────────────────────────────────────────
+  - key: high_tech
+    fr: High-tech
+    icon: high_tech
+    vertical: goods
+    model: protected_purchase
+    shipping: true
+    max_photos: 12
+    brand: required
+    attributes: [model_name, color]
+    children:
+      - key: high_tech.telephones
+        fr: Téléphones
+        children:
+          - { key: high_tech.telephones.smartphones, fr: Smartphones, attributes: [storage_gb!, unlocked, battery_health_pct] }
+          - { key: high_tech.telephones.classiques, fr: Téléphones classiques }
+          - { key: high_tech.telephones.accessoires, fr: Coques et accessoires, brand: optional }
+      - key: high_tech.ordinateurs
+        fr: Ordinateurs
+        children:
+          - { key: high_tech.ordinateurs.portables, fr: Ordinateurs portables, attributes: [screen_in, storage_gb, ram_gb] }
+          - { key: high_tech.ordinateurs.fixes, fr: Ordinateurs fixes, attributes: [storage_gb, ram_gb] }
+          - { key: high_tech.ordinateurs.composants, fr: Composants }
+          - { key: high_tech.ordinateurs.ecrans, fr: Écrans, attributes: [screen_in] }
+          - { key: high_tech.ordinateurs.peripheriques, fr: "Claviers, souris et périphériques", brand: optional }
+          - { key: high_tech.ordinateurs.imprimantes, fr: Imprimantes et scanners }
+      - key: high_tech.tablettes
+        fr: Tablettes et liseuses
+        attributes: [storage_gb, screen_in]
+        children:
+          - { key: high_tech.tablettes.tablettes, fr: Tablettes }
+          - { key: high_tech.tablettes.liseuses, fr: Liseuses }
+      - key: high_tech.tv_video
+        fr: TV et vidéo
+        children:
+          - { key: high_tech.tv_video.televiseurs, fr: Téléviseurs, attributes: [screen_in!], shipping: false }
+          - { key: high_tech.tv_video.videoprojecteurs, fr: Vidéoprojecteurs }
+          - { key: high_tech.tv_video.lecteurs, fr: Lecteurs et box }
+      - key: high_tech.audio
+        fr: Audio et hi-fi
+        children:
+          - { key: high_tech.audio.casques_ecouteurs, fr: Casques et écouteurs }
+          - { key: high_tech.audio.enceintes, fr: Enceintes }
+          - { key: high_tech.audio.chaines_hifi, fr: Chaînes hi-fi et amplificateurs }
+          - { key: high_tech.audio.platines, fr: Platines vinyle }
+      - key: high_tech.photo
+        fr: Photo et vidéo
+        children:
+          - { key: high_tech.photo.appareils, fr: Appareils photo }
+          - { key: high_tech.photo.objectifs, fr: Objectifs, attributes: [lens_mount!, focal_length] }
+          - { key: high_tech.photo.cameras, fr: Caméras et caméras d'action }
+          - { key: high_tech.photo.drones, fr: Drones }
+          - { key: high_tech.photo.accessoires, fr: Accessoires photo, brand: optional }
+      - key: high_tech.jeux_video
+        fr: Consoles et jeux vidéo
+        children:
+          - { key: high_tech.jeux_video.consoles, fr: Consoles, attributes: [game_platform!, storage_gb] }
+          - { key: high_tech.jeux_video.jeux, fr: Jeux vidéo, brand: optional, attributes: [game_platform!] }
+          - { key: high_tech.jeux_video.accessoires, fr: Manettes et accessoires, attributes: [game_platform] }
+      - key: high_tech.objets_connectes
+        fr: Objets connectés
+        children:
+          - { key: high_tech.objets_connectes.montres, fr: Montres connectées }
+          - { key: high_tech.objets_connectes.domotique, fr: Domotique et maison connectée }
+          - { key: high_tech.objets_connectes.autres, fr: Autres objets connectés }
+
+  # 5 ─────────────────────────────────────────────────────────────────────────────────
+  - key: culture_loisirs
+    fr: Culture et loisirs
+    icon: culture_loisirs
+    vertical: goods
+    model: protected_purchase
+    shipping: true
+    max_photos: 12
+    brand: none
+    children:
+      - key: culture_loisirs.livres
+        fr: Livres
+        attributes: [author, publisher, language, book_format, isbn~]
+        children:
+          - { key: culture_loisirs.livres.romans, fr: Romans et littérature }
+          - { key: culture_loisirs.livres.jeunesse, fr: Jeunesse }
+          - { key: culture_loisirs.livres.scolaire, fr: Scolaire et universitaire }
+          - { key: culture_loisirs.livres.beaux_livres, fr: Beaux livres et art }
+          - { key: culture_loisirs.livres.histoire, fr: Histoire et sciences humaines }
+          - { key: culture_loisirs.livres.pratique, fr: Cuisine et vie pratique }
+          - { key: culture_loisirs.livres.autres, fr: Autres livres }
+      - key: culture_loisirs.livres_rares
+        fr: Livres rares et éditions originales
+        attributes: [author!, publisher, edition_year, first_edition, signed, language]
+        children:
+          - { key: culture_loisirs.livres_rares.editions_originales, fr: Éditions originales }
+          - { key: culture_loisirs.livres_rares.livres_anciens, fr: Livres anciens }
+          - { key: culture_loisirs.livres_rares.bibliophilie, fr: Bibliophilie et reliures }
+      - key: culture_loisirs.bd_mangas
+        fr: BD et mangas
+        attributes: [author, publisher, edition_year, first_edition, language]
+        children:
+          - { key: culture_loisirs.bd_mangas.bd, fr: Bandes dessinées }
+          - { key: culture_loisirs.bd_mangas.mangas, fr: Mangas }
+          - { key: culture_loisirs.bd_mangas.comics, fr: Comics }
+      - key: culture_loisirs.musique
+        fr: Vinyles et CD
+        attributes: [author, music_genre, edition_year]
+        children:
+          - { key: culture_loisirs.musique.vinyles, fr: Vinyles, attributes: [music_format] }
+          - { key: culture_loisirs.musique.cd, fr: CD }
+          - { key: culture_loisirs.musique.cassettes, fr: Cassettes }
+      - key: culture_loisirs.films
+        fr: Films et séries
+        attributes: [video_format, language]
+        children:
+          - { key: culture_loisirs.films.films, fr: Films }
+          - { key: culture_loisirs.films.series, fr: Séries et coffrets }
+      - key: culture_loisirs.instruments
+        fr: Instruments de musique
+        brand: optional
+        attributes: [model_name]
+        children:
+          - { key: culture_loisirs.instruments.guitares, fr: Guitares et basses }
+          # Piano droit ou à queue : main propre ou transporteur spécialisé.
+          - { key: culture_loisirs.instruments.pianos, fr: Pianos, shipping: false }
+          - { key: culture_loisirs.instruments.claviers, fr: Claviers et synthétiseurs }
+          - { key: culture_loisirs.instruments.batteries, fr: Batteries et percussions }
+          - { key: culture_loisirs.instruments.vents, fr: Instruments à vent }
+          - { key: culture_loisirs.instruments.cordes, fr: Instruments à cordes }
+          - { key: culture_loisirs.instruments.studio, fr: Matériel de studio et de scène }
+      - key: culture_loisirs.jeux
+        fr: Jeux de société
+        brand: optional
+        attributes: [age_range, players]
+        children:
+          - { key: culture_loisirs.jeux.societe, fr: Jeux de société }
+          - { key: culture_loisirs.jeux.puzzles, fr: Puzzles, attributes: [piece_count] }
+          - { key: culture_loisirs.jeux.jeux_de_role, fr: Jeux de rôle et figurines de jeu }
+      - key: culture_loisirs.loisirs_creatifs
+        fr: Loisirs créatifs
+        brand: optional
+        children:
+          - { key: culture_loisirs.loisirs_creatifs.couture, fr: Couture et tricot }
+          - { key: culture_loisirs.loisirs_creatifs.dessin_peinture, fr: Dessin et peinture }
+          - { key: culture_loisirs.loisirs_creatifs.autres, fr: Autres loisirs créatifs }
+
+  # 6 ─────────────────────────────────────────────────────────────────────────────────
+  - key: collection
+    fr: Collection
+    icon: collection
+    vertical: goods
+    model: protected_purchase
+    shipping: true
+    max_photos: 12
+    brand: none
+    children:
+      - key: collection.cartes
+        fr: Cartes à collectionner
+        attributes: [card_game!, language, grading, grade, year]
+        children:
+          - { key: collection.cartes.unitaires, fr: Cartes à l'unité }
+          - { key: collection.cartes.lots, fr: Lots et collections }
+          - { key: collection.cartes.scellees, fr: "Produits scellés (boosters, coffrets)" }
+      - key: collection.timbres
+        fr: Timbres
+        attributes: [country, year]
+        children:
+          - { key: collection.timbres.france, fr: France }
+          - { key: collection.timbres.monde, fr: Monde }
+          - { key: collection.timbres.lettres, fr: Lettres et enveloppes }
+      - key: collection.numismatique
+        fr: Monnaies et billets
+        attributes: [country, year, metal]
+        children:
+          - { key: collection.numismatique.monnaies, fr: Monnaies }
+          - { key: collection.numismatique.billets, fr: Billets }
+          - { key: collection.numismatique.medailles, fr: Médailles et jetons }
+      - key: collection.figurines
+        fr: Figurines
+        brand: optional
+        children:
+          - { key: collection.figurines.pop_culture, fr: Pop culture et licences }
+          - { key: collection.figurines.anciennes, fr: Figurines anciennes }
+      # Sans arme ni munition (8.17) ; toujours vérifié par un humain.
+      - key: collection.militaria
+        fr: Militaria autorisé
+        restricted: true
+        attributes: [era, country]
+        children:
+          - { key: collection.militaria.uniformes, fr: Uniformes et coiffures }
+          - { key: collection.militaria.insignes, fr: Insignes et décorations }
+          - { key: collection.militaria.documents, fr: Documents et photographies }
+      - key: collection.publicitaire
+        fr: Objets publicitaires
+        brand: optional
+        attributes: [era]
+        children:
+          - { key: collection.publicitaire.plaques, fr: Plaques et enseignes }
+          - { key: collection.publicitaire.objets, fr: Objets de marque }
+      - key: collection.modelisme
+        fr: Modélisme
+        brand: optional
+        attributes: [scale]
+        children:
+          - { key: collection.modelisme.trains, fr: Trains miniatures }
+          - { key: collection.modelisme.voitures, fr: Voitures miniatures }
+          - { key: collection.modelisme.maquettes, fr: Maquettes }
+
+  # 7 ─────────────────────────────────────────────────────────────────────────────────
+  - key: enfants_bebe
+    fr: Enfants et bébé
+    icon: enfants_bebe
+    vertical: goods
+    model: protected_purchase
+    shipping: true
+    max_photos: 12
+    brand: optional
+    children:
+      - key: enfants_bebe.puericulture
+        fr: Puériculture
+        children:
+          - { key: enfants_bebe.puericulture.repas, fr: Repas et allaitement }
+          - { key: enfants_bebe.puericulture.bain_change, fr: Bain et change }
+          - { key: enfants_bebe.puericulture.portage, fr: Porte-bébés }
+          - { key: enfants_bebe.puericulture.securite, fr: Sécurité et babyphones }
+      - key: enfants_bebe.poussettes
+        fr: Poussettes
+        children:
+          - { key: enfants_bebe.poussettes.poussettes, fr: Poussettes }
+          - { key: enfants_bebe.poussettes.accessoires, fr: Accessoires de poussette }
+      # Équipement de sécurité (décision du 26/10/2026) : toujours vérifié par un humain.
+      - key: enfants_bebe.sieges_auto
+        fr: Sièges auto
+        restricted: true
+        attributes: [car_seat_norm!, car_seat_group]
+        children:
+          - { key: enfants_bebe.sieges_auto.sieges, fr: Sièges auto }
+          - { key: enfants_bebe.sieges_auto.rehausseurs, fr: Rehausseurs }
+      - key: enfants_bebe.vetements
+        fr: Vêtements bébé (0-24 mois)
+        attributes: [kids_size!, gender, color]
+        children:
+          - { key: enfants_bebe.vetements.bodies_pyjamas, fr: Bodies et pyjamas }
+          - { key: enfants_bebe.vetements.ensembles, fr: Ensembles }
+          - { key: enfants_bebe.vetements.manteaux, fr: Manteaux et combinaisons }
+          - { key: enfants_bebe.vetements.chaussures, fr: Chaussons et chaussures, attributes: [shoe_eu] }
+      - key: enfants_bebe.jouets
+        fr: Jouets
+        attributes: [age_range]
+        children:
+          - { key: enfants_bebe.jouets.premier_age, fr: Premier âge et éveil }
+          - { key: enfants_bebe.jouets.peluches_poupees, fr: Peluches et poupées }
+          - { key: enfants_bebe.jouets.construction, fr: Jeux de construction, attributes: [piece_count] }
+          - { key: enfants_bebe.jouets.vehicules, fr: Véhicules et circuits }
+          - { key: enfants_bebe.jouets.exterieur, fr: Jeux d'extérieur }
+          - { key: enfants_bebe.jouets.educatifs, fr: Jeux éducatifs }
+      - key: enfants_bebe.chambre
+        fr: Chambre
+        children:
+          - { key: enfants_bebe.chambre.lits, fr: Lits et berceaux, shipping: false }
+          - { key: enfants_bebe.chambre.mobilier, fr: Mobilier enfant }
+          - { key: enfants_bebe.chambre.decoration, fr: Décoration et linge }
+
+  # 8 ─────────────────────────────────────────────────────────────────────────────────
+  - key: sport_plein_air
+    fr: Sport et plein air
+    icon: sport_plein_air
+    vertical: goods
+    model: protected_purchase
+    shipping: true
+    max_photos: 12
+    brand: optional
+    children:
+      - key: sport_plein_air.velos
+        fr: Vélos et VAE
+        attributes: [frame_size, wheel_size_in]
+        children:
+          - { key: sport_plein_air.velos.route, fr: Vélos de route }
+          - { key: sport_plein_air.velos.vtt, fr: VTT }
+          - { key: sport_plein_air.velos.ville, fr: Vélos de ville }
+          - { key: sport_plein_air.velos.vae, fr: Vélos à assistance électrique, attributes: [ebike_battery_wh] }
+          - { key: sport_plein_air.velos.enfant, fr: Vélos enfant }
+          - { key: sport_plein_air.velos.pieces, fr: Pièces et accessoires vélo, attributes_replace: true }
+      - key: sport_plein_air.fitness
+        fr: Fitness et musculation
+        children:
+          - { key: sport_plein_air.fitness.machines, fr: Appareils de fitness, shipping: false }
+          - { key: sport_plein_air.fitness.poids, fr: Poids et haltères, attributes: [weight_kg] }
+          - { key: sport_plein_air.fitness.accessoires, fr: Accessoires de fitness }
+      - key: sport_plein_air.hiver
+        fr: Sports d'hiver
+        children:
+          - { key: sport_plein_air.hiver.skis, fr: Skis, attributes: [ski_length_cm] }
+          - { key: sport_plein_air.hiver.snowboards, fr: Snowboards, attributes: [ski_length_cm] }
+          - { key: sport_plein_air.hiver.chaussures, fr: Chaussures de ski et de snow, attributes: [shoe_eu] }
+          - { key: sport_plein_air.hiver.vetements, fr: Vêtements de ski, attributes: [clothing_size, gender] }
+      - key: sport_plein_air.glisse
+        fr: Glisse
+        children:
+          - { key: sport_plein_air.glisse.surf, fr: Surf et bodyboard }
+          - { key: sport_plein_air.glisse.kite_voile, fr: Kitesurf et planche à voile }
+          - { key: sport_plein_air.glisse.skate_roller, fr: "Skate, roller et trottinettes" }
+          - { key: sport_plein_air.glisse.paddle, fr: Paddle et kayak, shipping: false }
+      - key: sport_plein_air.camping
+        fr: Camping et randonnée
+        children:
+          - { key: sport_plein_air.camping.tentes, fr: Tentes }
+          - { key: sport_plein_air.camping.couchage, fr: Sacs de couchage et matelas }
+          - { key: sport_plein_air.camping.sacs, fr: Sacs de randonnée }
+          - { key: sport_plein_air.camping.equipement, fr: Équipement de randonnée }
+      - key: sport_plein_air.collectifs
+        fr: Sports collectifs et raquettes
+        children:
+          - { key: sport_plein_air.collectifs.football, fr: Football }
+          - { key: sport_plein_air.collectifs.basket, fr: Basket }
+          - { key: sport_plein_air.collectifs.rugby, fr: Rugby }
+          - { key: sport_plein_air.collectifs.raquettes, fr: "Tennis, padel et badminton" }
+          - { key: sport_plein_air.collectifs.autres, fr: Autres sports }
+      - key: sport_plein_air.peche
+        fr: Pêche
+        children:
+          - { key: sport_plein_air.peche.cannes, fr: Cannes à pêche }
+          - { key: sport_plein_air.peche.moulinets, fr: Moulinets }
+          - { key: sport_plein_air.peche.accessoires, fr: Leurres et accessoires }
+
+  # 9 ─────────────────────────────────────────────────────────────────────────────────
+  - key: art_antiquites
+    fr: Art, antiquités et artisanat
+    icon: art_antiquites
+    vertical: goods
+    model: protected_purchase
+    shipping: true
+    max_photos: 12
+    brand: none
+    attributes: [width_cm, height_cm]
+    children:
+      - key: art_antiquites.tableaux
+        fr: Tableaux
+        attributes: [artist, art_technique, signed, certificate, framed, era]
+        children:
+          - { key: art_antiquites.tableaux.peintures, fr: Peintures }
+          - { key: art_antiquites.tableaux.dessins, fr: Dessins et aquarelles }
+          - { key: art_antiquites.tableaux.estampes, fr: "Estampes, gravures et lithographies" }
+      - key: art_antiquites.sculptures
+        fr: Sculptures
+        attributes: [artist, material, signed, certificate, era, depth_cm]
+        children:
+          - { key: art_antiquites.sculptures.sculptures, fr: Sculptures }
+          - { key: art_antiquites.sculptures.bronzes, fr: Bronzes }
+      - key: art_antiquites.photographie
+        fr: Photographies d'art
+        attributes: [artist, signed, certificate, framed, year]
+        children:
+          - { key: art_antiquites.photographie.tirages, fr: Tirages d'art }
+          - { key: art_antiquites.photographie.anciennes, fr: Photographies anciennes }
+      - key: art_antiquites.antiquites
+        fr: Antiquités
+        attributes: [era!, material, depth_cm]
+        children:
+          - { key: art_antiquites.antiquites.mobilier, fr: Mobilier ancien, shipping: false }
+          - { key: art_antiquites.antiquites.objets, fr: Objets anciens }
+          - { key: art_antiquites.antiquites.arts_decoratifs, fr: Arts décoratifs }
+          - { key: art_antiquites.antiquites.arts_asie_afrique, fr: Arts d'Asie et d'Afrique }
+      - key: art_antiquites.artisanat
+        fr: Créations artisanales et fait main
+        attributes: [material]
+        children:
+          - { key: art_antiquites.artisanat.decoration, fr: Décoration artisanale }
+          - { key: art_antiquites.artisanat.bijoux, fr: Bijoux faits main }
+          - { key: art_antiquites.artisanat.textile, fr: Textile et couture faits main }
+          - { key: art_antiquites.artisanat.autres, fr: Autres créations }
+
+  # 10 ────────────────────────────────────────────────────────────────────────────────
+  - key: beaute_bien_etre
+    fr: Beauté et bien-être
+    icon: beaute_bien_etre
+    vertical: goods
+    model: protected_purchase
+    shipping: true
+    max_photos: 12
+    brand: required
+    children:
+      - key: beaute_bien_etre.parfums
+        fr: Parfums
+        attributes: [volume_ml, gender]
+        children:
+          - { key: beaute_bien_etre.parfums.parfums, fr: Parfums }
+          - { key: beaute_bien_etre.parfums.coffrets, fr: Coffrets }
+      # Neufs et scellés uniquement (8.19).
+      - key: beaute_bien_etre.soins_maquillage
+        fr: Soins et maquillage neufs scellés
+        conditions: [new_with_tags, new_without_tags]
+        attributes: [sealed!]
+        children:
+          - { key: beaute_bien_etre.soins_maquillage.maquillage, fr: Maquillage }
+          - { key: beaute_bien_etre.soins_maquillage.soins_visage, fr: Soins du visage }
+          - { key: beaute_bien_etre.soins_maquillage.soins_corps, fr: Soins du corps }
+          - { key: beaute_bien_etre.soins_maquillage.cheveux, fr: Soins des cheveux }
+      - key: beaute_bien_etre.coiffure
+        fr: Coiffure
+        attributes: [model_name]
+        children:
+          - { key: beaute_bien_etre.coiffure.appareils, fr: "Sèche-cheveux, lisseurs et boucleurs" }
+          - { key: beaute_bien_etre.coiffure.accessoires, fr: Accessoires de coiffure, brand: optional }
+      - key: beaute_bien_etre.accessoires
+        fr: Accessoires
+        brand: optional
+        children:
+          - { key: beaute_bien_etre.accessoires.trousses, fr: Trousses et rangements }
+          - { key: beaute_bien_etre.accessoires.appareils, fr: Appareils de beauté et de massage }
+
+  # 11 ────────────────────────────────────────────────────────────────────────────────
+  # Accessoires seulement : aucun animal vivant (8.17).
+  - key: animaux
+    fr: Animaux (accessoires)
+    icon: animaux
+    vertical: goods
+    model: protected_purchase
+    shipping: true
+    max_photos: 12
+    brand: optional
+    children:
+      - key: animaux.accessoires
+        fr: Accessoires
+        attributes: [animal!]
+        children:
+          - { key: animaux.accessoires.couchage, fr: Couchage et transport }
+          - { key: animaux.accessoires.alimentation, fr: Gamelles et distributeurs }
+          - { key: animaux.accessoires.colliers, fr: "Colliers, laisses et harnais" }
+          - { key: animaux.accessoires.jouets, fr: Jouets et griffoirs }
+          - { key: animaux.accessoires.cages, fr: "Cages, clapiers et volières" }
+      - key: animaux.aquariophilie
+        fr: Aquariophilie (matériel)
+        children:
+          - { key: animaux.aquariophilie.aquariums, fr: Aquariums et terrariums }
+          - { key: animaux.aquariophilie.materiel, fr: Filtration et matériel }
+      - key: animaux.equitation
+        fr: Équitation
+        children:
+          - { key: animaux.equitation.selles, fr: Selles et harnachement }
+          - { key: animaux.equitation.cavalier, fr: Équipement du cavalier, attributes: [clothing_size] }
+          - { key: animaux.equitation.soins, fr: Soins et écurie }
+
+  # 12 ────────────────────────────────────────────────────────────────────────────────
+  # « Achat protégé (ou contact au-delà du plafond) » (8.19) : le plafond n'est chiffré nulle
+  # part ; achat protégé partout en P2, plafond à fixer en [PARAM] avec le paiement (P4).
+  - key: materiel_pro
+    fr: Matériel professionnel
+    icon: materiel_pro
+    vertical: goods
+    model: protected_purchase
+    shipping: true
+    max_photos: 12
+    brand: optional
+    attributes: [model_name, year]
+    children:
+      - key: materiel_pro.btp
+        fr: BTP
+        children:
+          - { key: materiel_pro.btp.engins, fr: Engins et machines, shipping: false }
+          - { key: materiel_pro.btp.outillage, fr: Outillage professionnel, attributes: [voltage, power_w] }
+          - { key: materiel_pro.btp.echafaudages, fr: Échafaudages et coffrages, shipping: false }
+      - key: materiel_pro.restauration
+        fr: Restauration
+        children:
+          - { key: materiel_pro.restauration.cuisson, fr: Cuisson et fours, shipping: false, attributes: [voltage] }
+          - { key: materiel_pro.restauration.froid, fr: Froid professionnel, shipping: false }
+          - { key: materiel_pro.restauration.mobilier, fr: Mobilier de salle }
+          - { key: materiel_pro.restauration.ustensiles, fr: Ustensiles et vaisselle pro }
+      - key: materiel_pro.agricole
+        fr: Agricole
+        children:
+          - { key: materiel_pro.agricole.machines, fr: Machines agricoles, shipping: false }
+          - { key: materiel_pro.agricole.outillage, fr: Outillage agricole }
+      - key: materiel_pro.bureau
+        fr: Bureau
+        children:
+          - { key: materiel_pro.bureau.mobilier, fr: Mobilier de bureau, shipping: false }
+          - { key: materiel_pro.bureau.equipement, fr: Équipement de bureau }
+      - key: materiel_pro.commerce
+        fr: Commerce et boutique
+        children:
+          - { key: materiel_pro.commerce.agencement, fr: Agencement et présentoirs, shipping: false }
+          - { key: materiel_pro.commerce.caisse, fr: Caisse et encaissement }
+      # Hors dispositifs médicaux réglementés (8.19) : toujours vérifié par un humain.
+      - key: materiel_pro.medical
+        fr: Médical (hors dispositifs réglementés)
+        restricted: true
+        children:
+          - { key: materiel_pro.medical.mobilier, fr: Mobilier médical, shipping: false }
+          - { key: materiel_pro.medical.equipement, fr: Équipement de cabinet }
+      - key: materiel_pro.industrie
+        fr: Industrie
+        children:
+          - { key: materiel_pro.industrie.machines, fr: Machines industrielles, shipping: false, attributes: [voltage, power_w] }
+          - { key: materiel_pro.industrie.manutention, fr: Manutention et stockage, shipping: false }
+          - { key: materiel_pro.industrie.fournitures, fr: Fournitures industrielles }
+
+  # 13 ── Verticale (P9) ───────────────────────────────────────────────────────────────
+  - key: vehicules
+    fr: Véhicules
+    icon: vehicules
+    vertical: vehicles
+    model: mixed
+    shipping: false
+    max_photos: 30
+    brand: required
+    children:
+      - { key: vehicules.voitures, fr: Voitures }
+      - { key: vehicules.motos, fr: Motos }
+      - { key: vehicules.scooters, fr: Scooters }
+      - { key: vehicules.utilitaires, fr: Utilitaires }
+      - { key: vehicules.caravanes_camping_cars, fr: Caravanes et camping-cars }
+      - { key: vehicules.bateaux, fr: Bateaux }
+      - key: vehicules.pieces
+        fr: Pièces et équipements
+        model: protected_purchase
+        shipping: true
+        max_photos: 12
+        brand: optional
+        children:
+          - { key: vehicules.pieces.auto, fr: Pièces et équipements auto }
+          - { key: vehicules.pieces.moto, fr: Pièces et équipements moto }
+          - { key: vehicules.pieces.bateau, fr: Pièces et équipements bateau }
+
+  # 14 ── Verticale (P9) ───────────────────────────────────────────────────────────────
+  - key: immobilier
+    fr: Immobilier
+    icon: immobilier
+    vertical: real_estate
+    model: contact
+    shipping: false
+    max_photos: 30
+    brand: none
+    children:
+      - key: immobilier.vente
+        fr: Vente
+        children:
+          - { key: immobilier.vente.appartement, fr: Appartement }
+          - { key: immobilier.vente.maison, fr: Maison }
+          - { key: immobilier.vente.terrain, fr: Terrain }
+          - { key: immobilier.vente.parking, fr: Parking et box }
+          - { key: immobilier.vente.immeuble, fr: Immeuble }
+          - { key: immobilier.vente.viager, fr: Viager }
+      - key: immobilier.location
+        fr: Location
+        children:
+          - { key: immobilier.location.vide, fr: Location vide }
+          - { key: immobilier.location.meublee, fr: Location meublée }
+          - { key: immobilier.location.etudiant, fr: Location étudiant }
+          - { key: immobilier.location.parking, fr: Parking et box }
+      - { key: immobilier.colocation, fr: Colocation }
+      - { key: immobilier.saisonnier, fr: Location saisonnière }
+      - key: immobilier.bureaux_commerces
+        fr: Bureaux et commerces
+        children:
+          - { key: immobilier.bureaux_commerces.vente, fr: Vente }
+          - { key: immobilier.bureaux_commerces.location, fr: Location }
+      - { key: immobilier.fonds_de_commerce, fr: Fonds de commerce }
+
+  # 15 ── Verticale (P9) ───────────────────────────────────────────────────────────────
+  - key: services
+    fr: Services
+    icon: services
+    vertical: services
+    model: contact
+    shipping: false
+    max_photos: 12
+    brand: none
+    children:
+      - { key: services.cours, fr: Cours particuliers }
+      - { key: services.bricolage, fr: Bricolage et réparations }
+      - { key: services.demenagement, fr: Déménagement }
+      - { key: services.menage, fr: Ménage et repassage }
+      - { key: services.jardinage, fr: Jardinage }
+      - { key: services.garde_animaux, fr: Garde d'animaux }
+      - { key: services.informatique, fr: Informatique }
+      - { key: services.evenementiel, fr: Événementiel }
+      - { key: services.bien_etre, fr: Bien-être }
+
+  # 16 ────────────────────────────────────────────────────────────────────────────────
+  - key: autres
+    fr: Autres
+    icon: autres
+    vertical: goods
+    model: protected_purchase
+    shipping: true
+    max_photos: 12
+    brand: optional
+    children:
+      # Billets non nominatifs seulement (8.17) : toujours vérifié par un humain.
+      - key: autres.billetterie
+        fr: Billetterie non nominative
+        restricted: true
+        brand: none
+        children:
+          - { key: autres.billetterie.concerts, fr: Concerts et festivals }
+          - { key: autres.billetterie.spectacles, fr: Spectacles et théâtre }
+          - { key: autres.billetterie.sport, fr: Événements sportifs }
+          - { key: autres.billetterie.loisirs, fr: Parcs et loisirs }
+      - { key: autres.divers, fr: Divers }
