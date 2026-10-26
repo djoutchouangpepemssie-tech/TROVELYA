@@ -110,6 +110,8 @@ async def test_a_ready_image_is_complete(conn: AsyncConnection, owner: Any) -> N
         ),
         ({"status": "rejected"}, "media_rejected_has_reason"),
         ({"rejection_reason": "type"}, "media_rejected_has_reason"),
+        ({"status": "rejected", "rejection_reason": ""}, "media_rejection_reason_check"),
+        ({"mime_type": "image/svg+xml"}, "media_image_type"),
         ({"owner_id": new_id()}, "media_owner_id_fkey"),
     ],
 )
@@ -134,3 +136,13 @@ async def test_avatar_refers_to_a_media(conn: AsyncConnection, owner: Any) -> No
             text("UPDATE users SET avatar_media_id = :m WHERE id = :u"), {"m": new_id(), "u": owner}
         )
     await savepoint.rollback()
+
+
+async def test_purging_a_media_clears_the_avatar(conn: AsyncConnection, owner: Any) -> None:
+    media = _media(owner)
+    await conn.execute(_INSERT_MEDIA, media)
+    params = {"m": media["id"], "u": owner}
+    await conn.execute(text("UPDATE users SET avatar_media_id = :m WHERE id = :u"), params)
+    await conn.execute(text("DELETE FROM media WHERE id = :m"), params)
+    avatar = await conn.execute(text("SELECT avatar_media_id FROM users WHERE id = :u"), params)
+    assert avatar.scalar_one() is None

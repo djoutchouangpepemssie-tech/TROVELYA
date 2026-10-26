@@ -42,18 +42,23 @@ CREATE TABLE media (
   captured_at      TIMESTAMPTZ,
   exif_stripped    BOOLEAN NOT NULL DEFAULT false,
   variants         JSONB NOT NULL DEFAULT '[]' CHECK (jsonb_typeof(variants) = 'array'),
-  rejection_reason TEXT,
+  rejection_reason TEXT CHECK (rejection_reason <> ''),
   created_at       TIMESTAMPTZ NOT NULL DEFAULT now(),
   updated_at       TIMESTAMPTZ NOT NULL DEFAULT now(),
   deleted_at       TIMESTAMPTZ,
   CONSTRAINT media_ready_is_complete CHECK (
     status <> 'ready' OR (sha256 IS NOT NULL AND exif_stripped AND variants <> '[]'::jsonb)
   ),
+  -- Defence in depth: the API already refuses any other image type (P2-T02a3).
+  CONSTRAINT media_image_type CHECK (
+    kind <> 'image' OR mime_type IN ('image/jpeg','image/png','image/webp','image/avif')
+  ),
   CONSTRAINT media_rejected_has_reason
     CHECK ((status = 'rejected') = (rejection_reason IS NOT NULL))
 );
-CREATE INDEX media_owner_idx ON media (owner_id, created_at DESC) WHERE deleted_at IS NULL;
--- Uploads never completed and deleted media, for the purge job (P2-T02c).
+-- Every row, deleted ones too: the GDPR export and erasure, and the users foreign key.
+CREATE INDEX media_owner_idx ON media (owner_id, created_at DESC);
+-- Uploads never completed, for the purge job (P2-T02c); deleted media use media_deleted_idx.
 CREATE INDEX media_purge_idx ON media (status, created_at)
   WHERE status IN ('uploading','processing');
 CREATE INDEX media_deleted_idx ON media (deleted_at) WHERE deleted_at IS NOT NULL;
@@ -61,11 +66,14 @@ CREATE INDEX media_sha256_idx ON media (sha256) WHERE sha256 IS NOT NULL;
 CREATE TRIGGER media_updated_at BEFORE UPDATE ON media
   FOR EACH ROW EXECUTE FUNCTION set_updated_at();
 
+-- Purging a media file clears the avatar that showed it.
 ALTER TABLE users ADD CONSTRAINT users_avatar_media_id_fkey
-  FOREIGN KEY (avatar_media_id) REFERENCES media(id);
+  FOREIGN KEY (avatar_media_id) REFERENCES media(id) ON DELETE SET NULL;
+CREATE INDEX users_avatar_media_idx ON users (avatar_media_id) WHERE avatar_media_id IS NOT NULL;
 """
 
 DOWNGRADE = r"""
+DROP INDEX users_avatar_media_idx;
 ALTER TABLE users DROP CONSTRAINT users_avatar_media_id_fkey;
 DROP TABLE media;
 """
