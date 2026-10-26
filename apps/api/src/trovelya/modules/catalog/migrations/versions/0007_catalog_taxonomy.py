@@ -12,7 +12,8 @@ Additions to the spec, recorded in docs/plans/P2-catalogue-annonces.md (P2-T01a)
   categories included: a path is never ambiguous).
 - The database keeps the tree consistent: a category's path is its parent's path plus its own
   label (checked at commit), and changing a path moves the whole subtree with it.
-- `enum_values` maps each value key to its labels ({"noir": {"fr": "Noir"}}), like `names`.
+- `enum_values` lists the values in display order, each with its labels like `names`
+  ([{"key": "xs", "names": {"fr": "XS"}}, …]): a JSONB object would not keep the order.
 - The listing types (`listing_status`, `item_condition`) are created here: categories use
   `item_condition` already; the listing tables follow in P2-T03a.
 
@@ -124,8 +125,8 @@ CREATE TABLE attribute_definitions (
   updated_at  TIMESTAMPTZ NOT NULL DEFAULT now(),
   CONSTRAINT attribute_definitions_enum_values_check CHECK (
     CASE WHEN data_type = 'enum'
-      THEN enum_values IS NOT NULL AND jsonb_typeof(enum_values) = 'object'
-        AND enum_values <> '{}'::jsonb
+      THEN enum_values IS NOT NULL AND jsonb_typeof(enum_values) = 'array'
+        AND jsonb_array_length(enum_values) > 0
       ELSE enum_values IS NULL
     END
   )

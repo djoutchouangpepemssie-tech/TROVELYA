@@ -200,7 +200,7 @@ async def test_enum_attribute_needs_values(conn: AsyncConnection) -> None:
             "id": new_id(),
             "key": "t_color",
             "data_type": "enum",
-            "enum_values": '{"noir":{"fr":"Noir"}}',
+            "enum_values": '[{"key":"noir","names":{"fr":"Noir"}}]',
             "constraints": "{}",
         },
     )
@@ -326,10 +326,10 @@ async def test_more_category_checks(
     [
         ({"key": "Size"}, "attribute_definitions_key_check"),
         ({"key": "1size"}, "attribute_definitions_key_check"),
-        ({"enum_values": "{}"}, "attribute_definitions_enum_values_check"),
-        ({"enum_values": "[1]"}, "attribute_definitions_enum_values_check"),
+        ({"enum_values": "[]"}, "attribute_definitions_enum_values_check"),
+        ({"enum_values": '{"a":{"fr":"A"}}'}, "attribute_definitions_enum_values_check"),
         (
-            {"data_type": "text", "enum_values": '{"a":{"fr":"A"}}'},
+            {"data_type": "text", "enum_values": '[{"key":"a","names":{"fr":"A"}}]'},
             "attribute_definitions_enum_values_check",
         ),
         ({"data_type": "text", "enum_values": "[1]"}, "attribute_definitions_enum_values_check"),
@@ -342,7 +342,7 @@ async def test_more_attribute_checks(
         "id": new_id(),
         "key": "t_attr",
         "data_type": "enum",
-        "enum_values": '{"a":{"fr":"A"}}',
+        "enum_values": '[{"key":"a","names":{"fr":"A"}}]',
         "constraints": "{}",
     } | overrides
     assert constraint in await _fails(conn, _INSERT_ATTRIBUTE, params)
