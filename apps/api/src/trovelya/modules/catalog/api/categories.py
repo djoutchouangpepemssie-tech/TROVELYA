@@ -4,6 +4,7 @@ import hashlib
 from typing import Annotated
 
 from fastapi import APIRouter, Query, Request, Response
+from pydantic import AfterValidator
 
 from trovelya.core.db import Uow
 from trovelya.modules.catalog.schemas import BrandList, CategoryTree
@@ -28,13 +29,26 @@ async def get_categories(request: Request, db: Uow) -> Response:
     body = tree.model_dump_json().encode()
     etag = '"' + hashlib.sha256(body).hexdigest()[:32] + '"'
     headers = {"ETag": etag, "Cache-Control": CACHE_CONTROL}
-    sent = {tag.strip() for tag in request.headers.get("if-none-match", "").split(",")}
+    # A CDN may send the tag back weak (W/"…"); the body is the same either way.
+    tags = request.headers.get("if-none-match", "").split(",")
+    sent = {tag.strip().removeprefix("W/") for tag in tags}
     if etag in sent or "*" in sent:
         return Response(status_code=304, headers=headers)
     return Response(content=body, media_type="application/json", headers=headers)
 
 
+def _brand_query(q: str) -> str:
+    """Two characters at least once trimmed; no control character (PostgreSQL refuses NUL)."""
+    q = q.strip()
+    if len(q) < 2 or any(ord(c) < 32 or ord(c) == 127 for c in q):
+        raise ValueError("2 to 80 printable characters")
+    return q
+
+
+BrandQuery = Annotated[str, Query(min_length=2, max_length=80), AfterValidator(_brand_query)]
+
+
 @router.get("/brands", operation_id="catalog_brands")
-async def get_brands(db: Uow, q: Annotated[str, Query(min_length=2, max_length=80)]) -> BrandList:
+async def get_brands(db: Uow, q: BrandQuery) -> BrandList:
     """Up to 10 brands: names starting with `q` first, then the closest spellings."""
-    return await categories_service.search_brands(db, q.strip())
+    return await categories_service.search_brands(db, q)

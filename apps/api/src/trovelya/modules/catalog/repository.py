@@ -75,22 +75,26 @@ async def _id_by_key(db: AsyncSession, table: str, key: str) -> UUID:
     }
     return (await db.execute(text(query[table]), {"key": key})).scalar_one()
 
-# Active categories in tree order (parents first, siblings by position); a category is a
-# leaf when none of its children is active.
+
+# Active categories in tree order (parents first, siblings by position). The walk stops at a
+# retired category, so its subtree is never served; without the `verticals` flag, whole
+# universes of real estate, vehicles and services are left out. A category is a leaf when
+# none of its children is active.
 _ACTIVE_CATEGORIES = text(
     "WITH RECURSIVE ordered AS ("
-    " SELECT id, ARRAY[position::int] AS sort FROM categories WHERE parent_id IS NULL"
+    " SELECT id, ARRAY[position::int] AS sort FROM categories"
+    " WHERE parent_id IS NULL AND is_active AND (CAST(:verticals AS boolean) OR vertical = 'goods')"
     " UNION ALL"
     " SELECT c.id, o.sort || c.position::int FROM categories c JOIN ordered o ON c.parent_id = o.id"
+    " WHERE c.is_active"
     ")"
     " SELECT c.id, c.key, p.key AS parent_key, c.names, c.icon, c.position, c.vertical,"
     " c.transaction_model, c.shipping_allowed, c.max_photos, c.is_restricted, c.brand_policy,"
     " c.allowed_conditions::text[] AS allowed_conditions,"
     " NOT EXISTS (SELECT 1 FROM categories ch WHERE ch.parent_id = c.id AND ch.is_active)"
     " AS is_leaf"
-    " FROM categories c JOIN ordered o ON o.id = c.id"
+    " FROM ordered o JOIN categories c ON c.id = o.id"
     " LEFT JOIN categories p ON p.id = c.parent_id"
-    " WHERE c.is_active AND (CAST(:verticals AS boolean) OR c.vertical = 'goods')"
     " ORDER BY o.sort, c.key"
 )
 

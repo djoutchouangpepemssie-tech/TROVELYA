@@ -1,18 +1,21 @@
 """`GET /v1/categories` and `GET /v1/brands` (P2-T01b)."""
 
+import copy
 from collections.abc import AsyncIterator
 
 import pytest
 from httpx import ASGITransport, AsyncClient
 from redis.asyncio import Redis
+from sqlalchemy import text
 from sqlalchemy.ext.asyncio import AsyncSession, async_sessionmaker
 
 from tests.conftest import TEST_PROXY_SECRET, make_settings
 from trovelya.core.flags import FlagService
 from trovelya.main import create_app
+from trovelya.modules.catalog.service.brand_seed import parse_brands
 from trovelya.modules.catalog.service.seed import (
     load_seed,
-    parse_brands,
+    parse_seed,
     read_seed_file,
 )
 from trovelya.modules.catalog.service.seed_writer import apply_brands, apply_seed
@@ -111,7 +114,7 @@ async def test_categories_cache_headers(client: AsyncClient) -> None:
     response = await client.get("/v1/categories")
     assert response.headers["cache-control"] == "public, max-age=3600"
     etag = response.headers["etag"]
-    again = await client.get("/v1/categories", headers={"if-none-match": f'"x", {etag}'})
+    again = await client.get("/v1/categories", headers={"if-none-match": f'"x", W/{etag}'})
     assert again.status_code == 304
     assert again.content == b""
     assert again.headers["etag"] == etag
@@ -149,6 +152,57 @@ async def test_brands_wildcards_are_literal(client: AsyncClient) -> None:
     assert response.json()["brands"] == []
 
 
-@pytest.mark.parametrize("q", ["a", "x" * 81])
+async def test_brands_underscore_is_literal(client: AsyncClient) -> None:
+    assert (await client.get("/v1/brands", params={"q": "__"})).json()["brands"] == []
+
+
+@pytest.mark.parametrize("q", ["a", "x" * 81, "  a", "   ", "a\x00b", "a\tb"])
 async def test_brands_query_length(client: AsyncClient, q: str) -> None:
     assert (await client.get("/v1/brands", params={"q": q})).status_code == 422
+
+
+async def test_category_settings_served(
+    seeded: None, sessionmaker: async_sessionmaker[AsyncSession], redis_client: Redis
+) -> None:
+    async with await _client(sessionmaker, redis_client, verticals=True) as client:
+        tree = (await client.get("/v1/categories")).json()
+    by_key = {c["key"]: c for c in tree["categories"]}
+    fields = ("icon", "vertical", "transaction_model", "shipping_allowed", "max_photos")
+    settings = {k: tuple(by_key[k][f] for f in (*fields, "brand_policy")) for k in by_key}
+    assert settings["mode"] == ("mode", "goods", "protected_purchase", True, 12, "optional")
+    assert settings["vehicules.voitures"] == (None, "vehicles", "mixed", False, 30, "required")
+    assert settings["immobilier.colocation"] == (None, "real_estate", "contact", False, 30, "none")
+    canapes = settings["maison_jardin.meubles.canapes_fauteuils"]
+    assert canapes == (None, "goods", "protected_purchase", False, 12, "optional")
+
+
+async def test_retired_subtree_is_not_served(
+    seeded: None, sessionmaker: async_sessionmaker[AsyncSession], client: AsyncClient
+) -> None:
+    document = copy.deepcopy(read_seed_file("categories.yaml"))
+    women = next(c for c in document["categories"][0]["children"] if c["key"] == "mode.femme")
+    women["active"] = False
+    try:
+        async with sessionmaker() as db:
+            await apply_seed(db, parse_seed(document))
+            # Outside the seed's rules, but the API must still hold: all of a category's
+            # children retired makes it a leaf.
+            await db.execute(
+                text(
+                    "UPDATE categories SET is_active = false WHERE parent_id ="
+                    " (SELECT id FROM categories WHERE key = 'mode.chaussures')"
+                )
+            )
+            await db.execute(text("UPDATE categories SET is_active = false WHERE key = 'autres'"))
+            await db.commit()
+        tree = (await client.get("/v1/categories")).json()
+        by_key = {c["key"]: c for c in tree["categories"]}
+        assert not [k for k in by_key if k.startswith(("mode.femme", "mode.chaussures."))]
+        roots = [c["key"] for c in tree["categories"] if c["parent_key"] is None]
+        assert roots == [k for k in UNIVERSE_KEYS if k not in VERTICALS and k != "autres"]
+        assert not [k for k in by_key if k.startswith("autres")]
+        assert by_key["mode.chaussures"]["is_leaf"] is True
+    finally:
+        async with sessionmaker() as db:
+            await apply_seed(db, load_seed())
+            await db.commit()

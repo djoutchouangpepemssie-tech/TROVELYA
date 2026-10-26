@@ -34,12 +34,10 @@ async def category_tree(db: AsyncSession, *, verticals: bool) -> CategoryTree:
                 key=link.key, required=link.is_required, filterable=link.is_filterable
             )
         )
-    shown = {row.key for row in rows}
     categories = [
         CategoryOut(
             key=row.key,
-            # A shown category's parent is shown too: the flag hides whole universes.
-            parent_key=row.parent_key if row.parent_key in shown else None,
+            parent_key=row.parent_key,  # always served before its children
             name=_name(row.names),
             icon=row.icon,
             position=row.position,
