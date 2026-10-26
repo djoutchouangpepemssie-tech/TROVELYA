@@ -228,7 +228,7 @@ tout ── T12 (parcours 2, démo, porte)
 
 **Contenu :**
 - Tables `categories`, `attribute_definitions`, `category_attributes`, `brands`, exactement comme 7.5, plus :
-  - `categories.restricted_conditions item_condition[]` (états autorisés, `NULL` = tous) ;
+  - `categories.allowed_conditions item_condition[]` (états autorisés, `NULL` = tous) ;
   - `categories.brand_policy TEXT CHECK (IN ('required','optional','none'))` ;
   - `attribute_definitions.constraints JSONB` (min, max, step, max_length).
 - Types `listing_status` et `item_condition` (7.5).
