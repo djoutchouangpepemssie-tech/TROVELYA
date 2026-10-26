@@ -257,8 +257,10 @@ async def test_category_attribute_link(conn: AsyncConnection) -> None:
 
 async def test_brand_name_citext_unique(conn: AsyncConnection) -> None:
     insert = text("INSERT INTO brands (id, name, slug) VALUES (:id, :name, :slug)")
-    await conn.execute(insert, {"id": new_id(), "name": "Apple", "slug": "apple"})
-    message = await _fails(conn, insert, {"id": new_id(), "name": "apple", "slug": "apple-2"})
+    await conn.execute(insert, {"id": new_id(), "name": "Marque Témoin", "slug": "marque-temoin"})
+    message = await _fails(
+        conn, insert, {"id": new_id(), "name": "marque témoin", "slug": "marque-temoin-2"}
+    )
     assert "brands_name_key" in message
 
 
