@@ -432,6 +432,8 @@ tout ── T12 (parcours 2, démo, porte)
 
 ### P2-T03b — Brouillons, attributs, position et lecture d'une annonce
 
+*Livrée en trois PR : T03b1, les briques pures (validation des attributs, position publique, cellules H3, distance arrondie ; dépendance `h3` 4.5.0) ; T03b2, création et modification des brouillons ; T03b3, lecture, « mes annonces », grâce de l'effacement et purge des photos jamais rattachées.*
+
 **Branche :** `feat/P2-T03b-brouillons`.
 
 **Fichiers :**
