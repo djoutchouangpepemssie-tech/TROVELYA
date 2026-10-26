@@ -1,12 +1,13 @@
 "use client";
 
-import { Avatar, Logo } from "@trovelya/ui";
+import { Logo } from "@trovelya/ui";
 import { useLocale, useTranslations } from "next-intl";
 import { usePathname } from "next/navigation";
 import { useEffect, useId, useRef, useState } from "react";
 
 import { initials } from "@/lib/initials";
 
+import { MemberAvatar } from "./Avatar";
 import { useSession } from "./SessionProvider";
 
 /** Header (6.5) with only what works in P1: the logo, then "Se connecter" or the account. */
@@ -94,13 +95,17 @@ export function SiteHeader() {
               aria-haspopup="menu"
               aria-expanded={open}
               aria-controls={open ? menuId : undefined}
-              aria-label={t("accountMenu")}
+              // Starts with the initials it shows (WCAG 2.5.3, label in name).
+              aria-label={t("accountMenuOf", {
+                initials: initials(me.display_name),
+                name: me.display_name,
+              })}
               onClick={() => {
                 setOpen((value) => !value);
               }}
               className="rounded-full"
             >
-              <Avatar name={me.display_name} initials={initials(me.display_name)} size={36} />
+              <MemberAvatar name={me.display_name} avatar={me.avatar} size={36} />
             </button>
             {open && (
               <div className="absolute right-0 mt-2 w-56 rounded-lg border border-line bg-surface p-1 shadow-lg">

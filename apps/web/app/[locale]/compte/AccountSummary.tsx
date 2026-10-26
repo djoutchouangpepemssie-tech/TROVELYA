@@ -1,11 +1,11 @@
 "use client";
 
-import { Avatar, Button } from "@trovelya/ui";
+import { Button } from "@trovelya/ui";
 import { useLocale, useTranslations } from "next-intl";
 import { useState } from "react";
 
 import { useSession } from "@/components/SessionProvider";
-import { initials } from "@/lib/initials";
+import { MemberAvatar } from "@/components/Avatar";
 
 import { useAccount } from "./useAccount";
 
@@ -35,7 +35,7 @@ export function AccountSummary() {
     <main className="mx-auto flex w-full max-w-xl flex-col gap-6 px-4 py-8">
       <h1 className="text-3xl font-semibold tracking-tight">{t("title")}</h1>
       <div className="flex items-center gap-4">
-        <Avatar name={me.display_name} initials={initials(me.display_name)} size={56} />
+        <MemberAvatar name={me.display_name} avatar={me.avatar} size={56} />
         <div className="min-w-0">
           <p className="truncate text-lg font-semibold">{me.display_name}</p>
           <p className="truncate text-ink-2">@{me.username}</p>

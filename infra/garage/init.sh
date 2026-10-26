@@ -2,8 +2,14 @@
 # Prepares the local Garage node: one-node layout, the two buckets of ADR-0019 and an access
 # key, then prints the variables for apps/api/.env. Idempotent.
 # Usage: bash infra/garage/init.sh [container]   (default container: trovelya-garage-1)
+# GARAGE_ENDPOINT (S3 API as reached by GARAGE_PYTHON), GARAGE_CORS_ORIGIN (the web app) and
+# GARAGE_PYTHON (a Python with boto3) default to the local development stack.
 set -euo pipefail
 CONTAINER="${1:-trovelya-garage-1}"
+ENDPOINT="${GARAGE_ENDPOINT:-http://localhost:3900}"
+CORS_ORIGIN="${GARAGE_CORS_ORIGIN:-http://localhost:3000}"
+API_PROJECT="$(cd "$(dirname "$0")/../../apps/api" && pwd)"
+PYTHON="${GARAGE_PYTHON:-uv run --project $API_PROJECT python}"
 garage() { docker exec -e RUST_LOG=warn "$CONTAINER" /garage "$@"; }
 
 for _ in $(seq 1 30); do garage status >/dev/null 2>&1 && break; sleep 1; done
@@ -27,20 +33,21 @@ KEY_ID="$(echo "$KEY" | awk '/Key ID/ {print $NF}')"
 SECRET="$(echo "$KEY" | awk '/Secret key/ {print $NF}')"
 # The browser uploads straight to `originals` (as on R2, infra/r2/README.md): CORS for the
 # local web origin. Garage has no CLI command for it; the S3 API does.
-KEY_ID="$KEY_ID" SECRET="$SECRET" uv run --project "$(dirname "$0")/../../apps/api" python - <<'PY'
+export KEY_ID SECRET ENDPOINT CORS_ORIGIN
+$PYTHON - <<'PY'
 import os
 
 import boto3
 
 s3 = boto3.client(
     "s3",
-    endpoint_url="http://localhost:3900",
+    endpoint_url=os.environ["ENDPOINT"],
     region_name="garage",
     aws_access_key_id=os.environ["KEY_ID"],
     aws_secret_access_key=os.environ["SECRET"],
 )
 rule = {
-    "AllowedOrigins": ["http://localhost:3000"],
+    "AllowedOrigins": [os.environ["CORS_ORIGIN"]],
     "AllowedMethods": ["PUT"],
     "AllowedHeaders": ["content-type"],
     "MaxAgeSeconds": 3600,
@@ -48,7 +55,7 @@ rule = {
 s3.put_bucket_cors(Bucket="trovelya-originals", CORSConfiguration={"CORSRules": [rule]})
 PY
 echo "STORAGE_PROVIDER=s3"
-echo "STORAGE_ENDPOINT=http://localhost:3900"
+echo "STORAGE_ENDPOINT=$ENDPOINT"
 echo "STORAGE_REGION=garage"
 echo "STORAGE_ACCESS_KEY_ID=$KEY_ID"
 echo "STORAGE_SECRET_ACCESS_KEY=$SECRET"

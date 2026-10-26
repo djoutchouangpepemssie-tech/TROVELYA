@@ -124,6 +124,7 @@ async def test_me_before_completion(
     assert me["profile_completed"] is False and me["is_minor"] is None
     assert me["counters"] == {"unread_messages": 0, "notifications": 0}
     assert me["roles"] == [] and me["flags"]["auth.passkeys"] is True
+    assert me["flags"]["media.uploads"] is False  # the photo field hides its choose button
     assert me["version"] >= 1
 
 

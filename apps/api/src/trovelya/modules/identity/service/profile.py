@@ -30,7 +30,7 @@ PARIS = ZoneInfo("Europe/Paris")
 MIN_SIGNUP_AGE = 15
 DEFAULT_MIN_TRADE_AGE = 18
 # Feature flags the client needs to show or hide entry points.
-CLIENT_FLAGS = ("auth.passkeys", "auth.oauth_google", "auth.oauth_apple")
+CLIENT_FLAGS = ("auth.passkeys", "auth.oauth_google", "auth.oauth_apple", "media.uploads")
 _USERNAME_MAX = 30
 _SUFFIX_TRIES = 50
 
