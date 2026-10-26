@@ -80,6 +80,8 @@ OWNED_ROUTES = {
     "DELETE /v1/me/addresses/{address_id}",
     "PATCH /v1/me/zones/{zone_id}",
     "DELETE /v1/me/zones/{zone_id}",
+    "POST /v1/media/{media_id}/complete",
+    "GET /v1/media/{media_id}",
 }
 STAFF_ROUTES = {
     "GET /v1/staff/approvals",
@@ -190,6 +192,7 @@ def _random_ids() -> dict[str, UUID]:
             "address_id",
             "zone_id",
             "approval_id",
+            "media_id",
         )
     }
 
@@ -240,6 +243,11 @@ async def _owned_resources(
     address = await client.post("/v1/me/addresses", headers=owner.headers, json=ADDRESS)
     zone = await client.post("/v1/me/zones", headers=owner.headers, json=ZONE)
     export = await client.post("/v1/me/data-export", headers=owner.headers)
+    media = await client.post(
+        "/v1/media/uploads",
+        headers=owner.headers,
+        json={"purpose": "listing", "mime_type": "image/jpeg", "bytes": 1000},
+    )
     consent = await client.post(
         "/v1/me/consents",
         headers=owner.headers,
@@ -247,6 +255,7 @@ async def _owned_resources(
     )
     assert consent.status_code == 201
     assert (address.status_code, zone.status_code, export.status_code) == (201, 201, 202)
+    assert media.status_code == 201
     request_id = UUID(export.json()["request_id"])
     built = await build_data_export(
         sessionmaker, request_id, settings=make_settings(), clock=FixedClock(T0), queue=_NoQueue()
@@ -258,6 +267,7 @@ async def _owned_resources(
         "passkey_id": passkey_id,
         "address_id": UUID(address.json()["id"]),
         "zone_id": UUID(zone.json()["id"]),
+        "media_id": UUID(media.json()["media_id"]),
     }
 
 
@@ -289,7 +299,7 @@ async def test_someone_elses_resources_answer_404(
 
     # Nothing was touched, and the routes do work for the owner (a 404 for all proves nothing).
     for key in sorted(OWNED_ROUTES, key=lambda k: k.startswith("DELETE")):  # deletions last
-        assert await _call(client, key, ids, owner.headers) in {200, 204}, key
+        assert await _call(client, key, ids, owner.headers) in {200, 202, 204}, key
 
 
 async def test_members_get_403_on_staff_routes(

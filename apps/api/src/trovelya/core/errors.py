@@ -51,6 +51,7 @@ class ErrorCode(StrEnum):
     MEDIA_TYPE_REJECTED = "media_type_rejected"
     MEDIA_TOO_LARGE = "media_too_large"
     UPLOAD_LIMIT = "upload_limit"
+    MEDIA_ALREADY_COMPLETED = "media_already_completed"
 
 
 # French titles by default (section 2); translation by Accept-Language arrives with P1.
@@ -89,6 +90,7 @@ _TITLES: dict[ErrorCode, str] = {
     ErrorCode.MEDIA_TYPE_REJECTED: "Type de fichier refusé",
     ErrorCode.MEDIA_TOO_LARGE: "Fichier trop volumineux",
     ErrorCode.UPLOAD_LIMIT: "Trop d'envois de fichiers, réessayez plus tard",
+    ErrorCode.MEDIA_ALREADY_COMPLETED: "Ce fichier a déjà été envoyé",
 }
 
 _STATUS_CODES: dict[int, ErrorCode] = {

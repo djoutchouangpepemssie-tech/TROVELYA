@@ -3,6 +3,7 @@ repository.py."""
 
 from typing import Literal
 
+MediaStatus = Literal["uploading", "processing", "ready", "rejected"]
 # P2 handles photos only (decision Q7): of the purposes of 7.5, listing photos and avatars.
 UploadPurpose = Literal["listing", "avatar"]
 # Formats a browser or a phone produces and the worker can decode; never SVG (scripts), GIF

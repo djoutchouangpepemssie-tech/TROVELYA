@@ -4,7 +4,7 @@ from datetime import datetime
 from typing import Any
 from uuid import UUID
 
-from sqlalchemy import text
+from sqlalchemy import Row, text
 from sqlalchemy.ext.asyncio import AsyncSession
 
 # What a member gets in the GDPR export: every file they sent, deleted ones included, with
@@ -77,3 +77,35 @@ async def insert_upload(
             "now": now,
         },
     )
+
+
+async def start_processing(db: AsyncSession, media_id: UUID, owner_id: UUID) -> str | None:
+    """`uploading` → `processing` for the owner's media. Returns "started", or the status found
+    when it was not `uploading`, or None when the media is not theirs or does not exist."""
+    started = await db.scalar(
+        text(
+            "UPDATE media SET status = 'processing' WHERE id = :id AND owner_id = :owner"
+            " AND status = 'uploading' AND deleted_at IS NULL RETURNING id"
+        ),
+        {"id": media_id, "owner": owner_id},
+    )
+    if started is not None:
+        return "started"
+    return await db.scalar(
+        text(
+            "SELECT status FROM media WHERE id = :id AND owner_id = :owner AND deleted_at IS NULL"
+        ),
+        {"id": media_id, "owner": owner_id},
+    )
+
+
+async def owned_media(db: AsyncSession, media_id: UUID, owner_id: UUID) -> Row[Any] | None:
+    return (
+        await db.execute(
+            text(
+                "SELECT id, purpose, mime_type, status, width, height, variants, rejection_reason"
+                " FROM media WHERE id = :id AND owner_id = :owner AND deleted_at IS NULL"
+            ),
+            {"id": media_id, "owner": owner_id},
+        )
+    ).one_or_none()
