@@ -215,36 +215,44 @@ async def search_brands(db: AsyncSession, *, prefix: str, q: str, limit: int) ->
     return (await db.execute(_SEARCH_BRANDS, {"prefix": prefix, "q": q, "limit": limit})).all()
 
 
-# GDPR export (ADR-0016): the member's listings with their price and status histories (no
-# staff identity), their favorites and price watches. Not exported: the public position (an
-# offset of the real one), H3 cells, embedding and search document (derived, internal).
+# GDPR export (ADR-0016): the member's listings, every column they provided or that describes
+# them, with their photos, price and status histories (no staff identity); their favorites and
+# price watches. Not exported, being derived or internal: the public position (an offset of the
+# real one), H3 cells, embedding, search document, quality score, the id of the address or zone
+# the position came from (the address itself is in the identity export), and the links of
+# later phases (shop, product variant, passport, resale, boost).
 _EXPORT_LISTINGS = text(
     "SELECT l.id, l.short_id, l.status::text AS status, l.title, l.description,"
-    " c.key AS category, b.name::text AS brand, l.condition::text AS condition, l.attributes,"
+    " c.key AS category, c.names->>'fr' AS category_name, b.name::text AS brand,"
+    " l.condition::text AS condition, l.attributes,"
     " l.price_minor, l.currency, l.original_price_minor, l.quantity, l.accepts_offers,"
     " l.min_offer_minor, l.handover_enabled, l.shipping_enabled, l.parcel_size, l.weight_g,"
     " ST_Y(l.location::geometry) AS latitude, ST_X(l.location::geometry) AS longitude,"
     " l.place_name, l.country_code, l.location_source, l.sale_modes, l.open_to_swap,"
     " l.published_at, l.sold_at, l.expires_at, l.view_count, l.favorite_count,"
     " l.created_at, l.updated_at, l.deleted_at,"
+    " (SELECT coalesce(jsonb_agg(m.media_id ORDER BY m.position), '[]')"
+    " FROM listing_media m WHERE m.listing_id = l.id) AS media_ids,"
     " (SELECT coalesce(jsonb_agg(jsonb_build_object('price_minor', p.price_minor,"
-    " 'changed_at', p.changed_at) ORDER BY p.changed_at), '[]')"
+    " 'changed_at', p.changed_at) ORDER BY p.changed_at, p.id), '[]')"
     " FROM listing_price_history p WHERE p.listing_id = l.id) AS price_history,"
     " (SELECT coalesce(jsonb_agg(jsonb_build_object('from_status', h.from_status,"
     " 'to_status', h.to_status, 'event', h.event, 'actor_kind', h.actor_kind,"
     " 'reason_code', h.reason_code, 'reason_text', h.reason_text, 'created_at', h.created_at)"
-    " ORDER BY h.created_at), '[]')"
+    " ORDER BY h.created_at, h.id), '[]')"
     " FROM listing_status_history h WHERE h.listing_id = l.id) AS status_history"
     " FROM listings l JOIN categories c ON c.id = l.category_id"
     " LEFT JOIN brands b ON b.id = l.brand_id"
     " WHERE l.seller_id = :user_id ORDER BY l.created_at"
 )
+# Another member's listing is named by its short id and title only.
 _EXPORT_FAVORITES = text(
-    "SELECT listing_id, created_at FROM favorites WHERE user_id = :user_id ORDER BY created_at"
+    "SELECT f.listing_id, l.short_id, l.title, f.created_at FROM favorites f"
+    " JOIN listings l ON l.id = f.listing_id WHERE f.user_id = :user_id ORDER BY f.created_at"
 )
 _EXPORT_PRICE_WATCHES = text(
-    "SELECT listing_id, target_minor, created_at FROM price_watches WHERE user_id = :user_id"
-    " ORDER BY created_at"
+    "SELECT w.listing_id, l.short_id, l.title, w.target_minor, w.created_at FROM price_watches w"
+    " JOIN listings l ON l.id = w.listing_id WHERE w.user_id = :user_id ORDER BY w.created_at"
 )
 
 
@@ -264,8 +272,15 @@ async def erase_catalog(db: AsyncSession, user_id: UUID) -> None:
     """GDPR eraser (within the account's erasure, plan P2 Q13): the member's listings are
     deleted with what hangs on them (photo links, other members' favorites and watches,
     histories); the photos themselves go with the media eraser and purge. The member's own
-    favorites and price watches on other listings go too."""
+    favorites and price watches on other listings go too, their favorite counts with them."""
     params = {"u": user_id}
-    await db.execute(text("DELETE FROM favorites WHERE user_id = :u"), params)
+    await db.execute(
+        text(
+            "WITH gone AS (DELETE FROM favorites WHERE user_id = :u RETURNING listing_id)"
+            " UPDATE listings l SET favorite_count = greatest(l.favorite_count - 1, 0)"
+            " FROM gone WHERE l.id = gone.listing_id"
+        ),
+        params,
+    )
     await db.execute(text("DELETE FROM price_watches WHERE user_id = :u"), params)
     await db.execute(text("DELETE FROM listings WHERE seller_id = :u"), params)

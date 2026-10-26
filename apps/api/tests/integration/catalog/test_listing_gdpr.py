@@ -49,7 +49,7 @@ async def _listing(sessionmaker: Session, seller: UUID, category: UUID, title: s
                 " country_code, location_source, location_source_id)"
                 " VALUES (:id, :short_id, :seller, :title, 'Une description assez longue.',"
                 " :category, 'good', 2500, ST_GeogFromText('POINT(4.84 45.75)'),"
-                " ST_GeogFromText('POINT(4.85 45.76)'), 1, 2, 'Lyon 7e', 'FR', 'zone', :source)"
+                " ST_GeogFromText('POINT(4.84 45.7527)'), 1, 2, 'Lyon 7e', 'FR', 'zone', :source)"
             ),
             {
                 "id": listing_id,
@@ -81,23 +81,46 @@ async def _execute(sessionmaker: Session, sql: str, **params: Any) -> None:
         await db.commit()
 
 
+async def _photo(sessionmaker: Session, owner: UUID, listing: UUID, position: int) -> UUID:
+    media_id = new_id()
+    async with sessionmaker() as db:
+        await db.execute(
+            text(
+                "INSERT INTO media (id, owner_id, kind, purpose, storage_key, mime_type, bytes,"
+                " status) VALUES (:id, :owner, 'image', 'listing', :key, 'image/jpeg', 10,"
+                " 'uploading')"
+            ),
+            {"id": media_id, "owner": owner, "key": new_id().hex},
+        )
+        await db.execute(
+            text("INSERT INTO listing_media (listing_id, media_id, position) VALUES (:l, :m, :p)"),
+            {"l": listing, "m": media_id, "p": position},
+        )
+        await db.commit()
+    return media_id
+
+
 async def test_catalog_exported(sessionmaker: Session, category: UUID) -> None:
     member = await make_account(sessionmaker, completed=True)
     other = await make_account(sessionmaker, completed=True)
+    third = await make_account(sessionmaker, completed=True)
     own = await _listing(sessionmaker, member.id, category, "Lampe opaline verte")
     others = await _listing(sessionmaker, other.id, category, "Vase de Biot bleu")
-    await _execute(
-        sessionmaker,
-        "INSERT INTO favorites (user_id, listing_id) VALUES (:u, :l)",
-        u=member.id,
-        l=others,
-    )
-    await _execute(
-        sessionmaker,
-        "INSERT INTO price_watches (user_id, listing_id, target_minor) VALUES (:u, :l, 2000)",
-        u=member.id,
-        l=others,
-    )
+    second = await _photo(sessionmaker, member.id, own, 1)
+    first = await _photo(sessionmaker, member.id, own, 0)
+    for user in (member.id, third.id):  # the third member's must never be exported
+        await _execute(
+            sessionmaker,
+            "INSERT INTO favorites (user_id, listing_id) VALUES (:u, :l)",
+            u=user,
+            l=others,
+        )
+        await _execute(
+            sessionmaker,
+            "INSERT INTO price_watches (user_id, listing_id, target_minor) VALUES (:u, :l, 2000)",
+            u=user,
+            l=others,
+        )
     async with sessionmaker() as db:
         export = await registered_exporters()["catalog"](db, member.id)
 
@@ -108,14 +131,19 @@ async def test_catalog_exported(sessionmaker: Session, category: UUID) -> None:
         "Lyon 7e",
     )
     assert (listing["latitude"], listing["longitude"]) == (45.75, 4.84)
+    assert listing["category_name"] == "x"  # its French name, beside its key
+    assert listing["category"].startswith("t_gdpr_")
+    assert listing["media_ids"] == [str(first), str(second)]  # in display order
     assert [entry["price_minor"] for entry in listing["price_history"]] == [2500]
     assert [(e["to_status"], e["event"]) for e in listing["status_history"]] == [
         ("draft", "create")
     ]
-    # Internal or other people's data never leaves: no embedding, cells, staff identities.
+    # Derived, internal or other people's data never leaves.
     assert not {"embedding", "search_document", "h3_r7", "h3_r9", "location_public"} & set(listing)
     assert "actor_id" not in listing["status_history"][0]
-    assert [f["listing_id"] for f in export["favorites"]] == [others]
+    assert [(f["listing_id"], f["title"]) for f in export["favorites"]] == [
+        (others, "Vase de Biot bleu")
+    ]
     assert [(w["listing_id"], w["target_minor"]) for w in export["price_watches"]] == [
         (others, 2000)
     ]
@@ -124,35 +152,57 @@ async def test_catalog_exported(sessionmaker: Session, category: UUID) -> None:
 async def test_catalog_erased(sessionmaker: Session, category: UUID) -> None:
     member = await make_account(sessionmaker, completed=True)
     other = await make_account(sessionmaker, completed=True)
+    third = await make_account(sessionmaker, completed=True)
     own = await _listing(sessionmaker, member.id, category, "Lampe opaline verte")
     others = await _listing(sessionmaker, other.id, category, "Vase de Biot bleu")
-    for sql in (
-        "INSERT INTO favorites (user_id, listing_id) VALUES (:u, :l)",
-        "INSERT INTO price_watches (user_id, listing_id) VALUES (:u, :l)",
-    ):
-        await _execute(sessionmaker, sql, u=member.id, l=others)
-        await _execute(sessionmaker, sql, u=other.id, l=own)
+    thirds = await _listing(sessionmaker, third.id, category, "Chaise Tolix rouge")
+    photo = await _photo(sessionmaker, member.id, own, 0)
+    for user, listing in ((member.id, others), (other.id, own), (other.id, thirds)):
+        for sql in (
+            "INSERT INTO favorites (user_id, listing_id) VALUES (:u, :l)",
+            "INSERT INTO price_watches (user_id, listing_id) VALUES (:u, :l)",
+        ):
+            await _execute(sessionmaker, sql, u=user, l=listing)
+    await _execute(
+        sessionmaker,
+        "UPDATE listings SET favorite_count = 1 WHERE id IN (:a, :b, :c)",
+        a=own,
+        b=others,
+        c=thirds,
+    )
     async with sessionmaker() as db:
         await registered_erasers()["catalog"](db, member.id)
         await db.commit()
-        remaining = {
-            table: await db.scalar(
-                text(
-                    f"SELECT count(*) FROM {table} WHERE user_id IN (:a, :b)"  # noqa: S608
-                ),
-                {"a": member.id, "b": other.id},
+        kept = {
+            table: set(
+                (
+                    await db.execute(
+                        text(
+                            f"SELECT user_id, listing_id FROM {table}"  # noqa: S608
+                            " WHERE user_id IN (:a, :b)"
+                        ),
+                        {"a": member.id, "b": other.id},
+                    )
+                ).all()
             )
             for table in ("favorites", "price_watches")
         }
-        listings = set(
+        counts = dict(
             (
-                await db.scalars(
-                    text("SELECT id FROM listings WHERE id IN (:a, :b)"),
-                    {"a": own, "b": others},
+                await db.execute(
+                    text("SELECT id, favorite_count FROM listings WHERE id IN (:a, :b, :c)"),
+                    {"a": own, "b": others, "c": thirds},
                 )
             ).all()
         )
-    # The member's listings are gone (with the other member's favorite on them); the other
-    # member's listing stays, without the erased member's favorite.
-    assert listings == {others}
-    assert remaining == {"favorites": 0, "price_watches": 0}
+        links = await db.scalar(
+            text("SELECT count(*) FROM listing_media WHERE media_id = :m"), {"m": photo}
+        )
+    # The member's listing is gone with the other member's favorite and watch on it; the
+    # member's own favorite and watch go too; nothing else is touched.
+    assert counts == {others: 0, thirds: 1}
+    assert kept == {
+        "favorites": {(other.id, thirds)},
+        "price_watches": {(other.id, thirds)},
+    }
+    assert links == 0

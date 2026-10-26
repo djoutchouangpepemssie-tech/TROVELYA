@@ -15,15 +15,17 @@ from sqlalchemy.ext.asyncio import AsyncConnection, AsyncEngine
 from trovelya.shared.ids import new_id
 
 _INSERT_LISTING = text(
-    "INSERT INTO listings (id, short_id, seller_id, title, description, category_id, condition,"
+    "INSERT INTO listings (id, short_id, seller_id, title, description, category_id, brand_id,"
+    " condition,"
     " attributes, price_minor, currency, original_price_minor, quantity, min_offer_minor,"
     " parcel_size, weight_g, location, location_public, h3_r7, h3_r9, place_name,"
     " country_code, location_source, location_source_id, sale_modes, quality_score,"
     " embedding, embedding_model, view_count, favorite_count)"
-    " VALUES (:id, :short_id, :seller_id, :title, :description, :category_id, :condition,"
+    " VALUES (:id, :short_id, :seller_id, :title, :description, :category_id, :brand_id,"
+    " :condition,"
     " CAST(:attributes AS jsonb), :price, :currency, :original_price, :quantity, :min_offer,"
     " :parcel_size, :weight_g, ST_GeogFromText('POINT(4.84 45.75)'),"
-    " ST_GeogFromText('POINT(4.85 45.76)'), 608819013654478847, 627333812236304383,"
+    " ST_GeogFromText('POINT(4.84 45.7527)'), 608819013654478847, 627333812236304383,"
     " :place_name, :country_code, :location_source, :location_source_id,"
     " CAST(:sale_modes AS text[]), :quality_score, CAST(:embedding AS vector),"
     " :embedding_model, :view_count, :favorite_count)"
@@ -87,6 +89,7 @@ def _listing_params(seller: UUID, category: UUID, **overrides: Any) -> dict[str,
         "title": "Lampe opaline verte",
         "description": "Lampe opaline des années 1950, abat-jour intact, fonctionne.",
         "category_id": category,
+        "brand_id": None,
         "condition": "very_good",
         "attributes": "{}",
         "price": 4500,
@@ -171,10 +174,9 @@ async def test_listing_defaults_follow_the_spec(
         ({"price": 99}, "listings_price_minor_check"),
         ({"price": 100_000_001}, "listings_price_minor_check"),
         ({"currency": "eur"}, "listings_currency_check"),
-        ({"original_price": 0}, "listings_original_price_minor_check"),
+        ({"original_price": -1}, "listings_original_price_minor_check"),
         ({"quantity": -1}, "listings_quantity_check"),
-        ({"min_offer": 0}, "listings_min_offer_check"),
-        ({"min_offer": 4501}, "listings_min_offer_check"),
+        ({"min_offer": -1}, "listings_min_offer_minor_check"),
         ({"parcel_size": "xxl"}, "listings_parcel_size_check"),
         ({"weight_g": 0}, "listings_weight_g_check"),
         ({"place_name": ""}, "listings_place_name_check"),
@@ -223,6 +225,20 @@ async def test_listing_accepts_its_full_shape(
     )
 
 
+@pytest.mark.parametrize(
+    "overrides",
+    [
+        {"price": 100, "title": "x" * 5, "description": "x" * 20},
+        {"price": 100_000_000, "title": "x" * 120, "description": "x" * 5000},
+        {"original_price": 0, "min_offer": 0, "weight_g": 1, "quantity": 0},
+    ],
+)
+async def test_listing_bounds_accepted(
+    conn: AsyncConnection, seller: UUID, category: UUID, overrides: dict[str, Any]
+) -> None:
+    await _listing(conn, seller, category, **overrides)
+
+
 async def test_short_id_unique(conn: AsyncConnection, seller: UUID, category: UUID) -> None:
     await _listing(conn, seller, category)
     message = await _fails(conn, _INSERT_LISTING, _listing_params(seller, category))
@@ -235,9 +251,43 @@ async def test_listing_needs_a_known_seller_and_category(
     for overrides, constraint in (
         ({"seller_id": new_id()}, "listings_seller_id_fkey"),
         ({"category_id": new_id()}, "listings_category_id_fkey"),
+        ({"brand_id": new_id()}, "listings_brand_id_fkey"),
     ):
         params = _listing_params(seller, category, **overrides)
         assert constraint in await _fails(conn, _INSERT_LISTING, params)
+
+
+async def test_counters_and_derived_data_keep_version_and_updated_at(
+    conn: AsyncConnection, seller: UUID, category: UUID
+) -> None:
+    """A view, a favorite or a worker's computation must not make the seller's If-Match stale
+    nor count as a change of the listing (expiry, plan P2 E12)."""
+    listing_id = await _listing(conn, seller, category)
+    await conn.execute(
+        text("UPDATE listings SET updated_at = now() - interval '1 day' WHERE id = :id"),
+        {"id": listing_id},
+    )
+    for change in (
+        "view_count = view_count + 1",
+        "favorite_count = favorite_count + 1",
+        "quality_score = 80",
+        "search_document = to_tsvector('simple', title)",
+        "title = title",
+    ):
+        await conn.execute(
+            text(f"UPDATE listings SET {change} WHERE id = :id"),  # noqa: S608
+            {"id": listing_id},
+        )
+    version, stale = (
+        await conn.execute(
+            text(
+                "SELECT version, updated_at < now() - interval '1 hour' FROM listings"
+                " WHERE id = :id"
+            ),
+            {"id": listing_id},
+        )
+    ).one()
+    assert (version, stale) == (1, True)
 
 
 async def test_version_and_updated_at_follow_each_update(
@@ -260,7 +310,8 @@ async def test_version_and_updated_at_follow_each_update(
             {"id": listing_id},
         )
     ).one()
-    assert (version, fresh) == (3, True)
+    # The first update changed no content (version 1 kept), the second one did.
+    assert (version, fresh) == (2, True)
 
 
 async def test_listing_media_ordered_and_owned_by_one_listing(
@@ -272,11 +323,10 @@ async def test_listing_media_ordered_and_owned_by_one_listing(
     insert = text("INSERT INTO listing_media (listing_id, media_id, position) VALUES (:l, :m, :p)")
     await conn.execute(insert, {"l": listing_id, "m": first, "p": 0})
     await conn.execute(insert, {"l": listing_id, "m": second, "p": 1})
-    # Reordered within one transaction: positions are checked at commit.
-    await conn.execute(
-        text("UPDATE listing_media SET position = 1 - position WHERE listing_id = :l"),
-        {"l": listing_id},
-    )
+    # Swapped one statement at a time: positions are checked at commit, not in between.
+    move = text("UPDATE listing_media SET position = :p WHERE media_id = :m")
+    await conn.execute(move, {"m": first, "p": 1})
+    await conn.execute(move, {"m": second, "p": 0})
     await conn.execute(text("SET CONSTRAINTS ALL IMMEDIATE"))
     await conn.execute(text("SET CONSTRAINTS ALL DEFERRED"))
     assert "listing_media_media_id_key" in await _fails(
@@ -288,6 +338,23 @@ async def test_listing_media_ordered_and_owned_by_one_listing(
     await conn.execute(insert, {"l": other, "m": await _photo(conn, seller), "p": 0})
     await conn.execute(insert, {"l": other, "m": await _photo(conn, seller), "p": 0})
     assert "listing_media_position_key" in await _checked_at_commit(conn)
+
+
+async def test_purged_photo_leaves_its_listing(
+    conn: AsyncConnection, seller: UUID, category: UUID
+) -> None:
+    """The media purge deletes photo rows: the link goes with it, the purge is never blocked."""
+    listing_id = await _listing(conn, seller, category)
+    photo = await _photo(conn, seller)
+    await conn.execute(
+        text("INSERT INTO listing_media (listing_id, media_id, position) VALUES (:l, :m, 0)"),
+        {"l": listing_id, "m": photo},
+    )
+    await conn.execute(text("DELETE FROM media WHERE id = :m"), {"m": photo})
+    links = await conn.scalar(
+        text("SELECT count(*) FROM listing_media WHERE listing_id = :l"), {"l": listing_id}
+    )
+    assert links == 0
 
 
 async def test_favorites_and_price_watches(
@@ -310,9 +377,10 @@ async def test_price_history(conn: AsyncConnection, seller: UUID, category: UUID
     listing_id = await _listing(conn, seller, category)
     insert = text("INSERT INTO listing_price_history (listing_id, price_minor) VALUES (:l, :p)")
     await conn.execute(insert, {"l": listing_id, "p": 4500})
-    assert "listing_price_history_price_minor_check" in await _fails(
-        conn, insert, {"l": listing_id, "p": 99}
-    )
+    for price in (99, 100_000_001):
+        assert "listing_price_history_price_minor_check" in await _fails(
+            conn, insert, {"l": listing_id, "p": price}
+        )
 
 
 @pytest.mark.parametrize(
@@ -323,6 +391,9 @@ async def test_price_history(conn: AsyncConnection, seller: UUID, category: UUID
         ({"event": "Publish!"}, "listing_status_history_event_check"),
         ({"actor_kind": "user", "actor_id": None}, "listing_status_history_actor_check"),
         ({"reason_text": "x" * 1001}, "listing_status_history_reason_text_check"),
+        ({"reason_text": ""}, "listing_status_history_reason_text_check"),
+        ({"reason_code": "Bad-Code"}, "listing_status_history_reason_code_check"),
+        ({"actor_kind": "system"}, "listing_status_history_actor_check"),
     ],
 )
 async def test_status_history_checks(
@@ -402,15 +473,50 @@ async def test_deleting_a_listing_deletes_what_hangs_on_it(
 
 
 async def test_indexes_of_the_spec(conn: AsyncConnection) -> None:
-    rows = await conn.execute(text("SELECT indexname FROM pg_indexes WHERE tablename = 'listings'"))
-    names = {row[0] for row in rows}
-    assert {
-        "listings_active_geo_idx",
-        "listings_active_h3_idx",
-        "listings_title_trgm_idx",
-        "listings_seller_idx",
-        "listings_category_idx",
-        "listings_attributes_idx",
-    } <= names
+    rows = await conn.execute(
+        text(
+            "SELECT indexname, pg_get_indexdef(indexrelid) FROM pg_indexes"
+            " JOIN pg_class c ON c.relname = indexname"
+            " JOIN pg_index i ON i.indexrelid = c.oid WHERE tablename = 'listings'"
+        )
+    )
+    definitions = {name: definition.split(" USING ")[1] for name, definition in rows}
+    assert definitions["listings_active_geo_idx"] == (
+        "gist (location) WHERE (status = 'active'::listing_status)"
+    )
+    assert definitions["listings_active_h3_idx"] == (
+        "btree (h3_r7) WHERE (status = 'active'::listing_status)"
+    )
+    assert definitions["listings_title_trgm_idx"] == "gin (title gin_trgm_ops)"
+    assert definitions["listings_seller_idx"] == (
+        "btree (seller_id, status, created_at DESC, id DESC)"
+    )
+    assert definitions["listings_brand_idx"] == "btree (brand_id) WHERE (brand_id IS NOT NULL)"
+    assert definitions["listings_category_idx"] == (
+        "btree (category_id, status, published_at DESC)"
+    )
+    assert definitions["listings_attributes_idx"] == "gin (attributes jsonb_path_ops)"
     # P3 creates the full-text index, T11 the vector one.
-    assert not names & {"listings_search_idx", "listings_embedding_idx"}
+    assert not definitions.keys() & {"listings_search_idx", "listings_embedding_idx"}
+
+
+async def test_indexes_of_the_linked_tables(conn: AsyncConnection) -> None:
+    rows = await conn.execute(
+        text(
+            "SELECT c.relname, pg_get_indexdef(c.oid) FROM pg_class c"
+            " JOIN pg_index i ON i.indexrelid = c.oid"
+            " WHERE c.relname IN ('favorites_listing_idx', 'price_watches_listing_idx',"
+            " 'listing_price_history_listing_idx', 'listing_status_history_listing_idx',"
+            " 'listing_status_history_actor_idx')"
+        )
+    )
+    definitions = {name: definition.split(" USING ")[1] for name, definition in rows}
+    assert definitions == {
+        "favorites_listing_idx": "btree (listing_id)",
+        "price_watches_listing_idx": "btree (listing_id)",
+        "listing_price_history_listing_idx": "btree (listing_id, changed_at)",
+        "listing_status_history_listing_idx": "btree (listing_id, created_at, id)",
+        "listing_status_history_actor_idx": (
+            "btree (actor_id, created_at) WHERE (actor_id IS NOT NULL)"
+        ),
+    }

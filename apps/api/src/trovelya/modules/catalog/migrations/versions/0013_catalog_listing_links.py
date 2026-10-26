@@ -7,7 +7,8 @@ Additions to the spec, recorded in docs/plans/P2-catalogue-annonces.md:
 - A photo belongs to one listing at most; positions are unique per listing, checked at commit
   so photos can be reordered in one transaction.
 - Deleting a listing row (only with an account's erasure) deletes its photo links, favorites,
-  price watches and histories. The photos themselves stay for the media purge.
+  price watches and histories. The photos themselves stay for the media purge; purging a photo
+  removes it from its listing (as an avatar is cleared), so the purge is never blocked.
 
 Revision ID: 0013
 Revises: 0012
@@ -24,7 +25,7 @@ depends_on = None
 UPGRADE = r"""
 CREATE TABLE listing_media (
   listing_id UUID NOT NULL REFERENCES listings(id) ON DELETE CASCADE,
-  media_id   UUID NOT NULL UNIQUE REFERENCES media(id),
+  media_id   UUID NOT NULL UNIQUE REFERENCES media(id) ON DELETE CASCADE,
   position   SMALLINT NOT NULL CHECK (position >= 0),
   PRIMARY KEY (listing_id, media_id),
   CONSTRAINT listing_media_position_key UNIQUE (listing_id, position) DEFERRABLE INITIALLY DEFERRED
@@ -72,7 +73,10 @@ CREATE TABLE listing_status_history (
     CHECK ((actor_kind = 'system') = (actor_id IS NULL))
 );
 CREATE INDEX listing_status_history_listing_idx
-  ON listing_status_history (listing_id, created_at);
+  ON listing_status_history (listing_id, created_at, id);
+-- A member's transitions over a period (the daily publication quota of P2-T04).
+CREATE INDEX listing_status_history_actor_idx
+  ON listing_status_history (actor_id, created_at) WHERE actor_id IS NOT NULL;
 """
 
 DOWNGRADE = r"""

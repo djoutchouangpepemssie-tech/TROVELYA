@@ -45,7 +45,18 @@ IDENTITY_TABLES = {
     "data_requests",
     "data_exports",
 }
-CATALOG_TABLES = {"categories", "attribute_definitions", "category_attributes", "brands"}
+CATALOG_TABLES = {
+    "categories",
+    "attribute_definitions",
+    "category_attributes",
+    "brands",
+    "listings",
+    "listing_media",
+    "favorites",
+    "price_watches",
+    "listing_price_history",
+    "listing_status_history",
+}
 MEDIA_TABLES = {"media"}
 
 
