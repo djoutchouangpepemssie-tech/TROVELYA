@@ -45,7 +45,7 @@ IDENTITY_TABLES = {
     "data_requests",
     "data_exports",
 }
-CATALOG_TABLES = {"categories", "attribute_definitions", "category_attributes", "brands"}
+CATALOG_TABLES = {"categories", "attribute_definitions", "category_attributes", "brands", "media"}
 
 
 async def _tables(engine: AsyncEngine) -> set[str]:
