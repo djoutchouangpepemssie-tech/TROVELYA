@@ -6,11 +6,12 @@ import struct
 import zlib
 from io import BytesIO
 from pathlib import Path
+from typing import Any
 
 import pytest
 from PIL import Image, ImageDraw
-from structlog.testing import capture_logs
 
+from trovelya.modules.media.service import images
 from trovelya.modules.media.service.images import (
     MAX_PIXELS,
     ImageRejectedError,
@@ -355,8 +356,20 @@ def test_large_palette_bilevel_and_16_bit_images_are_processed(mode: str) -> Non
     assert max(v.width for v in result.variants) == 1600
 
 
-def test_unreadable_file_is_logged_by_error_type() -> None:
+class _Recorder:
+    def __init__(self) -> None:
+        self.events: list[tuple[str, dict[str, Any]]] = []
+
+    def warning(self, event: str, **fields: Any) -> None:
+        self.events.append((event, fields))
+
+
+def test_unreadable_file_is_logged_by_error_type(monkeypatch: pytest.MonkeyPatch) -> None:
+    recorder = _Recorder()
+    monkeypatch.setattr(images, "logger", recorder)
     data = _encode(_picture(), "JPEG")
-    with capture_logs() as logs, pytest.raises(ImageRejectedError):
+    with pytest.raises(ImageRejectedError):
         process_image(data[: len(data) // 2], "image/jpeg", max_bytes=MAX_BYTES)
-    assert [(log["event"], log["error"]) for log in logs] == [("media.image_unreadable", "OSError")]
+    assert recorder.events == [
+        ("media.image_unreadable", {"error": "OSError", "mime": "image/jpeg"})
+    ]
