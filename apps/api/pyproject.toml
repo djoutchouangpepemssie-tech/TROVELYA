@@ -28,7 +28,7 @@ dependencies = [
     "pyjwt==2.15.1",
     "webauthn==3.0.1",
     "pyyaml==6.0.3",
-    "boto3==1.43.118",
+    "boto3==1.43.111",
 ]
 
 [dependency-groups]
@@ -74,3 +74,8 @@ asyncio_default_fixture_loop_scope = "session"
 asyncio_default_test_loop_scope = "session"
 testpaths = ["tests"]
 addopts = "-ra --strict-markers"
+
+[tool.uv]
+# Transitive dependencies held to releases at least two weeks old (supply-chain review of
+# boto3, P2-T02a2): a release this fresh may be compromised before anyone notices.
+constraint-dependencies = ["botocore==1.43.111", "s3transfer==0.19.2"]
