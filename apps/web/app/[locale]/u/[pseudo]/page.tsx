@@ -1,10 +1,10 @@
-import { Avatar } from "@trovelya/ui";
 import type { Metadata } from "next";
 import { notFound, redirect } from "next/navigation";
 import { getFormatter, getTranslations } from "next-intl/server";
 import { cache } from "react";
 
-import { initials } from "@/lib/initials";
+import { MemberAvatar } from "@/components/Avatar";
+import type { Variant } from "@/lib/media";
 import { serverGet } from "@/lib/server-api";
 
 import { ProfileActions } from "./ProfileActions";
@@ -13,6 +13,7 @@ export type PublicProfile = {
   id: string;
   username: string;
   display_name: string;
+  avatar: Variant[] | null;
   bio: string | null;
   member_since: string;
   followers_count: number;
@@ -52,7 +53,7 @@ export async function generateMetadata({ params }: Props): Promise<Metadata> {
   };
 }
 
-/** W08 (P1 part, Q13): pseudo, name, initials, bio, member since and counters. No place. */
+/** W08 (P1 part, Q13): pseudo, name, photo (or initials), bio, member since and counters. No place. */
 export default async function PublicProfilePage({ params }: Props) {
   const { locale, pseudo } = await params;
   const profile = await loadProfile(pseudo);
@@ -66,7 +67,7 @@ export default async function PublicProfilePage({ params }: Props) {
   return (
     <main className="mx-auto flex w-full max-w-xl flex-col gap-6 px-4 py-10">
       <div className="flex items-center gap-4">
-        <Avatar name={profile.display_name} initials={initials(profile.display_name)} size={72} />
+        <MemberAvatar name={profile.display_name} avatar={profile.avatar} size={72} />
         <div className="min-w-0">
           <h1 className="truncate text-2xl font-semibold tracking-tight">{profile.display_name}</h1>
           <p className="truncate text-ink-2">@{profile.username}</p>

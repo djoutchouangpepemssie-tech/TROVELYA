@@ -1,6 +1,7 @@
 /** Sign-in screens (P1-T12a): API calls through the relay, and the return address. */
 
 import { apiFetch } from "./api";
+import type { Variant } from "./media";
 
 export type AuthMethods = {
   magic_link: boolean;
@@ -14,6 +15,8 @@ export type Me = {
   email: string;
   username: string;
   display_name: string;
+  /** Square variants of the photo (P2-T02c), null while there is none. */
+  avatar: Variant[] | null;
   profile_completed: boolean;
   /** Erasure asked for (Q10): the account is erased then, unless the member cancels. */
   erase_at: string | null;

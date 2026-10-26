@@ -1,44 +1,10 @@
-import AxeBuilder from "@axe-core/playwright";
-import { expect, type Page, test } from "@playwright/test";
+import { expect, test } from "@playwright/test";
 
 import messages from "../../messages/fr.json" with { type: "json" };
+import { expectNoAxeViolations, linkFromMailpit } from "./helpers";
 
 const auth = messages.Auth;
 const onboarding = messages.Onboarding;
-const MAILPIT = `http://127.0.0.1:${process.env.FULL_MAILPIT_PORT ?? "8125"}`;
-
-async function expectNoAxeViolations(page: Page): Promise<void> {
-  const results = await new AxeBuilder({ page }).analyze();
-  expect(results.violations).toEqual([]);
-}
-
-type MailpitSummary = { ID: string; Subject: string };
-
-/** The sign-in link of the e-mail the worker delivered to Mailpit, as a path on this site. */
-async function linkFromMailpit(page: Page, email: string): Promise<string> {
-  const search = `${MAILPIT}/api/v1/search?query=${encodeURIComponent(`to:"${email}"`)}`;
-  let found: MailpitSummary | undefined;
-  await expect
-    .poll(
-      async () => {
-        const answer = (await (await page.request.get(search)).json()) as {
-          messages: MailpitSummary[];
-        };
-        found = answer.messages[0];
-        return found?.ID;
-      },
-      { message: "the sign-in e-mail never reached Mailpit", timeout: 30_000 },
-    )
-    .toBeTruthy();
-  const message = (await (
-    await page.request.get(`${MAILPIT}/api/v1/message/${found?.ID ?? ""}`)
-  ).json()) as { Text: string };
-  const link = /https?:\/\/\S+#token=[\w-]+/.exec(message.Text)?.[0];
-  expect(link, "no sign-in link in the e-mail").toBeTruthy();
-  const url = new URL(link ?? "");
-  return url.pathname + url.hash;
-}
-
 test("journey 1: sign-up by e-mail, onboarding, 5 km zone, signed-in home", async ({ page }) => {
   const email = `parcours1-${Date.now().toString(36)}@example.org`;
 

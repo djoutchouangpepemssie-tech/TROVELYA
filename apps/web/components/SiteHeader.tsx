@@ -1,11 +1,11 @@
 "use client";
 
-import { Avatar, Logo } from "@trovelya/ui";
+import { Logo } from "@trovelya/ui";
 import { useLocale, useTranslations } from "next-intl";
 import { usePathname } from "next/navigation";
 import { useEffect, useId, useRef, useState } from "react";
 
-import { initials } from "@/lib/initials";
+import { MemberAvatar } from "./Avatar";
 
 import { useSession } from "./SessionProvider";
 
@@ -100,7 +100,7 @@ export function SiteHeader() {
               }}
               className="rounded-full"
             >
-              <Avatar name={me.display_name} initials={initials(me.display_name)} size={36} />
+              <MemberAvatar name={me.display_name} avatar={me.avatar} size={36} />
             </button>
             {open && (
               <div className="absolute right-0 mt-2 w-56 rounded-lg border border-line bg-surface p-1 shadow-lg">

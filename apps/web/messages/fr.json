@@ -307,7 +307,33 @@
         "stale": "Votre profil a été modifié ailleurs entre-temps. Vos changements sont conservés : vérifiez-les puis enregistrez à nouveau.",
         "error": "L'enregistrement n'a pas abouti. Réessayez dans un instant."
       },
-      "loadError": "Votre profil n'a pas pu être chargé."
+      "loadError": "Votre profil n'a pas pu être chargé.",
+      "avatar": {
+        "label": "Photo de profil",
+        "hint": "Visible de tous. JPEG, PNG, WebP ou AVIF ; elle est recadrée au carré.",
+        "unavailable": "L'envoi de photos n'est pas encore ouvert.",
+        "choose": "Choisir une photo",
+        "change": "Changer de photo",
+        "remove": "Retirer la photo",
+        "sending": "Envoi…",
+        "processing": "Envoi et préparation de la photo…",
+        "preview": "Voici votre nouvelle photo. Enregistrez-la pour l'afficher sur votre profil.",
+        "save": "Enregistrer la photo",
+        "saving": "Enregistrement…",
+        "cancel": "Annuler",
+        "saved": "Photo de profil enregistrée.",
+        "removed": "Photo de profil retirée.",
+        "errors": {
+          "unavailable": "L'envoi de photos n'est pas encore ouvert.",
+          "too_large": "Cette photo est trop lourde. Choisissez une image plus légère.",
+          "type": "Ce format n'est pas accepté : choisissez une image JPEG, PNG, WebP ou AVIF.",
+          "rate_limited": "Vous avez envoyé beaucoup de photos récemment. Réessayez plus tard.",
+          "rejected": "Cette image n'a pas pu être utilisée. Essayez avec une autre photo.",
+          "timeout": "La préparation de la photo prend plus de temps que prévu. Réessayez dans un instant.",
+          "stale": "Votre profil a été modifié ailleurs entre-temps. Réessayez.",
+          "error": "L'envoi n'a pas abouti. Réessayez dans un instant."
+        }
+      }
     },
     "feed": {
       "title": "Votre fil",

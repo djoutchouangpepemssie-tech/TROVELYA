@@ -7,12 +7,12 @@ import { type SyntheticEvent, useEffect, useRef, useState } from "react";
 import { useSession } from "@/components/SessionProvider";
 import { apiCall } from "@/lib/api";
 
-type Profile = {
+import { AvatarField, type AvatarProfile } from "./AvatarField";
+
+type Profile = AvatarProfile & {
   username: string;
-  display_name: string;
   bio: string | null;
   locale: string;
-  version: number;
 };
 type Field = "username" | "displayName";
 type Problem = { field: Field | null; key: string };
@@ -21,7 +21,7 @@ type Problem = { field: Field | null; key: string };
 const USERNAME = /^[a-z0-9_.]{3,30}$/;
 const BIO_MAX = 500;
 
-/** Pseudo, name, bio and language; saved with `If-Match` on the version that was read. */
+/** Photo, pseudo, name, bio and language; saved with `If-Match` on the version that was read. */
 export function ProfileForm({ onSaved }: { onSaved: (message: string) => void }) {
   const t = useTranslations("Account.profile");
   const tAccount = useTranslations("Account");
@@ -119,71 +119,75 @@ export function ProfileForm({ onSaved }: { onSaved: (message: string) => void })
   }
 
   return (
-    <form onSubmit={(event) => void submit(event)} noValidate className="flex flex-col gap-4">
-      <Input
-        ref={usernameRef}
-        label={t("username")}
-        hint={t("usernameHint")}
-        value={username}
-        autoComplete="username"
-        autoCapitalize="none"
-        spellCheck={false}
-        maxLength={30}
-        disabled={!profile}
-        onChange={(event) => {
-          setUsername(event.target.value.toLowerCase());
-        }}
-        {...error("username")}
-      />
-      <Input
-        ref={displayNameRef}
-        label={t("displayName")}
-        hint={t("displayNameHint")}
-        value={displayName}
-        autoComplete="name"
-        maxLength={60}
-        disabled={!profile}
-        onChange={(event) => {
-          setDisplayName(event.target.value);
-        }}
-        {...error("displayName")}
-      />
-      <div className="trv-field">
-        <label className="trv-field-label" htmlFor="profile-bio">
-          {t("bio")}
-        </label>
-        <textarea
-          id="profile-bio"
-          className="trv-input min-h-28 py-3"
-          value={bio}
-          maxLength={BIO_MAX}
+    <div className="flex flex-col gap-6">
+      {/* Saved on its own: what is typed below stays as it is. */}
+      <AvatarField profile={profile} onStored={setProfile} onSaved={onSaved} />
+      <form onSubmit={(event) => void submit(event)} noValidate className="flex flex-col gap-4">
+        <Input
+          ref={usernameRef}
+          label={t("username")}
+          hint={t("usernameHint")}
+          value={username}
+          autoComplete="username"
+          autoCapitalize="none"
+          spellCheck={false}
+          maxLength={30}
           disabled={!profile}
-          aria-describedby="profile-bio-hint"
           onChange={(event) => {
-            setBio(event.target.value);
+            setUsername(event.target.value.toLowerCase());
           }}
+          {...error("username")}
         />
-        <p className="trv-field-hint" id="profile-bio-hint">
-          {t("bioHint")} {bio.length}/{BIO_MAX}
-        </p>
-      </div>
-      <div className="trv-field">
-        <label className="trv-field-label" htmlFor="profile-language">
-          {t("language")}
-        </label>
-        {/* French only until P18 (the other EU languages). */}
-        <select id="profile-language" className="trv-input" value="fr-FR" disabled>
-          <option value="fr-FR">{t("languageFr")}</option>
-        </select>
-      </div>
-      {problem && problem.field === null && (
-        <p role="alert" className="text-sm text-danger-ink">
-          {t(`errors.${problem.key}`)}
-        </p>
-      )}
-      <Button type="submit" disabled={!profile || saving} className="self-start">
-        {saving ? t("saving") : t("save")}
-      </Button>
-    </form>
+        <Input
+          ref={displayNameRef}
+          label={t("displayName")}
+          hint={t("displayNameHint")}
+          value={displayName}
+          autoComplete="name"
+          maxLength={60}
+          disabled={!profile}
+          onChange={(event) => {
+            setDisplayName(event.target.value);
+          }}
+          {...error("displayName")}
+        />
+        <div className="trv-field">
+          <label className="trv-field-label" htmlFor="profile-bio">
+            {t("bio")}
+          </label>
+          <textarea
+            id="profile-bio"
+            className="trv-input min-h-28 py-3"
+            value={bio}
+            maxLength={BIO_MAX}
+            disabled={!profile}
+            aria-describedby="profile-bio-hint"
+            onChange={(event) => {
+              setBio(event.target.value);
+            }}
+          />
+          <p className="trv-field-hint" id="profile-bio-hint">
+            {t("bioHint")} {bio.length}/{BIO_MAX}
+          </p>
+        </div>
+        <div className="trv-field">
+          <label className="trv-field-label" htmlFor="profile-language">
+            {t("language")}
+          </label>
+          {/* French only until P18 (the other EU languages). */}
+          <select id="profile-language" className="trv-input" value="fr-FR" disabled>
+            <option value="fr-FR">{t("languageFr")}</option>
+          </select>
+        </div>
+        {problem && problem.field === null && (
+          <p role="alert" className="text-sm text-danger-ink">
+            {t(`errors.${problem.key}`)}
+          </p>
+        )}
+        <Button type="submit" disabled={!profile || saving} className="self-start">
+          {saving ? t("saving") : t("save")}
+        </Button>
+      </form>
+    </div>
   );
 }
