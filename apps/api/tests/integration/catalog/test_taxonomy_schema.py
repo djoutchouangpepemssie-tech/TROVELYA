@@ -8,6 +8,7 @@ from sqlalchemy import text
 from sqlalchemy.exc import DBAPIError
 from sqlalchemy.ext.asyncio import AsyncConnection, AsyncEngine
 
+from trovelya.modules.catalog.models import ItemCondition, ListingStatus
 from trovelya.shared.ids import new_id
 
 _INSERT_CATEGORY = text(
@@ -79,7 +80,7 @@ async def test_category_key_unique(conn: AsyncConnection) -> None:
             "id": new_id(),
             "parent_id": None,
             "key": "t_unique",
-            "names": "{}",
+            "names": '{"fr":"x"}',
             "vertical": "goods",
             "model": "contact",
             "brand_policy": "none",
@@ -115,7 +116,7 @@ async def test_category_checks(
         "id": new_id(),
         "parent_id": None,
         "key": f"t_check_{column}",
-        "names": "{}",
+        "names": '{"fr":"x"}',
         "vertical": "goods",
         "model": "protected_purchase",
         "brand_policy": "optional",
@@ -127,7 +128,10 @@ async def test_category_checks(
 async def test_path_must_end_with_key_label(conn: AsyncConnection) -> None:
     message = await _fails(
         conn,
-        text("INSERT INTO categories (id, key, path, names) VALUES (:id, 't_a', 't_b', '{}')"),
+        text(
+            "INSERT INTO categories (id, key, path, names)"
+            " VALUES (:id, 't_a', 't_b', '{\"fr\":\"x\"}')"
+        ),
         {"id": new_id()},
     )
     assert "categories_path_ends_with_key" in message
@@ -153,7 +157,7 @@ async def test_path_unique(conn: AsyncConnection) -> None:
         conn,
         text(
             "INSERT INTO categories (id, parent_id, key, path, names)"
-            " VALUES (:id, :p, 't_elsewhere.leaf', 't_dup.leaf', '{}')"
+            " VALUES (:id, :p, 't_elsewhere.leaf', 't_dup.leaf', '{\"fr\":\"x\"}')"
         ),
         {"id": new_id(), "p": parent},
     )
@@ -169,7 +173,7 @@ async def test_allowed_conditions_use_the_condition_type(conn: AsyncConnection) 
             "id": new_id(),
             "parent_id": None,
             "key": "t_bad_condition",
-            "names": "{}",
+            "names": '{"fr":"x"}',
             "vertical": "goods",
             "model": "protected_purchase",
             "brand_policy": "optional",
@@ -276,22 +280,173 @@ async def test_listing_enums_exist(conn: AsyncConnection) -> None:
         )
     )
     assert dict(rows.all()) == {
-        "item_condition": [
-            "new_with_tags",
-            "new_without_tags",
-            "very_good",
-            "good",
-            "fair",
-            "for_parts",
-        ],
-        "listing_status": [
-            "draft",
-            "pending_review",
-            "active",
-            "reserved",
-            "sold",
-            "withdrawn",
-            "removed",
-            "expired",
-        ],
+        "item_condition": [c.value for c in ItemCondition],
+        "listing_status": [st.value for st in ListingStatus],
     }
+
+
+_INSERT_RAW = text(
+    "INSERT INTO categories (id, parent_id, key, path, names, allowed_conditions,"
+    " protected_payment_cap_minor)"
+    " VALUES (:id, :parent_id, :key, text2ltree(:path), CAST(:names AS jsonb),"
+    " CAST(:conditions AS item_condition[]), :cap)"
+)
+
+
+@pytest.mark.parametrize(
+    ("overrides", "constraint"),
+    [
+        ({"key": "T_Upper", "path": "T_Upper"}, "categories_key_check"),
+        ({"key": "t-dash", "path": "t-dash"}, "categories_key_check"),
+        ({"key": "t_lvl.two", "path": "t_lvl.two"}, "categories_root_has_no_parent"),
+        ({"conditions": []}, "categories_allowed_conditions_check"),
+        ({"conditions": [None]}, "categories_allowed_conditions_check"),
+        ({"cap": 0}, "categories_protected_payment_cap_minor_check"),
+        ({"names": "{}"}, "categories_names_check"),
+        ({"names": '["fr"]'}, "categories_names_check"),
+    ],
+)
+async def test_more_category_checks(
+    conn: AsyncConnection, overrides: dict[str, Any], constraint: str
+) -> None:
+    params = {
+        "id": new_id(),
+        "parent_id": None,
+        "key": "t_raw",
+        "path": "t_raw",
+        "names": '{"fr":"x"}',
+        "conditions": None,
+        "cap": None,
+    } | overrides
+    assert constraint in await _fails(conn, _INSERT_RAW, params)
+
+
+@pytest.mark.parametrize(
+    ("overrides", "constraint"),
+    [
+        ({"key": "Size"}, "attribute_definitions_key_check"),
+        ({"key": "1size"}, "attribute_definitions_key_check"),
+        ({"enum_values": "{}"}, "attribute_definitions_enum_values_check"),
+        ({"enum_values": "[1]"}, "attribute_definitions_enum_values_check"),
+        (
+            {"data_type": "text", "enum_values": '{"a":{"fr":"A"}}'},
+            "attribute_definitions_enum_values_check",
+        ),
+        ({"data_type": "text", "enum_values": "[1]"}, "attribute_definitions_enum_values_check"),
+    ],
+)
+async def test_more_attribute_checks(
+    conn: AsyncConnection, overrides: dict[str, Any], constraint: str
+) -> None:
+    params = {
+        "id": new_id(),
+        "key": "t_attr",
+        "data_type": "enum",
+        "enum_values": '{"a":{"fr":"A"}}',
+        "constraints": "{}",
+    } | overrides
+    assert constraint in await _fails(conn, _INSERT_ATTRIBUTE, params)
+
+
+@pytest.mark.parametrize("name", ["", "x" * 81])
+async def test_brand_name_length(conn: AsyncConnection, name: str) -> None:
+    message = await _fails(
+        conn,
+        text("INSERT INTO brands (id, name, slug) VALUES (:id, :name, 'slug')"),
+        {"id": new_id(), "name": name},
+    )
+    assert "brands_name_check" in message
+
+
+async def _immediate_fails(conn: AsyncConnection) -> str:
+    return await _fails(conn, text("SET CONSTRAINTS ALL IMMEDIATE"), {})
+
+
+async def test_category_must_sit_under_its_parent(conn: AsyncConnection) -> None:
+    first = await _category(conn, "t_pa")
+    await _category(conn, "t_pb")
+    await conn.execute(
+        _INSERT_RAW,
+        {
+            "id": new_id(),
+            "parent_id": first,
+            "key": "t_pb.x",
+            "path": "t_pb.x",
+            "names": '{"fr":"x"}',
+            "conditions": None,
+            "cap": None,
+        },
+    )
+    assert "categories_tree_check" in await _immediate_fails(conn)
+
+
+async def test_category_cannot_be_its_own_parent(conn: AsyncConnection) -> None:
+    parent = await _category(conn, "t_self")
+    child = await _category(conn, "t_self.child", parent_id=parent)
+    await conn.execute(text("UPDATE categories SET parent_id = id WHERE id = :id"), {"id": child})
+    assert "categories_tree_check" in await _immediate_fails(conn)
+
+
+async def test_moving_a_node_moves_its_subtree(conn: AsyncConnection) -> None:
+    old_root = await _category(conn, "t_from")
+    new_root = await _category(conn, "t_to")
+    middle = await _category(conn, "t_from.mid", parent_id=old_root)
+    leaf = await _category(conn, "t_from.mid.leaf", parent_id=middle)
+    await _category(conn, "t_from.mid.leaf.deep", parent_id=leaf)
+    await conn.execute(
+        text("UPDATE categories SET parent_id = :p, path = 't_to.mid' WHERE id = :id"),
+        {"p": new_root, "id": middle},
+    )
+    await conn.execute(text("SET CONSTRAINTS ALL IMMEDIATE"))
+    rows = await conn.execute(
+        text("SELECT key, path::text FROM categories WHERE key LIKE 't_from.mid%' ORDER BY key")
+    )
+    assert [tuple(r) for r in rows] == [
+        ("t_from.mid", "t_to.mid"),
+        ("t_from.mid.leaf", "t_to.mid.leaf"),
+        ("t_from.mid.leaf.deep", "t_to.mid.leaf.deep"),
+    ]
+
+
+async def test_two_nodes_swap_places_in_one_transaction(conn: AsyncConnection) -> None:
+    left = await _category(conn, "t_left")
+    right = await _category(conn, "t_right")
+    a = await _category(conn, "t_left.same", parent_id=left)
+    await _category(conn, "t_left.same.child", parent_id=a)
+    b = await _category(conn, "t_right.same", parent_id=right)
+    await conn.execute(
+        text("UPDATE categories SET parent_id = :p, path = 't_right.same' WHERE id = :id"),
+        {"p": right, "id": a},
+    )
+    await conn.execute(
+        text("UPDATE categories SET parent_id = :p, path = 't_left.same' WHERE id = :id"),
+        {"p": left, "id": b},
+    )
+    await conn.execute(text("SET CONSTRAINTS ALL IMMEDIATE"))
+    child = await conn.execute(
+        text("SELECT path::text FROM categories WHERE key = 't_left.same.child'")
+    )
+    assert child.scalar_one() == "t_right.same.child"
+
+
+async def test_category_rows_cannot_be_deleted_with_their_attributes(
+    conn: AsyncConnection,
+) -> None:
+    category_id = await _category(conn, "t_del")
+    attribute_id = new_id()
+    await conn.execute(
+        _INSERT_ATTRIBUTE,
+        {
+            "id": attribute_id,
+            "key": "t_del_attr",
+            "data_type": "bool",
+            "enum_values": None,
+            "constraints": "{}",
+        },
+    )
+    await conn.execute(
+        text("INSERT INTO category_attributes (category_id, attribute_id) VALUES (:c, :a)"),
+        {"c": category_id, "a": attribute_id},
+    )
+    message = await _fails(conn, text("DELETE FROM categories WHERE id = :id"), {"id": category_id})
+    assert "category_attributes_category_id_fkey" in message

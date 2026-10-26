@@ -66,3 +66,17 @@ forbidden_modules =
     trovelya.modules.identity.repository
     trovelya.modules.identity.models
     trovelya.modules.identity.migrations
+
+[importlinter:contract:catalog-universes]
+name = catalog.universes imports nothing from the application (any module may read it)
+type = forbidden
+source_modules =
+    trovelya.modules.catalog.universes
+forbidden_modules =
+    trovelya.core
+    trovelya.shared
+    trovelya.modules.catalog.service
+    trovelya.modules.catalog.models
+    trovelya.modules.identity
+    trovelya.modules.ledger
+    trovelya.modules.orders

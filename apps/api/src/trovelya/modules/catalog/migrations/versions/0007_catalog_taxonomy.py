@@ -8,7 +8,10 @@ Additions to the spec, recorded in docs/plans/P2-catalogue-annonces.md (P2-T01a)
 - The `key` identifies a category for good (listings, seed); the `path` (ltree) says where it
   sits. A new category's key is its path; a moved category keeps its key and gets a new path
   under its new parent, so only the last label is common to both. A key is never reused; a
-  category leaves the tree by `is_active = false`.
+  category leaves the tree by `is_active = false` and keeps its path (paths are unique, inactive
+  categories included: a path is never ambiguous).
+- The database keeps the tree consistent: a category's path is its parent's path plus its own
+  label (checked at commit), and changing a path moves the whole subtree with it.
 - `enum_values` maps each value key to its labels ({"noir": {"fr": "Noir"}}), like `names`.
 - The listing types (`listing_status`, `item_condition`) are created here: categories use
   `item_condition` already; the listing tables follow in P2-T03a.
@@ -36,7 +39,7 @@ CREATE TABLE categories (
   parent_id              UUID REFERENCES categories(id),
   key                    TEXT NOT NULL UNIQUE CHECK (key ~ '^[a-z0-9_]+(\.[a-z0-9_]+)*$'),
   path                   LTREE NOT NULL,
-  names                  JSONB NOT NULL CHECK (jsonb_typeof(names) = 'object'),
+  names                  JSONB NOT NULL CHECK (jsonb_typeof(names) = 'object' AND names ? 'fr'),
   icon                   TEXT,
   position               SMALLINT NOT NULL DEFAULT 0,
   is_active              BOOLEAN NOT NULL DEFAULT true,
@@ -52,7 +55,9 @@ CREATE TABLE categories (
   listing_fee_minor      BIGINT CHECK (listing_fee_minor >= 0),
   max_photos             SMALLINT NOT NULL DEFAULT 12 CHECK (max_photos BETWEEN 1 AND 50),
   vat_category           TEXT NOT NULL DEFAULT 'standard',
-  allowed_conditions     item_condition[] CHECK (cardinality(allowed_conditions) > 0),
+  allowed_conditions     item_condition[] CHECK (
+    cardinality(allowed_conditions) > 0 AND array_position(allowed_conditions, NULL) IS NULL
+  ),
   brand_policy           TEXT NOT NULL DEFAULT 'optional'
     CHECK (brand_policy IN ('required','optional','none')),
   created_at             TIMESTAMPTZ NOT NULL DEFAULT now(),
@@ -69,10 +74,48 @@ CREATE INDEX categories_parent_idx ON categories (parent_id);
 CREATE TRIGGER categories_updated_at BEFORE UPDATE ON categories
   FOR EACH ROW EXECUTE FUNCTION set_updated_at();
 
+-- A new path moves the subtree: each child takes its parent's path plus its own label (the
+-- update of a child fires this trigger again, down to the leaves). Children are found by
+-- parent_id, never by path, so categories crossing each other's paths are never mixed up.
+CREATE FUNCTION categories_move_subtree() RETURNS trigger LANGUAGE plpgsql AS $$
+BEGIN
+  UPDATE categories SET path = NEW.path || subpath(path, -1)
+   WHERE parent_id = NEW.id AND path <> NEW.path || subpath(path, -1);
+  RETURN NULL;
+END;
+$$;
+CREATE TRIGGER categories_move_subtree AFTER UPDATE OF path ON categories
+  FOR EACH ROW WHEN (OLD.path IS DISTINCT FROM NEW.path)
+  EXECUTE FUNCTION categories_move_subtree();
+
+-- At commit, every inserted or updated category sits exactly under its parent.
+CREATE FUNCTION categories_check_tree() RETURNS trigger LANGUAGE plpgsql AS $$
+DECLARE
+  current categories%ROWTYPE;
+  parent_path ltree;
+BEGIN
+  SELECT * INTO current FROM categories WHERE id = NEW.id;
+  IF NOT FOUND THEN
+    RETURN NULL;
+  END IF;
+  IF current.parent_id IS NOT NULL THEN
+    SELECT path INTO parent_path FROM categories WHERE id = current.parent_id;
+    IF current.parent_id = current.id OR current.path <> parent_path || subpath(current.path, -1)
+    THEN
+      RAISE EXCEPTION 'categories_tree_check: % is not under its parent', current.key
+        USING ERRCODE = 'check_violation';
+    END IF;
+  END IF;
+  RETURN NULL;
+END;
+$$;
+CREATE CONSTRAINT TRIGGER categories_check_tree AFTER INSERT OR UPDATE ON categories
+  DEFERRABLE INITIALLY DEFERRED FOR EACH ROW EXECUTE FUNCTION categories_check_tree();
+
 CREATE TABLE attribute_definitions (
   id          UUID PRIMARY KEY,
   key         TEXT NOT NULL UNIQUE CHECK (key ~ '^[a-z][a-z0-9_]*$'),
-  names       JSONB NOT NULL CHECK (jsonb_typeof(names) = 'object'),
+  names       JSONB NOT NULL CHECK (jsonb_typeof(names) = 'object' AND names ? 'fr'),
   data_type   TEXT NOT NULL CHECK (data_type IN ('text','int','decimal','enum','bool','year')),
   enum_values JSONB,
   unit        TEXT,
@@ -80,17 +123,18 @@ CREATE TABLE attribute_definitions (
   created_at  TIMESTAMPTZ NOT NULL DEFAULT now(),
   updated_at  TIMESTAMPTZ NOT NULL DEFAULT now(),
   CONSTRAINT attribute_definitions_enum_values_check CHECK (
-    (data_type = 'enum') = (
-      enum_values IS NOT NULL AND jsonb_typeof(enum_values) = 'object'
-      AND enum_values <> '{}'::jsonb
-    )
+    CASE WHEN data_type = 'enum'
+      THEN enum_values IS NOT NULL AND jsonb_typeof(enum_values) = 'object'
+        AND enum_values <> '{}'::jsonb
+      ELSE enum_values IS NULL
+    END
   )
 );
 CREATE TRIGGER attribute_definitions_updated_at BEFORE UPDATE ON attribute_definitions
   FOR EACH ROW EXECUTE FUNCTION set_updated_at();
 
 CREATE TABLE category_attributes (
-  category_id   UUID NOT NULL REFERENCES categories(id) ON DELETE CASCADE,
+  category_id   UUID NOT NULL REFERENCES categories(id),
   attribute_id  UUID NOT NULL REFERENCES attribute_definitions(id),
   is_required   BOOLEAN NOT NULL DEFAULT false,
   is_filterable BOOLEAN NOT NULL DEFAULT true,
@@ -107,6 +151,7 @@ CREATE TABLE brands (
   is_verified BOOLEAN NOT NULL DEFAULT false,
   created_at  TIMESTAMPTZ NOT NULL DEFAULT now()
 );
+-- Autocompletion queries `name::text` (pg_trgm has no operator class for citext).
 CREATE INDEX brands_name_trgm_idx ON brands USING gin ((name::text) gin_trgm_ops);
 """
 
@@ -115,6 +160,8 @@ DROP TABLE brands;
 DROP TABLE category_attributes;
 DROP TABLE attribute_definitions;
 DROP TABLE categories;
+DROP FUNCTION categories_check_tree();
+DROP FUNCTION categories_move_subtree();
 DROP TYPE item_condition;
 DROP TYPE listing_status;
 """
