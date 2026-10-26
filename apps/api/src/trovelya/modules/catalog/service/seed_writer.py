@@ -5,7 +5,6 @@ moving one keeps its id and its listings. A key missing from the file is deactiv
 deleted. The caller's transaction holds everything; the caller commits.
 """
 
-from collections.abc import Sequence
 from uuid import UUID
 
 from sqlalchemy.ext.asyncio import AsyncSession
@@ -16,6 +15,7 @@ from trovelya.modules.catalog.service.seed import CatalogSeed, SeedError
 
 async def apply_seed(db: AsyncSession, seed: CatalogSeed) -> None:
     """Write the seed in the caller's transaction (the caller commits)."""
+    await repository.lock_seed(db)
     existing_types = await repository.attribute_types(db)
     for attribute in seed.attributes:
         old_type = existing_types.get(attribute.key)
@@ -63,7 +63,7 @@ async def apply_seed(db: AsyncSession, seed: CatalogSeed) -> None:
         )
     # Categories gone from the file leave the tree inactive where they are.
     await repository.deactivate_categories_except(db, list(category_ids))
-    await repository.replace_category_attributes(
+    await repository.sync_category_attributes(
         db,
         list(category_ids.values()),
         [
@@ -78,7 +78,3 @@ async def apply_seed(db: AsyncSession, seed: CatalogSeed) -> None:
             for position, attribute in enumerate(category.attributes)
         ],
     )
-
-
-async def apply_brands(db: AsyncSession, brands: Sequence[tuple[str, str]]) -> None:
-    await repository.insert_brands(db, brands)
