@@ -17,6 +17,7 @@ from trovelya.modules.media.service.processing import (
     process_media,
     recover_stuck_media,
 )
+from trovelya.modules.media.service.purge import purge_media
 from trovelya.modules.media.service.uploads import PROCESS_JOB
 
 __all__ = ["MAX_TRIES", "PROCESS_JOB", "PROCESS_TIMEOUT_S", "process_media_job"]
@@ -49,6 +50,10 @@ async def process_media_job(ctx: dict[str, Any], media_id: str) -> str:
         logger.warning("media.processing_retry", media_id=media_id, attempt=attempt)
         # 30 s, then 2 min: a short storage outage does not cost the member their photos.
         raise Retry(defer=30 * 4 ** (attempt - 1)) from exc
+
+
+async def purge_media_job(ctx: dict[str, Any]) -> int:
+    return await purge_media(ctx["sessionmaker"], ctx["storage"], clock=ctx["clock"])
 
 
 async def recover_stuck_media_job(ctx: dict[str, Any]) -> int:

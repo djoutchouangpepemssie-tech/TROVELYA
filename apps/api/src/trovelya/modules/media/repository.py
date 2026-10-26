@@ -225,3 +225,39 @@ async def ready_variants(db: AsyncSession, media_id: UUID) -> list[dict[str, Any
         ),
         {"id": media_id},
     )
+
+
+async def erase_media(db: AsyncSession, user_id: UUID) -> None:
+    """GDPR eraser (within the account's erasure): every photo hidden at once, what it says of
+    the person cleared; files and rows go with the next purge."""
+    await db.execute(
+        text(
+            "UPDATE media SET deleted_at = coalesce(deleted_at, now()), captured_at = NULL,"
+            " moderation = '{}' WHERE owner_id = :u"
+        ),
+        {"u": user_id},
+    )
+
+
+async def media_to_purge(
+    db: AsyncSession, *, deleted_before: datetime, abandoned_before: datetime, limit: int
+) -> list[Row[Any]]:
+    """Deleted media past their retention (at once for an erased account), uploads never
+    completed, old refusals: (id, storage_key, variants)."""
+    rows = await db.execute(
+        text(
+            "SELECT m.id, m.storage_key, m.variants FROM media m JOIN users u ON u.id = m.owner_id"
+            " WHERE (m.deleted_at IS NOT NULL"
+            "        AND (m.deleted_at < :deleted_before OR u.status = 'deleted'))"
+            " OR (m.status = 'uploading' AND m.created_at < :abandoned_before)"
+            " OR (m.status = 'rejected' AND m.created_at < :deleted_before)"
+            " ORDER BY m.id LIMIT :limit"
+        ),
+        {"deleted_before": deleted_before, "abandoned_before": abandoned_before, "limit": limit},
+    )
+    return list(rows)
+
+
+async def delete_media_row(db: AsyncSession, media_id: UUID) -> None:
+    """Once its files are gone; an avatar pointing at it is cleared (ON DELETE SET NULL)."""
+    await db.execute(text("DELETE FROM media WHERE id = :id"), {"id": media_id})
