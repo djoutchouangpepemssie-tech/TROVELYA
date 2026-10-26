@@ -18,7 +18,7 @@ La production ne bouge que par le workflow **Deploy production** (décision E5).
    Variante sans tag : GitHub → Actions → **Deploy production** → *Run workflow* (laisser `sha`
    vide pour la tête de `main`).
 3. Le workflow refuse si la CI de ce commit n'est pas verte ou si `release` n'est pas un ancêtre (pas d'avance rapide possible).
-4. Railway (production) reconstruit `pg`, `TROVELYA` et `worker` ; `alembic upgrade head` tourne avant le basculement, le healthcheck `/ready` conditionne la mise en service.
+4. Railway (production) reconstruit `pg`, `TROVELYA` et `worker` ; `alembic upgrade head` puis `python -m trovelya.scripts.seed_catalog` tournent avant le basculement, le healthcheck `/ready` conditionne la mise en service.
 5. Contrôler le déploiement dans Railway, puis Sentry pendant 15 minutes.
 
 ## Revenir en arrière

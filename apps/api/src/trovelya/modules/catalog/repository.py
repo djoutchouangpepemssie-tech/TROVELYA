@@ -142,3 +142,15 @@ async def sync_category_attributes(
                 "positions": [link["position"] for link in links],
             },
         )
+
+
+async def insert_brands(db: AsyncSession, brands: Sequence[tuple[str, str]]) -> None:
+    """(name, slug) pairs; a brand already there (by name or slug) is left as it is."""
+    if brands:
+        await db.execute(
+            text(
+                "INSERT INTO brands (id, name, slug) VALUES (:id, :name, :slug)"
+                " ON CONFLICT DO NOTHING"
+            ),
+            [{"id": new_id(), "name": name, "slug": slug} for name, slug in brands],
+        )

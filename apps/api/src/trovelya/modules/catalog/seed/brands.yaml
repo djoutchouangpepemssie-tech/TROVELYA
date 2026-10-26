@@ -1,0 +1,386 @@
+# Marques courantes proposées à l'autocomplétion (P2-T01b, décision Q3).
+# Une marque absente se crée à la saisie, non vérifiée ; « vérifiée » est réservé aux
+# boutiques officielles (P10). Rejouable : une marque déjà présente n'est pas modifiée.
+version: 1
+brands:
+  # Mode et chaussures
+  - Zara
+  - H&M
+  - Mango
+  - Uniqlo
+  - Levi's
+  - Lee
+  - Wrangler
+  - Diesel
+  - Tommy Hilfiger
+  - Calvin Klein
+  - Ralph Lauren
+  - Lacoste
+  - Petit Bateau
+  - Sézane
+  - Maje
+  - Sandro
+  - The Kooples
+  - Zadig & Voltaire
+  - Ba&sh
+  - A.P.C.
+  - Comptoir des Cotonniers
+  - Kiabi
+  - Promod
+  - Camaïeu
+  - Jules
+  - Celio
+  - Bonobo
+  - Pimkie
+  - Etam
+  - Princesse tam.tam
+  - Aubade
+  - Armor-Lux
+  - Saint James
+  - Le Slip Français
+  - Agnès b.
+  - Kenzo
+  - Isabel Marant
+  - Jacquemus
+  - Ami Paris
+  - Patagonia
+  - The North Face
+  - Columbia
+  - Quechua
+  - Kaporal
+  - Pepe Jeans
+  - G-Star Raw
+  - Superdry
+  - Carhartt
+  - Dickies
+  - Stone Island
+  - Napapijri
+  - Moncler
+  - Canada Goose
+  - Barbour
+  - Burberry
+  - Massimo Dutti
+  - Bershka
+  - Pull&Bear
+  - Stradivarius
+  - COS
+  - "& Other Stories"
+  - Arket
+  - Monki
+  - Weekday
+  - Desigual
+  - Benetton
+  - Guess
+  - Michael Kors
+  - Furla
+  - Longchamp
+  - Lancel
+  - Le Tanneur
+  - Fossil
+  - Eastpak
+  - Herschel
+  - Samsonite
+  - Delsey
+  - Rimowa
+  - Nike
+  - Adidas
+  - Puma
+  - Reebok
+  - New Balance
+  - Asics
+  - Converse
+  - Vans
+  - Veja
+  - Salomon
+  - Dr. Martens
+  - Timberland
+  - UGG
+  - Birkenstock
+  - Clarks
+  - Geox
+  - Mephisto
+  - Aigle
+  - Le Coq Sportif
+  - Kickers
+  - Minelli
+  - Repetto
+  - Bensimon
+  - K-Way
+  # Luxe
+  - Chanel
+  - Hermès
+  - Louis Vuitton
+  - Dior
+  - Gucci
+  - Prada
+  - Saint Laurent
+  - Céline
+  - Balenciaga
+  - Givenchy
+  - Fendi
+  - Bottega Veneta
+  - Valentino
+  - Loewe
+  - Chloé
+  - Miu Miu
+  - Goyard
+  - Christian Louboutin
+  - Versace
+  - Dolce & Gabbana
+  - Alexander McQueen
+  - Off-White
+  # Montres et bijoux
+  - Rolex
+  - Omega
+  - Cartier
+  - Tag Heuer
+  - Breitling
+  - Patek Philippe
+  - Audemars Piguet
+  - IWC
+  - Jaeger-LeCoultre
+  - Longines
+  - Tissot
+  - Seiko
+  - Casio
+  - Swatch
+  - Hamilton
+  - Tudor
+  - Lip
+  - Herbelin
+  - Pandora
+  - Swarovski
+  - Van Cleef & Arpels
+  - Boucheron
+  - Chaumet
+  - Tiffany & Co.
+  - Bulgari
+  - Fred
+  - Messika
+  - Dinh Van
+  - Agatha
+  - Histoire d'Or
+  # Maison et électroménager
+  - IKEA
+  - Habitat
+  - Maisons du Monde
+  - La Redoute Intérieurs
+  - Roche Bobois
+  - Ligne Roset
+  - Cinna
+  - Vitra
+  - Knoll
+  - Fermob
+  - Tolix
+  - Le Creuset
+  - Staub
+  - De Buyer
+  - Tefal
+  - Seb
+  - Moulinex
+  - Rowenta
+  - Krups
+  - Magimix
+  - KitchenAid
+  - Kenwood
+  - Thermomix
+  - Nespresso
+  - De'Longhi
+  - Smeg
+  - Dyson
+  - Bosch
+  - Siemens
+  - Miele
+  - Whirlpool
+  - Electrolux
+  - Beko
+  - Brandt
+  - Indesit
+  - Samsung
+  - LG
+  - Philips
+  - Braun
+  - Babyliss
+  - Ghd
+  - Black+Decker
+  - Makita
+  - DeWalt
+  - Ryobi
+  - Stanley
+  - Facom
+  - Husqvarna
+  - Stihl
+  - Gardena
+  - Weber
+  - Kärcher
+  # High-tech
+  - Apple
+  - Google
+  - Xiaomi
+  - Huawei
+  - OnePlus
+  - Oppo
+  - Sony
+  - Motorola
+  - Nokia
+  - Fairphone
+  - Honor
+  - Lenovo
+  - HP
+  - Dell
+  - Asus
+  - Acer
+  - MSI
+  - Microsoft
+  - Razer
+  - Logitech
+  - Corsair
+  - Canon
+  - Nikon
+  - Fujifilm
+  - Panasonic
+  - Olympus
+  - Leica
+  - Sigma
+  - Tamron
+  - GoPro
+  - DJI
+  - Bose
+  - Sennheiser
+  - JBL
+  - Marshall
+  - Bang & Olufsen
+  - Devialet
+  - Focal
+  - Sonos
+  - Technics
+  - Audio-Technica
+  - Nintendo
+  - PlayStation
+  - Xbox
+  - Garmin
+  - Fitbit
+  - Kindle
+  - Kobo
+  - Epson
+  - Brother
+  # Enfants, jouets et loisirs
+  - Lego
+  - Playmobil
+  - Hasbro
+  - Mattel
+  - Barbie
+  - Hot Wheels
+  - Vtech
+  - Fisher-Price
+  - Djeco
+  - Janod
+  - Sophie la girafe
+  - Bugaboo
+  - Cybex
+  - Maxi-Cosi
+  - Chicco
+  - Babyzen
+  - Stokke
+  - Joie
+  - Britax Römer
+  - Béaba
+  - Jacadi
+  - Tartine et Chocolat
+  - Cyrillus
+  - Okaïdi
+  - DPAM
+  - Catimini
+  - Sergent Major
+  - Bonpoint
+  - Asmodee
+  - Ravensburger
+  - Games Workshop
+  - Fender
+  - Gibson
+  - Yamaha
+  - Roland
+  - Korg
+  - Ibanez
+  - Epiphone
+  - Pearl
+  # Sport et plein air
+  - Decathlon
+  - Rossignol
+  - Head
+  - Atomic
+  - Burton
+  - Millet
+  - Lafuma
+  - Petzl
+  - Babolat
+  - Wilson
+  - Lapierre
+  - Look
+  - Btwin
+  - Rockrider
+  - Specialized
+  - Trek
+  - Giant
+  - Cannondale
+  - Moustache
+  - Shimano
+  - Quiksilver
+  - Roxy
+  - Rip Curl
+  - Billabong
+  - Oxbow
+  - Tribord
+  # Beauté
+  - L'Oréal
+  - Lancôme
+  - Estée Lauder
+  - Clarins
+  - Sisley
+  - Guerlain
+  - Yves Rocher
+  - Nuxe
+  - Caudalie
+  - La Roche-Posay
+  - Avène
+  - Bioderma
+  - Vichy
+  - Clinique
+  - MAC
+  - Sephora Collection
+  - Benefit
+  - Nars
+  - Fenty Beauty
+  - Rituals
+  - Diptyque
+  - L'Occitane
+  - Kiehl's
+  # Véhicules et pièces
+  - Renault
+  - Peugeot
+  - Citroën
+  - Dacia
+  - DS
+  - Toyota
+  - Volkswagen
+  - Mercedes-Benz
+  - BMW
+  - Audi
+  - Ford
+  - Fiat
+  - Opel
+  - Kia
+  - Hyundai
+  - Nissan
+  - Tesla
+  - Volvo
+  - Honda
+  - Suzuki
+  - Kawasaki
+  - Ducati
+  - Triumph
+  - Harley-Davidson
+  - Piaggio
+  - Vespa
+  - Michelin
+  - Norauto
