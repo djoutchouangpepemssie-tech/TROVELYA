@@ -478,6 +478,126 @@
         "title": "ApprovalOutcomeOut",
         "type": "object"
       },
+      "AttributeOut": {
+        "properties": {
+          "key": {
+            "title": "Key",
+            "type": "string"
+          },
+          "max": {
+            "anyOf": [
+              {
+                "type": "number"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Max"
+          },
+          "max_length": {
+            "anyOf": [
+              {
+                "type": "integer"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Max Length"
+          },
+          "min": {
+            "anyOf": [
+              {
+                "type": "number"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Min"
+          },
+          "name": {
+            "title": "Name",
+            "type": "string"
+          },
+          "step": {
+            "anyOf": [
+              {
+                "type": "number"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Step"
+          },
+          "type": {
+            "enum": [
+              "text",
+              "int",
+              "decimal",
+              "enum",
+              "bool",
+              "year"
+            ],
+            "title": "Type",
+            "type": "string"
+          },
+          "unit": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Unit"
+          },
+          "values": {
+            "anyOf": [
+              {
+                "items": {
+                  "$ref": "#/components/schemas/AttributeValueOut"
+                },
+                "type": "array"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Values"
+          }
+        },
+        "required": [
+          "key",
+          "name",
+          "type",
+          "unit",
+          "values"
+        ],
+        "title": "AttributeOut",
+        "type": "object"
+      },
+      "AttributeValueOut": {
+        "properties": {
+          "key": {
+            "title": "Key",
+            "type": "string"
+          },
+          "name": {
+            "title": "Name",
+            "type": "string"
+          }
+        },
+        "required": [
+          "key",
+          "name"
+        ],
+        "title": "AttributeValueOut",
+        "type": "object"
+      },
       "AuthMethods": {
         "description": "What the sign-in screen may offer (flags on and, for Google/Apple, credentials set).",
         "properties": {
@@ -557,6 +677,210 @@
           "blocked_at"
         ],
         "title": "BlockedMember",
+        "type": "object"
+      },
+      "BrandList": {
+        "properties": {
+          "brands": {
+            "items": {
+              "$ref": "#/components/schemas/BrandOut"
+            },
+            "maxItems": 10,
+            "title": "Brands",
+            "type": "array"
+          }
+        },
+        "required": [
+          "brands"
+        ],
+        "title": "BrandList",
+        "type": "object"
+      },
+      "BrandOut": {
+        "properties": {
+          "name": {
+            "title": "Name",
+            "type": "string"
+          },
+          "slug": {
+            "title": "Slug",
+            "type": "string"
+          }
+        },
+        "required": [
+          "name",
+          "slug"
+        ],
+        "title": "BrandOut",
+        "type": "object"
+      },
+      "CategoryAttributeOut": {
+        "properties": {
+          "filterable": {
+            "title": "Filterable",
+            "type": "boolean"
+          },
+          "key": {
+            "title": "Key",
+            "type": "string"
+          },
+          "required": {
+            "title": "Required",
+            "type": "boolean"
+          }
+        },
+        "required": [
+          "key",
+          "required",
+          "filterable"
+        ],
+        "title": "CategoryAttributeOut",
+        "type": "object"
+      },
+      "CategoryOut": {
+        "properties": {
+          "allowed_conditions": {
+            "anyOf": [
+              {
+                "items": {
+                  "$ref": "#/components/schemas/ItemCondition"
+                },
+                "type": "array"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Allowed Conditions"
+          },
+          "attributes": {
+            "items": {
+              "$ref": "#/components/schemas/CategoryAttributeOut"
+            },
+            "title": "Attributes",
+            "type": "array"
+          },
+          "brand_policy": {
+            "enum": [
+              "required",
+              "optional",
+              "none"
+            ],
+            "title": "Brand Policy",
+            "type": "string"
+          },
+          "icon": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Icon"
+          },
+          "is_leaf": {
+            "title": "Is Leaf",
+            "type": "boolean"
+          },
+          "is_restricted": {
+            "title": "Is Restricted",
+            "type": "boolean"
+          },
+          "key": {
+            "title": "Key",
+            "type": "string"
+          },
+          "max_photos": {
+            "title": "Max Photos",
+            "type": "integer"
+          },
+          "name": {
+            "title": "Name",
+            "type": "string"
+          },
+          "parent_key": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Parent Key"
+          },
+          "position": {
+            "title": "Position",
+            "type": "integer"
+          },
+          "shipping_allowed": {
+            "title": "Shipping Allowed",
+            "type": "boolean"
+          },
+          "transaction_model": {
+            "enum": [
+              "protected_purchase",
+              "contact",
+              "mixed"
+            ],
+            "title": "Transaction Model",
+            "type": "string"
+          },
+          "vertical": {
+            "enum": [
+              "goods",
+              "real_estate",
+              "vehicles",
+              "services"
+            ],
+            "title": "Vertical",
+            "type": "string"
+          }
+        },
+        "required": [
+          "key",
+          "parent_key",
+          "name",
+          "icon",
+          "position",
+          "is_leaf",
+          "vertical",
+          "transaction_model",
+          "shipping_allowed",
+          "max_photos",
+          "is_restricted",
+          "brand_policy",
+          "allowed_conditions",
+          "attributes"
+        ],
+        "title": "CategoryOut",
+        "type": "object"
+      },
+      "CategoryTree": {
+        "description": "Active categories, parents before their children, and the attributes they use.",
+        "properties": {
+          "attributes": {
+            "items": {
+              "$ref": "#/components/schemas/AttributeOut"
+            },
+            "title": "Attributes",
+            "type": "array"
+          },
+          "categories": {
+            "items": {
+              "$ref": "#/components/schemas/CategoryOut"
+            },
+            "title": "Categories",
+            "type": "array"
+          }
+        },
+        "required": [
+          "categories",
+          "attributes"
+        ],
+        "title": "CategoryTree",
         "type": "object"
       },
       "CompleteProfile": {
@@ -873,6 +1197,18 @@
         },
         "title": "HTTPValidationError",
         "type": "object"
+      },
+      "ItemCondition": {
+        "enum": [
+          "new_with_tags",
+          "new_without_tags",
+          "very_good",
+          "good",
+          "fair",
+          "for_parts"
+        ],
+        "title": "ItemCondition",
+        "type": "string"
       },
       "MagicLinkRequest": {
         "properties": {
@@ -2658,6 +2994,75 @@
         "summary": "Verify",
         "tags": [
           "auth"
+        ]
+      }
+    },
+    "/v1/brands": {
+      "get": {
+        "description": "Up to 10 brands: names starting with `q` first, then the closest spellings.",
+        "operationId": "catalog_brands",
+        "parameters": [
+          {
+            "in": "query",
+            "name": "q",
+            "required": true,
+            "schema": {
+              "maxLength": 80,
+              "minLength": 2,
+              "title": "Q",
+              "type": "string"
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/BrandList"
+                }
+              }
+            },
+            "description": "Successful Response"
+          },
+          "422": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/HTTPValidationError"
+                }
+              }
+            },
+            "description": "Validation Error"
+          }
+        },
+        "summary": "Get Brands",
+        "tags": [
+          "catalog"
+        ]
+      }
+    },
+    "/v1/categories": {
+      "get": {
+        "operationId": "catalog_categories",
+        "responses": {
+          "200": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/CategoryTree"
+                }
+              }
+            },
+            "description": "Successful Response"
+          },
+          "304": {
+            "description": "Unchanged since the ETag sent in If-None-Match"
+          }
+        },
+        "summary": "Get Categories",
+        "tags": [
+          "catalog"
         ]
       }
     },

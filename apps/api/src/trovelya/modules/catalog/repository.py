@@ -5,7 +5,7 @@ from collections.abc import Mapping, Sequence
 from typing import Any
 from uuid import UUID
 
-from sqlalchemy import text
+from sqlalchemy import Row, text
 from sqlalchemy.ext.asyncio import AsyncSession
 
 from trovelya.shared.ids import new_id
@@ -38,6 +38,45 @@ _UPSERT_CATEGORY = text(
 _INSERT_CATEGORY_ATTRIBUTE = text(
     "INSERT INTO category_attributes (category_id, attribute_id, is_required, is_filterable,"
     " position) VALUES (:category_id, :attribute_id, :is_required, :is_filterable, :position)"
+)
+
+# Active categories in tree order (parents first, siblings by position); a category is a
+# leaf when none of its children is active.
+_ACTIVE_CATEGORIES = text(
+    "WITH RECURSIVE ordered AS ("
+    " SELECT id, ARRAY[position::int] AS sort FROM categories WHERE parent_id IS NULL"
+    " UNION ALL"
+    " SELECT c.id, o.sort || c.position::int FROM categories c JOIN ordered o ON c.parent_id = o.id"
+    ")"
+    " SELECT c.id, c.key, p.key AS parent_key, c.names, c.icon, c.position, c.vertical,"
+    " c.transaction_model, c.shipping_allowed, c.max_photos, c.is_restricted, c.brand_policy,"
+    " c.allowed_conditions::text[] AS allowed_conditions,"
+    " NOT EXISTS (SELECT 1 FROM categories ch WHERE ch.parent_id = c.id AND ch.is_active)"
+    " AS is_leaf"
+    " FROM categories c JOIN ordered o ON o.id = c.id"
+    " LEFT JOIN categories p ON p.id = c.parent_id"
+    " WHERE c.is_active AND (CAST(:verticals AS boolean) OR c.vertical = 'goods')"
+    " ORDER BY o.sort, c.key"
+)
+
+_CATEGORY_ATTRIBUTES = text(
+    "SELECT ca.category_id, a.key, ca.is_required, ca.is_filterable"
+    " FROM category_attributes ca JOIN attribute_definitions a ON a.id = ca.attribute_id"
+    " WHERE ca.category_id = ANY(:ids) ORDER BY ca.category_id, ca.position"
+)
+
+_ATTRIBUTES = text(
+    "SELECT key, names, data_type, enum_values, unit, constraints FROM attribute_definitions"
+    " WHERE key = ANY(:keys) ORDER BY key"
+)
+
+# Prefix matches first, then the closest names (pg_trgm), on `name::text` so the trigram
+# index serves both; the caller escapes LIKE wildcards in the prefix.
+_SEARCH_BRANDS = text(
+    "SELECT name::text AS name, slug FROM brands"
+    " WHERE name::text ILIKE :prefix ESCAPE '\\' OR name::text % :q"
+    " ORDER BY name::text ILIKE :prefix ESCAPE '\\' DESC, similarity(name::text, :q) DESC,"
+    " name LIMIT :limit"
 )
 
 
@@ -109,3 +148,19 @@ async def insert_brands(db: AsyncSession, brands: Sequence[tuple[str, str]]) -> 
             ),
             [{"id": new_id(), "name": name, "slug": slug} for name, slug in brands],
         )
+
+
+async def active_categories(db: AsyncSession, *, verticals: bool) -> Sequence[Row[Any]]:
+    return (await db.execute(_ACTIVE_CATEGORIES, {"verticals": verticals})).all()
+
+
+async def category_attributes(db: AsyncSession, ids: Sequence[UUID]) -> Sequence[Row[Any]]:
+    return (await db.execute(_CATEGORY_ATTRIBUTES, {"ids": list(ids)})).all()
+
+
+async def attributes(db: AsyncSession, keys: Sequence[str]) -> Sequence[Row[Any]]:
+    return (await db.execute(_ATTRIBUTES, {"keys": list(keys)})).all()
+
+
+async def search_brands(db: AsyncSession, *, prefix: str, q: str, limit: int) -> Sequence[Row[Any]]:
+    return (await db.execute(_SEARCH_BRANDS, {"prefix": prefix, "q": q, "limit": limit})).all()
