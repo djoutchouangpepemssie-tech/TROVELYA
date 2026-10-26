@@ -358,7 +358,7 @@ async def test_erasure_event_and_audit(
         ("user.erasure_requested", "user"),
         ("user.erase", "system"),
     ]
-    assert set(registered_erasers()) >= {"identity"}
+    assert set(registered_erasers()) >= {"identity", "media"}
 
 
 async def test_erased_account_cannot_sign_in_with_its_old_session(
