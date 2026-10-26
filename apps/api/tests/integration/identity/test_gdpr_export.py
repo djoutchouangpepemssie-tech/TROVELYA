@@ -145,7 +145,8 @@ async def test_every_identity_table_exported(
     clock: FixedClock,
     queue: RecordingQueue,
 ) -> None:
-    """Any table pointing at `users` must be in the export (introspection, ADR-0016)."""
+    """Any table pointing at `users` must be in the export, whichever module holds it
+    (introspection, ADR-0016)."""
     async with sessionmaker() as db:
         tables = set(
             (
@@ -159,8 +160,9 @@ async def test_every_identity_table_exported(
         )
     account = await make_account(sessionmaker, completed=True)
     _, export, _ = await _exported(client, sessionmaker, account, clock=clock, queue=queue)
-    assert tables | {"users"} <= set(export["identity"])
-    assert set(registered_exporters()) >= {"identity"}
+    exported = {table for section in export.values() for table in section}
+    assert tables | {"users"} <= exported
+    assert set(registered_exporters()) >= {"identity", "media"}
 
 
 async def test_export_excludes_secrets_and_other_peoples_data(

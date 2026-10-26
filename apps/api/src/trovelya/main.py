@@ -7,6 +7,7 @@ import httpx
 from arq.connections import ArqRedis
 from fastapi import FastAPI
 
+import trovelya.modules.media.service  # noqa: F401  # pyright: ignore[reportUnusedImport]  (GDPR exporter)
 from trovelya.core import db, debug_routes, redis, testing_routes
 from trovelya.core.config import Settings, get_settings
 from trovelya.core.csrf import CsrfMiddleware

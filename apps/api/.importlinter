@@ -26,6 +26,7 @@ source_modules =
     trovelya.modules.catalog
     trovelya.modules.orders
     trovelya.modules.identity
+    trovelya.modules.media
 forbidden_modules =
     trovelya.modules.ledger.repository
     trovelya.modules.ledger.models
@@ -38,6 +39,7 @@ source_modules =
     trovelya.modules.ledger
     trovelya.modules.orders
     trovelya.modules.identity
+    trovelya.modules.media
 forbidden_modules =
     trovelya.modules.catalog.repository
     trovelya.modules.catalog.models
@@ -50,6 +52,7 @@ source_modules =
     trovelya.modules.ledger
     trovelya.modules.catalog
     trovelya.modules.identity
+    trovelya.modules.media
 forbidden_modules =
     trovelya.modules.orders.repository
     trovelya.modules.orders.models
@@ -62,10 +65,25 @@ source_modules =
     trovelya.modules.ledger
     trovelya.modules.catalog
     trovelya.modules.orders
+    trovelya.modules.media
 forbidden_modules =
     trovelya.modules.identity.repository
     trovelya.modules.identity.models
     trovelya.modules.identity.migrations
+
+[importlinter:contract:module-media]
+name = Other modules use media only through media.service
+type = forbidden
+source_modules =
+    trovelya.modules.ledger
+    trovelya.modules.catalog
+    trovelya.modules.orders
+    trovelya.modules.identity
+forbidden_modules =
+    trovelya.modules.media.repository
+    trovelya.modules.media.models
+    trovelya.modules.media.migrations
+    trovelya.modules.media.adapters
 
 [importlinter:contract:catalog-universes]
 name = catalog.universes imports nothing from the application (any module may read it)
@@ -80,3 +98,4 @@ forbidden_modules =
     trovelya.modules.identity
     trovelya.modules.ledger
     trovelya.modules.orders
+    trovelya.modules.media
