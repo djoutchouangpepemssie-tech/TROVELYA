@@ -20,6 +20,7 @@ from trovelya.core.logging import configure_logging
 from trovelya.core.middleware import RequestIdMiddleware
 from trovelya.core.observability import configure_observability, trace_engine
 from trovelya.core.ratelimit import AnonymousRateLimitMiddleware
+from trovelya.modules.catalog.api import router as catalog_router
 from trovelya.modules.identity.adapters.geocoder import (
     FakeGeocoder,
     Geocoder,
@@ -145,6 +146,7 @@ def create_app(
     app.include_router(health_router)
     app.include_router(csrf_router)
     app.include_router(identity_router)
+    app.include_router(catalog_router)
     if settings.env != "production":
         app.include_router(debug_routes.router)
     if settings.env in {"local", "test"}:

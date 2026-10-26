@@ -108,6 +108,8 @@ PUBLIC_ROUTES = {
     "POST /v1/auth/passkeys/login/verify",
     "POST /v1/auth/passkeys/enrol/options",  # the enrolment token is the proof
     "POST /v1/auth/passkeys/enrol/verify",
+    "GET /v1/categories",
+    "GET /v1/brands",
 }
 
 # A valid body for the routes that read one (none is reached by a refused caller anyway).

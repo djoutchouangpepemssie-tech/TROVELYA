@@ -377,6 +377,43 @@ export interface paths {
         patch?: never;
         trace?: never;
     };
+    "/v1/brands": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        /**
+         * Get Brands
+         * @description Up to 10 brands: names starting with `q` first, then the closest spellings.
+         */
+        get: operations["catalog_brands"];
+        put?: never;
+        post?: never;
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/v1/categories": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        /** Get Categories */
+        get: operations["catalog_categories"];
+        put?: never;
+        post?: never;
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
     "/v1/csrf": {
         parameters: {
             query?: never;
@@ -1099,6 +1136,37 @@ export interface components {
              */
             status: "pending" | "done" | "approved" | "rejected";
         };
+        /** AttributeOut */
+        AttributeOut: {
+            /** Key */
+            key: string;
+            /** Max */
+            max?: number | null;
+            /** Max Length */
+            max_length?: number | null;
+            /** Min */
+            min?: number | null;
+            /** Name */
+            name: string;
+            /** Step */
+            step?: number | null;
+            /**
+             * Type
+             * @enum {string}
+             */
+            type: "text" | "int" | "decimal" | "enum" | "bool" | "year";
+            /** Unit */
+            unit: string | null;
+            /** Values */
+            values: components["schemas"]["AttributeValueOut"][] | null;
+        };
+        /** AttributeValueOut */
+        AttributeValueOut: {
+            /** Key */
+            key: string;
+            /** Name */
+            name: string;
+        };
         /**
          * AuthMethods
          * @description What the sign-in screen may offer (flags on and, for Google/Apple, credentials set).
@@ -1139,6 +1207,77 @@ export interface components {
             user_id: string;
             /** Username */
             username: string;
+        };
+        /** BrandList */
+        BrandList: {
+            /** Brands */
+            brands: components["schemas"]["BrandOut"][];
+        };
+        /** BrandOut */
+        BrandOut: {
+            /** Name */
+            name: string;
+            /** Slug */
+            slug: string;
+        };
+        /** CategoryAttributeOut */
+        CategoryAttributeOut: {
+            /** Filterable */
+            filterable: boolean;
+            /** Key */
+            key: string;
+            /** Required */
+            required: boolean;
+        };
+        /** CategoryOut */
+        CategoryOut: {
+            /** Allowed Conditions */
+            allowed_conditions: components["schemas"]["ItemCondition"][] | null;
+            /** Attributes */
+            attributes: components["schemas"]["CategoryAttributeOut"][];
+            /**
+             * Brand Policy
+             * @enum {string}
+             */
+            brand_policy: "required" | "optional" | "none";
+            /** Icon */
+            icon: string | null;
+            /** Is Leaf */
+            is_leaf: boolean;
+            /** Is Restricted */
+            is_restricted: boolean;
+            /** Key */
+            key: string;
+            /** Max Photos */
+            max_photos: number;
+            /** Name */
+            name: string;
+            /** Parent Key */
+            parent_key: string | null;
+            /** Position */
+            position: number;
+            /** Shipping Allowed */
+            shipping_allowed: boolean;
+            /**
+             * Transaction Model
+             * @enum {string}
+             */
+            transaction_model: "protected_purchase" | "contact" | "mixed";
+            /**
+             * Vertical
+             * @enum {string}
+             */
+            vertical: "goods" | "real_estate" | "vehicles" | "services";
+        };
+        /**
+         * CategoryTree
+         * @description Active categories, parents before their children, and the attributes they use.
+         */
+        CategoryTree: {
+            /** Attributes */
+            attributes: components["schemas"]["AttributeOut"][];
+            /** Categories */
+            categories: components["schemas"]["CategoryOut"][];
         };
         /** CompleteProfile */
         CompleteProfile: {
@@ -1267,6 +1406,11 @@ export interface components {
             /** Detail */
             detail?: components["schemas"]["ValidationError"][];
         };
+        /**
+         * ItemCondition
+         * @enum {string}
+         */
+        ItemCondition: "new_with_tags" | "new_without_tags" | "very_good" | "good" | "fair" | "for_parts";
         /** MagicLinkRequest */
         MagicLinkRequest: {
             /** Captcha Token */
@@ -2254,6 +2398,64 @@ export interface operations {
                 content: {
                     "application/json": components["schemas"]["HTTPValidationError"];
                 };
+            };
+        };
+    };
+    catalog_brands: {
+        parameters: {
+            query: {
+                q: string;
+            };
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description Successful Response */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["BrandList"];
+                };
+            };
+            /** @description Validation Error */
+            422: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["HTTPValidationError"];
+                };
+            };
+        };
+    };
+    catalog_categories: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description Successful Response */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["CategoryTree"];
+                };
+            };
+            /** @description Unchanged since the ETag sent in If-None-Match */
+            304: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content?: never;
             };
         };
     };
