@@ -100,16 +100,23 @@ async def start_processing(db: AsyncSession, media_id: UUID, owner_id: UUID) -> 
     )
 
 
-async def owned_media(db: AsyncSession, media_id: UUID, owner_id: UUID) -> Row[Any] | None:
-    return (
-        await db.execute(
-            text(
-                "SELECT id, purpose, mime_type, status, width, height, variants, rejection_reason"
-                " FROM media WHERE id = :id AND owner_id = :owner AND deleted_at IS NULL"
-            ),
-            {"id": media_id, "owner": owner_id},
-        )
-    ).one_or_none()
+_OWNED_MEDIA = text(
+    "SELECT id, purpose, mime_type, status, width, height, variants, rejection_reason"
+    " FROM media WHERE id = :id AND owner_id = :owner AND deleted_at IS NULL"
+)
+_OWNED_MEDIA_FOR_SHARE = text(
+    "SELECT id, purpose, mime_type, status, width, height, variants, rejection_reason"
+    " FROM media WHERE id = :id AND owner_id = :owner AND deleted_at IS NULL FOR SHARE"
+)
+
+
+async def owned_media(
+    db: AsyncSession, media_id: UUID, owner_id: UUID, *, lock: bool = False
+) -> Row[Any] | None:
+    """`lock`: held FOR SHARE until the transaction ends, so the purge cannot delete a photo
+    being chosen as an avatar (see `mark_for_purge`)."""
+    query = _OWNED_MEDIA_FOR_SHARE if lock else _OWNED_MEDIA
+    return (await db.execute(query, {"id": media_id, "owner": owner_id})).one_or_none()
 
 
 async def media_to_process(db: AsyncSession, media_id: UUID) -> Row[Any] | None:
@@ -246,8 +253,12 @@ def _rowcount(result: Any) -> int:
 async def mark_for_purge(
     db: AsyncSession, *, now: datetime, abandoned_before: datetime, refused_before: datetime
 ) -> int:
-    """Purge, step 1: uploads never completed and avatar photos never chosen after 24 hours,
-    refusals past retention are marked deleted, so a worker can no longer make them ready."""
+    """Purge, step 1: uploads never completed, avatar photos never chosen and old refusals are
+    marked deleted, so a worker or a member can no longer make them ready or an avatar.
+
+    Avatar photos not chosen are locked first, skipping the ones a member is choosing right
+    now (`check_avatar` holds them FOR SHARE, which conflicts with FOR NO KEY UPDATE); the
+    second statement, with a new snapshot, sees the avatars chosen up to the lock."""
     params = {"now": now, "abandoned_before": abandoned_before, "refused_before": refused_before}
     marked = 0
     for query in (
@@ -255,26 +266,67 @@ async def mark_for_purge(
         " AND status = 'uploading' AND created_at < :abandoned_before",
         "UPDATE media SET deleted_at = :now WHERE deleted_at IS NULL"
         " AND status = 'rejected' AND created_at < :refused_before",
-        "UPDATE media m SET deleted_at = :now WHERE m.deleted_at IS NULL"
-        " AND m.purpose = 'avatar' AND m.created_at < :abandoned_before"
-        " AND NOT EXISTS (SELECT 1 FROM users u WHERE u.avatar_media_id = m.id)",
     ):
-        marked += _rowcount(await db.execute(text(query), params))
+        result = await db.execute(text(query), params)
+        marked += _rowcount(result)
+    avatars: list[UUID] = list(
+        await db.scalars(
+            text(
+                "SELECT id FROM media WHERE purpose = 'avatar' AND deleted_at IS NULL"
+                " AND created_at < :abandoned_before"
+                " AND NOT EXISTS (SELECT 1 FROM users u WHERE u.avatar_media_id = media.id)"
+                " FOR NO KEY UPDATE SKIP LOCKED"
+            ),
+            {"abandoned_before": abandoned_before},
+        )
+    )
+    if avatars:
+        result = await db.execute(
+            text(
+                "UPDATE media m SET deleted_at = :now WHERE m.id = ANY(:ids)"
+                " AND NOT EXISTS (SELECT 1 FROM users u WHERE u.avatar_media_id = m.id)"
+            ),
+            {"now": now, "ids": avatars},
+        )
+        marked += _rowcount(result)
     return marked
 
 
-async def files_to_delete(db: AsyncSession, *, after: UUID | None, limit: int) -> list[Row[Any]]:
+_FILES_TO_DELETE = text(
+    "SELECT id, storage_key, variants FROM media"
+    " WHERE deleted_at IS NOT NULL AND files_deleted_at IS NULL"
+    " AND files_purge_failed_at IS NULL"
+    " AND (CAST(:after AS uuid) IS NULL OR id > :after) ORDER BY id LIMIT :limit"
+)
+_FILES_TO_RETRY = text(
+    "SELECT id, storage_key, variants FROM media"
+    " WHERE deleted_at IS NOT NULL AND files_deleted_at IS NULL"
+    " AND files_purge_failed_at < :failed_before"
+    " AND (CAST(:after AS uuid) IS NULL OR id > :after) ORDER BY id LIMIT :limit"
+)
+
+
+async def files_to_delete(
+    db: AsyncSession, *, retry_failed_before: datetime | None, after: UUID | None, limit: int
+) -> list[Row[Any]]:
     """Purge, step 2: deleted media whose files are still stored, in id order from `after`:
-    (id, storage_key, variants). Deleted means final: their variants no longer change."""
-    rows = await db.execute(
-        text(
-            "SELECT id, storage_key, variants FROM media"
-            " WHERE deleted_at IS NOT NULL AND files_deleted_at IS NULL"
-            " AND (CAST(:after AS uuid) IS NULL OR id > :after) ORDER BY id LIMIT :limit"
-        ),
-        {"after": after, "limit": limit},
+    (id, storage_key, variants). Deleted means final: their variants no longer change.
+
+    The ones that never failed first; with `retry_failed_before`, the ones that failed
+    before then, so a file that keeps failing never holds the others back."""
+    if retry_failed_before is None:
+        query, params = _FILES_TO_DELETE, {"after": after, "limit": limit}
+    else:
+        query = _FILES_TO_RETRY
+        params = {"after": after, "limit": limit, "failed_before": retry_failed_before}
+    return list(await db.execute(query, params))
+
+
+async def mark_files_purge_failed(db: AsyncSession, media_id: UUID, now: datetime) -> None:
+    await db.execute(
+        text("UPDATE media SET files_purge_failed_at = :now WHERE id = :id"),
+        {"id": media_id, "now": now},
     )
-    return list(rows)
 
 
 async def mark_files_deleted(db: AsyncSession, media_id: UUID, now: datetime) -> None:
@@ -300,3 +352,17 @@ async def delete_purged_rows(db: AsyncSession, *, deleted_before: datetime) -> i
         {"deleted_before": deleted_before},
     )
     return _rowcount(result)
+
+
+async def files_overdue(db: AsyncSession, *, deleted_before: datetime) -> int:
+    """Media deleted before `deleted_before` (withdrawn photo, erased account) whose files are
+    still stored."""
+    return (
+        await db.scalar(
+            text(
+                "SELECT count(*) FROM media WHERE deleted_at < :before AND files_deleted_at IS NULL"
+            ),
+            {"before": deleted_before},
+        )
+        or 0
+    )
