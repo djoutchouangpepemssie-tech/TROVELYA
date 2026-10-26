@@ -142,7 +142,6 @@ async def sync_category_attributes(
                 "positions": [link["position"] for link in links],
             },
         )
-<<<<<<< HEAD
 
 
 async def insert_brands(db: AsyncSession, brands: Sequence[tuple[str, str]]) -> None:
@@ -155,5 +154,3 @@ async def insert_brands(db: AsyncSession, brands: Sequence[tuple[str, str]]) -> 
             ),
             [{"id": new_id(), "name": name, "slug": slug} for name, slug in brands],
         )
-=======
->>>>>>> origin/main
