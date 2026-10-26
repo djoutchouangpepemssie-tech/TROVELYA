@@ -1,6 +1,7 @@
 """Uploading a photo (P2-T02a3a and b, ADR-0019): a presigned URL, then « complete » hands the file
 to the worker; the member reads its status. Nobody else ever sees it."""
 
+import asyncio
 from collections.abc import AsyncIterator
 from datetime import timedelta
 from typing import Any
@@ -14,9 +15,10 @@ from sqlalchemy import text
 from sqlalchemy.ext.asyncio import AsyncSession, async_sessionmaker
 
 from tests.conftest import TEST_PROXY_SECRET, make_settings
-from tests.integration.identity.test_profile import T0, make_account
+from tests.integration.identity.test_profile import POLICY, T0, Account, make_account
 from trovelya.core.flags import FlagService
 from trovelya.main import create_app
+from trovelya.modules.identity.service import create_session
 from trovelya.modules.media.adapters.storage import MemoryStorage
 from trovelya.shared.clock import FixedClock
 
@@ -132,37 +134,75 @@ async def test_only_listing_and_avatar_photos_in_p2(
         assert (await _upload(client, member.headers, purpose=purpose)).status_code == 422
 
 
-async def test_upload_quota_per_hour_and_day(
-    client: AsyncClient, sessionmaker: async_sessionmaker[AsyncSession], clock: FixedClock
+async def _set_quota(
+    sessionmaker: async_sessionmaker[AsyncSession], per_hour: int, per_day: int
 ) -> None:
-    member = await make_account(sessionmaker, completed=True)
     async with sessionmaker() as db:
         await db.execute(
             text("UPDATE platform_settings SET value = CAST(:v AS jsonb) WHERE key = :k"),
-            [{"k": "media.uploads_per_hour", "v": "3"}, {"k": "media.uploads_per_day", "v": "5"}],
+            [
+                {"k": "media.uploads_per_hour", "v": str(per_hour)},
+                {"k": "media.uploads_per_day", "v": str(per_day)},
+            ],
         )
         await db.commit()
-    try:
-        for _ in range(3):
-            assert (await _upload(client, member.headers)).status_code == 201
-        refused = await _upload(client, member.headers)
-        assert (refused.status_code, refused.json()["code"]) == (429, "upload_limit")
-        clock.advance(timedelta(hours=1, seconds=1))
-        for _ in range(2):
-            assert (await _upload(client, member.headers)).status_code == 201
-        assert (await _upload(client, member.headers)).status_code == 429  # 5 today
-        other = await make_account(sessionmaker, completed=True)
-        assert (await _upload(client, other.headers)).status_code == 201  # per account
-    finally:
-        async with sessionmaker() as db:
-            await db.execute(
-                text("UPDATE platform_settings SET value = CAST(:v AS jsonb) WHERE key = :k"),
-                [
-                    {"k": "media.uploads_per_hour", "v": "30"},
-                    {"k": "media.uploads_per_day", "v": "200"},
-                ],
+
+
+@pytest.fixture
+async def small_quota(sessionmaker: async_sessionmaker[AsyncSession]) -> AsyncIterator[None]:
+    await _set_quota(sessionmaker, 3, 5)
+    yield
+    await _set_quota(sessionmaker, 30, 200)
+
+
+async def test_upload_quota_per_hour_and_day(
+    client: AsyncClient,
+    sessionmaker: async_sessionmaker[AsyncSession],
+    clock: FixedClock,
+    small_quota: None,
+) -> None:
+    member = await make_account(sessionmaker, completed=True)
+    for _ in range(3):
+        assert (await _upload(client, member.headers)).status_code == 201
+    async with sessionmaker() as db:  # a deleted upload still counts
+        await db.execute(
+            text("UPDATE media SET deleted_at = now() WHERE owner_id = :o"), {"o": member.id}
+        )
+        await db.commit()
+    refused = await _upload(client, member.headers)
+    assert (refused.status_code, refused.json()["code"]) == (429, "upload_limit")
+    clock.advance(timedelta(hours=1, seconds=1))
+    for _ in range(2):
+        assert (await _upload(client, member.headers)).status_code == 201
+    assert (await _upload(client, member.headers)).status_code == 429  # 5 today
+    other = await make_account(sessionmaker, completed=True)
+    assert (await _upload(client, other.headers)).status_code == 201  # per account
+
+
+async def test_quota_holds_under_simultaneous_requests(
+    client: AsyncClient, sessionmaker: async_sessionmaker[AsyncSession], small_quota: None
+) -> None:
+    """Twelve requests at once from twelve sessions of one member (one session would already
+    queue them behind its own row): exactly the quota passes."""
+    member = await make_account(sessionmaker, completed=True)
+    accounts = [member]
+    async with sessionmaker() as db:
+        for _ in range(11):
+            issued = await create_session(
+                db,
+                user_id=member.id,
+                kind="web",
+                ip="203.0.113.7",
+                user_agent=None,
+                country="FR",
+                strong=True,
+                policy=POLICY,
+                clock=FixedClock(T0),
             )
-            await db.commit()
+            accounts.append(Account(member.id, member.email, issued.token))
+        await db.commit()
+    responses = await asyncio.gather(*(_upload(client, a.headers) for a in accounts))
+    assert sorted(r.status_code for r in responses) == [201] * 3 + [429] * 9
 
 
 async def test_uploads_closed_while_the_flag_is_off(

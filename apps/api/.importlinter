@@ -22,9 +22,6 @@ layers =
 [importlinter:contract:module-ledger]
 name = Other modules use ledger only through ledger.service
 type = forbidden
-# Direct imports only: going through another module's service is allowed even when that
-# service, inside its own module, reaches its repository and models.
-allow_indirect_imports = True
 source_modules =
     trovelya.modules.catalog
     trovelya.modules.orders
@@ -38,9 +35,6 @@ forbidden_modules =
 [importlinter:contract:module-catalog]
 name = Other modules use catalog only through catalog.service
 type = forbidden
-# Direct imports only: going through another module's service is allowed even when that
-# service, inside its own module, reaches its repository and models.
-allow_indirect_imports = True
 source_modules =
     trovelya.modules.ledger
     trovelya.modules.orders
@@ -54,9 +48,6 @@ forbidden_modules =
 [importlinter:contract:module-orders]
 name = Other modules use orders only through orders.service
 type = forbidden
-# Direct imports only: going through another module's service is allowed even when that
-# service, inside its own module, reaches its repository and models.
-allow_indirect_imports = True
 source_modules =
     trovelya.modules.ledger
     trovelya.modules.catalog
@@ -70,8 +61,8 @@ forbidden_modules =
 [importlinter:contract:module-identity]
 name = Other modules use identity only through identity.service
 type = forbidden
-# Direct imports only: going through another module's service is allowed even when that
-# service, inside its own module, reaches its repository and models.
+# Direct imports only: media.api depends on identity.service.auth (the signed-in member),
+# which reaches identity's own repository inside its module.
 allow_indirect_imports = True
 source_modules =
     trovelya.modules.ledger
@@ -86,9 +77,6 @@ forbidden_modules =
 [importlinter:contract:module-media]
 name = Other modules use media only through media.service
 type = forbidden
-# Direct imports only: going through another module's service is allowed even when that
-# service, inside its own module, reaches its repository and models.
-allow_indirect_imports = True
 source_modules =
     trovelya.modules.ledger
     trovelya.modules.catalog
