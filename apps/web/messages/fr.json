@@ -257,6 +257,7 @@
     "home": "Accueil",
     "signIn": "Se connecter",
     "accountMenu": "Menu du compte",
+    "accountMenuOf": "{initials} : menu du compte de {name}",
     "account": "Mon compte",
     "signOut": "Se déconnecter",
     "signOutFailed": "La déconnexion n'a pas abouti. Réessayez dans un instant.",
