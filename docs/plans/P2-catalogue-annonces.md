@@ -472,6 +472,10 @@ tout ── T12 (parcours 2, démo, porte)
 | GET | `/v1/listings/{id}` | 🔓 / propriétaire si non active | 404 |
 | GET | `/v1/me/listings` | 🔑 | — |
 
+- Suites des revues de T03a :
+  - Purge des photos d'annonce jamais rattachées (24 h, comme les avatars non choisis) : `purpose = 'listing'`, sans ligne dans `listing_media` ; même verrou que pour les avatars (`FOR NO KEY UPDATE SKIP LOCKED` dans la purge, `FOR SHARE` sur la photo au rattachement), test `test_attached_photo_never_purged`.
+  - Au rattachement, le service vérifie que la photo appartient au vendeur et a `purpose = 'listing'` (la base ne le garantit pas).
+  - Cohérence statut et dates (`sold_at` d'une annonce vendue, `published_at` d'une annonce active) : portée par la machine à états (T04), pas par des contraintes (E17).
 - [ ] Tests d'abord :
   - `test_attribute_validation` paramétré (obligatoire manquant, valeur hors énumération, entier hors bornes, attribut inconnu, attribut d'une autre catégorie) ;
   - `test_category_must_be_leaf`, `test_vertical_refused_when_flag_off`, `test_cosmetics_require_new_condition` ;

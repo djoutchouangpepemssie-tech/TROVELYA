@@ -12,7 +12,8 @@
 3. Rows whose files are gone: after the retention, at once for an erased account or a media
    that never became a photo.
 
-Photos never attached to a listing are purged once listings exist (P2-T03).
+Photos never attached to a listing are purged by P2-T03b (24 hours, with the same lock as the
+avatars: see the P2 plan).
 """
 
 from datetime import datetime, timedelta

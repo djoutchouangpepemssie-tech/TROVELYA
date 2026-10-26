@@ -1,4 +1,4 @@
-"""Listings table (P2-T03a1, section 7.5 with the P2 plan additions E5, E10, E14).
+"""Listing tables (P2-T03a1 and T03a2, section 7.5 with the P2 plan additions E5, E8, E10, E14).
 
 Every constraint of the migration has a case below.
 """
@@ -49,6 +49,10 @@ async def _fails(conn: AsyncConnection, statement: Any, params: dict[str, Any]) 
         await conn.execute(statement, params)
     await savepoint.rollback()
     return str(error.value)
+
+
+async def _checked_at_commit(conn: AsyncConnection) -> str:
+    return await _fails(conn, text("SET CONSTRAINTS ALL IMMEDIATE"), {})
 
 
 @pytest.fixture
@@ -112,6 +116,19 @@ async def _listing(conn: AsyncConnection, seller: UUID, category: UUID, **overri
     params = _listing_params(seller, category, **overrides)
     await conn.execute(_INSERT_LISTING, params)
     return params["id"]
+
+
+async def _photo(conn: AsyncConnection, owner: UUID) -> UUID:
+    media_id = new_id()
+    await conn.execute(
+        text(
+            "INSERT INTO media (id, owner_id, kind, purpose, storage_key, mime_type, bytes,"
+            " status) VALUES (:id, :owner, 'image', 'listing', :key, 'image/jpeg', 10,"
+            " 'uploading')"
+        ),
+        {"id": media_id, "owner": owner, "key": new_id().hex},
+    )
+    return media_id
 
 
 async def test_listing_defaults_follow_the_spec(
@@ -297,6 +314,164 @@ async def test_version_and_updated_at_follow_each_update(
     assert (version, fresh) == (2, True)
 
 
+async def test_listing_media_ordered_and_owned_by_one_listing(
+    conn: AsyncConnection, seller: UUID, category: UUID
+) -> None:
+    listing_id = await _listing(conn, seller, category)
+    other = await _listing(conn, seller, category, short_id="Zz9yY8xX7w")
+    first, second = await _photo(conn, seller), await _photo(conn, seller)
+    insert = text("INSERT INTO listing_media (listing_id, media_id, position) VALUES (:l, :m, :p)")
+    await conn.execute(insert, {"l": listing_id, "m": first, "p": 0})
+    await conn.execute(insert, {"l": listing_id, "m": second, "p": 1})
+    # Swapped one statement at a time: positions are checked at commit, not in between.
+    move = text("UPDATE listing_media SET position = :p WHERE media_id = :m")
+    await conn.execute(move, {"m": first, "p": 1})
+    await conn.execute(move, {"m": second, "p": 0})
+    await conn.execute(text("SET CONSTRAINTS ALL IMMEDIATE"))
+    await conn.execute(text("SET CONSTRAINTS ALL DEFERRED"))
+    assert "listing_media_media_id_key" in await _fails(
+        conn, insert, {"l": other, "m": first, "p": 0}
+    )
+    assert "listing_media_position_check" in await _fails(
+        conn, insert, {"l": other, "m": await _photo(conn, seller), "p": -1}
+    )
+    await conn.execute(insert, {"l": other, "m": await _photo(conn, seller), "p": 0})
+    await conn.execute(insert, {"l": other, "m": await _photo(conn, seller), "p": 0})
+    assert "listing_media_position_key" in await _checked_at_commit(conn)
+
+
+async def test_purged_photo_leaves_its_listing(
+    conn: AsyncConnection, seller: UUID, category: UUID
+) -> None:
+    """The media purge deletes photo rows: the link goes with it, the purge is never blocked."""
+    listing_id = await _listing(conn, seller, category)
+    photo = await _photo(conn, seller)
+    await conn.execute(
+        text("INSERT INTO listing_media (listing_id, media_id, position) VALUES (:l, :m, 0)"),
+        {"l": listing_id, "m": photo},
+    )
+    await conn.execute(text("DELETE FROM media WHERE id = :m"), {"m": photo})
+    links = await conn.scalar(
+        text("SELECT count(*) FROM listing_media WHERE listing_id = :l"), {"l": listing_id}
+    )
+    assert links == 0
+
+
+async def test_favorites_and_price_watches(
+    conn: AsyncConnection, seller: UUID, category: UUID
+) -> None:
+    listing_id = await _listing(conn, seller, category)
+    favorite = text("INSERT INTO favorites (user_id, listing_id) VALUES (:u, :l)")
+    await conn.execute(favorite, {"u": seller, "l": listing_id})
+    assert "favorites_pkey" in await _fails(conn, favorite, {"u": seller, "l": listing_id})
+    watch = text(
+        "INSERT INTO price_watches (user_id, listing_id, target_minor) VALUES (:u, :l, :t)"
+    )
+    assert "price_watches_target_minor_check" in await _fails(
+        conn, watch, {"u": seller, "l": listing_id, "t": 0}
+    )
+    await conn.execute(watch, {"u": seller, "l": listing_id, "t": None})
+
+
+async def test_price_history(conn: AsyncConnection, seller: UUID, category: UUID) -> None:
+    listing_id = await _listing(conn, seller, category)
+    insert = text("INSERT INTO listing_price_history (listing_id, price_minor) VALUES (:l, :p)")
+    await conn.execute(insert, {"l": listing_id, "p": 4500})
+    for price in (99, 100_000_001):
+        assert "listing_price_history_price_minor_check" in await _fails(
+            conn, insert, {"l": listing_id, "p": price}
+        )
+
+
+@pytest.mark.parametrize(
+    ("overrides", "constraint"),
+    [
+        ({"actor_kind": "robot"}, "listing_status_history_actor_kind_check"),
+        ({"to_status": "online"}, "invalid input value for enum listing_status"),
+        ({"event": "Publish!"}, "listing_status_history_event_check"),
+        ({"actor_kind": "user", "actor_id": None}, "listing_status_history_actor_check"),
+        ({"reason_text": "x" * 1001}, "listing_status_history_reason_text_check"),
+        ({"reason_text": ""}, "listing_status_history_reason_text_check"),
+        ({"reason_code": "Bad-Code"}, "listing_status_history_reason_code_check"),
+        ({"actor_kind": "system"}, "listing_status_history_actor_check"),
+    ],
+)
+async def test_status_history_checks(
+    conn: AsyncConnection,
+    seller: UUID,
+    category: UUID,
+    overrides: dict[str, Any],
+    constraint: str,
+) -> None:
+    listing_id = await _listing(conn, seller, category)
+    params = {
+        "id": new_id(),
+        "listing_id": listing_id,
+        "from_status": "draft",
+        "to_status": "active",
+        "event": "publish",
+        "actor_id": seller,
+        "actor_kind": "user",
+        "reason_code": None,
+        "reason_text": None,
+    } | overrides
+    insert = text(
+        "INSERT INTO listing_status_history (id, listing_id, from_status, to_status, event,"
+        " actor_id, actor_kind, reason_code, reason_text) VALUES (:id, :listing_id,"
+        " CAST(:from_status AS listing_status), CAST(:to_status AS listing_status), :event,"
+        " :actor_id, :actor_kind, :reason_code, :reason_text)"
+    )
+    assert constraint in await _fails(conn, insert, params)
+    # A transition made by the system needs no actor; a creation has no previous status.
+    await conn.execute(
+        insert,
+        params
+        | {
+            "id": new_id(),
+            "from_status": None,
+            "to_status": "draft",
+            "event": "create",
+            "actor_id": None,
+            "actor_kind": "system",
+            "reason_code": "auto_moderation",
+            "reason_text": None,
+        },
+    )
+
+
+async def test_deleting_a_listing_deletes_what_hangs_on_it(
+    conn: AsyncConnection, seller: UUID, category: UUID
+) -> None:
+    listing_id = await _listing(conn, seller, category)
+    photo = await _photo(conn, seller)
+    for statement in (
+        "INSERT INTO listing_media (listing_id, media_id, position) VALUES (:l, :m, 0)",
+        "INSERT INTO favorites (user_id, listing_id) VALUES (:u, :l)",
+        "INSERT INTO price_watches (user_id, listing_id) VALUES (:u, :l)",
+        "INSERT INTO listing_price_history (listing_id, price_minor) VALUES (:l, 4500)",
+        "INSERT INTO listing_status_history (id, listing_id, to_status, event, actor_kind)"
+        " VALUES (:h, :l, 'draft', 'create', 'system')",
+    ):
+        await conn.execute(
+            text(statement), {"l": listing_id, "m": photo, "u": seller, "h": new_id()}
+        )
+    await conn.execute(text("DELETE FROM listings WHERE id = :l"), {"l": listing_id})
+    for table in (
+        "listing_media",
+        "favorites",
+        "price_watches",
+        "listing_price_history",
+        "listing_status_history",
+    ):
+        count = await conn.scalar(
+            text(f"SELECT count(*) FROM {table} WHERE listing_id = :l"),  # noqa: S608
+            {"l": listing_id},
+        )
+        assert count == 0, table
+    # The photo itself stays: the media purge decides what becomes of it.
+    assert await conn.scalar(text("SELECT count(*) FROM media WHERE id = :m"), {"m": photo}) == 1
+
+
 async def test_indexes_of_the_spec(conn: AsyncConnection) -> None:
     rows = await conn.execute(
         text(
@@ -323,3 +498,25 @@ async def test_indexes_of_the_spec(conn: AsyncConnection) -> None:
     assert definitions["listings_attributes_idx"] == "gin (attributes jsonb_path_ops)"
     # P3 creates the full-text index, T11 the vector one.
     assert not definitions.keys() & {"listings_search_idx", "listings_embedding_idx"}
+
+
+async def test_indexes_of_the_linked_tables(conn: AsyncConnection) -> None:
+    rows = await conn.execute(
+        text(
+            "SELECT c.relname, pg_get_indexdef(c.oid) FROM pg_class c"
+            " JOIN pg_index i ON i.indexrelid = c.oid"
+            " WHERE c.relname IN ('favorites_listing_idx', 'price_watches_listing_idx',"
+            " 'listing_price_history_listing_idx', 'listing_status_history_listing_idx',"
+            " 'listing_status_history_actor_idx')"
+        )
+    )
+    definitions = {name: definition.split(" USING ")[1] for name, definition in rows}
+    assert definitions == {
+        "favorites_listing_idx": "btree (listing_id)",
+        "price_watches_listing_idx": "btree (listing_id)",
+        "listing_price_history_listing_idx": "btree (listing_id, changed_at)",
+        "listing_status_history_listing_idx": "btree (listing_id, created_at, id)",
+        "listing_status_history_actor_idx": (
+            "btree (actor_id, created_at) WHERE (actor_id IS NOT NULL)"
+        ),
+    }

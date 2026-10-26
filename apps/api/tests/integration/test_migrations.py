@@ -51,6 +51,11 @@ CATALOG_TABLES = {
     "category_attributes",
     "brands",
     "listings",
+    "listing_media",
+    "favorites",
+    "price_watches",
+    "listing_price_history",
+    "listing_status_history",
 }
 MEDIA_TABLES = {"media"}
 
