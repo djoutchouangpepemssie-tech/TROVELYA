@@ -148,6 +148,7 @@ async def test_moved_category_keeps_its_key(conn: AsyncConnection) -> None:
 async def test_path_unique(conn: AsyncConnection) -> None:
     parent = await _category(conn, "t_dup")
     await _category(conn, "t_dup.leaf", parent_id=parent)
+    await conn.execute(text("SET CONSTRAINTS categories_path_key IMMEDIATE"))
     message = await _fails(
         conn,
         text(

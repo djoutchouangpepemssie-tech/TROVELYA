@@ -60,9 +60,10 @@ CREATE TABLE categories (
   CONSTRAINT categories_path_ends_with_key CHECK (
     ltree2text(subpath(path, -1)) = regexp_replace(key, '^.*\.', '')
   ),
-  CONSTRAINT categories_root_has_no_parent CHECK ((parent_id IS NULL) = (nlevel(path) = 1))
+  CONSTRAINT categories_root_has_no_parent CHECK ((parent_id IS NULL) = (nlevel(path) = 1)),
+  -- Checked at commit, so the seed can move or swap categories within one transaction.
+  CONSTRAINT categories_path_key UNIQUE (path) DEFERRABLE INITIALLY DEFERRED
 );
-CREATE UNIQUE INDEX categories_path_key ON categories (path);
 CREATE INDEX categories_path_gist ON categories USING gist (path);
 CREATE INDEX categories_parent_idx ON categories (parent_id);
 CREATE TRIGGER categories_updated_at BEFORE UPDATE ON categories
