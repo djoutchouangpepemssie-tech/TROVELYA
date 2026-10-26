@@ -1,5 +1,6 @@
 """arq worker. Run with: arq trovelya.workers.main.WorkerSettings"""
 
+import asyncio
 import socket
 from typing import Any, ClassVar
 from uuid import UUID
@@ -33,7 +34,13 @@ from trovelya.modules.identity.service import (
     purge_expired_magic_links,
 )
 from trovelya.modules.media.adapters.storage import storage_from_settings
-from trovelya.modules.media.tasks import PROCESS_JOB, PROCESS_TIMEOUT_S, process_media_job
+from trovelya.modules.media.tasks import MAX_TRIES as MEDIA_MAX_TRIES
+from trovelya.modules.media.tasks import (
+    PROCESS_JOB,
+    PROCESS_TIMEOUT_S,
+    process_media_job,
+    recover_stuck_media_job,
+)
 from trovelya.shared.clock import SystemClock
 from trovelya.workers.consumers import consume_events, ensure_group
 from trovelya.workers.email_jobs import MAX_TRIES, deliver_email
@@ -62,6 +69,9 @@ async def startup(ctx: Context) -> None:
     ctx["clock"] = SystemClock()
     ctx["settings"] = settings
     ctx["storage"] = storage_from_settings(settings)
+    # One image decoded at a time in this worker (memory); waiting happens outside the
+    # 60 s given to each image.
+    ctx["image_slot"] = asyncio.Semaphore(1)
     ctx["http"] = httpx.AsyncClient()
     ctx["email_sender"] = make_email_sender(settings, ctx["http"])
     # Handlers enqueue their e-mails on arq's own pool (ctx["redis"]).
@@ -138,12 +148,18 @@ class WorkerSettings:
     functions: ClassVar[list[Any]] = [
         func(deliver_email, max_tries=MAX_TRIES, timeout=60),
         func(build_data_export_job, name=EXPORT_JOB, max_tries=3, timeout=300),
-        func(process_media_job, name=PROCESS_JOB, max_tries=3, timeout=PROCESS_TIMEOUT_S),
+        func(
+            process_media_job,
+            name=PROCESS_JOB,
+            max_tries=MEDIA_MAX_TRIES,
+            timeout=PROCESS_TIMEOUT_S,
+        ),
     ]
     cron_jobs: ClassVar[list[CronJob]] = [
         cron(relay_outbox, second=EVERY_SECOND, unique=True, timeout=30),
         cron(consume_events_job, second=EVERY_SECOND, unique=True, timeout=30),
         cron(audit_verify_chain_job, hour=3, minute=0, unique=True, timeout=600),
+        cron(recover_stuck_media_job, minute=set(range(5, 60, 10)), unique=True, timeout=600),
         cron(expire_approvals_job, minute=set(range(0, 60, 10)), unique=True, timeout=120),
         cron(process_erasures_job, hour=4, minute=0, unique=True, timeout=1800),
         cron(purge_idempotency_keys_job, hour=4, minute=30, unique=True, timeout=600),

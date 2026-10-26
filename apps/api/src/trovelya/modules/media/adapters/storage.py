@@ -47,7 +47,10 @@ class ObjectStorage(Protocol):
         """The stored object's real size, or None when nothing was uploaded."""
         ...
 
-    async def get(self, bucket: Bucket, key: str) -> bytes: ...
+    async def get(self, bucket: Bucket, key: str, *, max_bytes: int | None = None) -> bytes:
+        """The object's bytes; with `max_bytes`, at most max_bytes + 1 of them (enough to tell
+        that it is too large without reading it all)."""
+        ...
 
     async def put(self, bucket: Bucket, key: str, data: bytes, *, content_type: str) -> None: ...
 
@@ -117,9 +120,10 @@ class S3Storage:
             raise
         return int(head["ContentLength"])
 
-    async def get(self, bucket: Bucket, key: str) -> bytes:
+    async def get(self, bucket: Bucket, key: str, *, max_bytes: int | None = None) -> bytes:
+        extra = {} if max_bytes is None else {"Range": f"bytes=0-{max_bytes}"}
         response = await asyncio.to_thread(
-            self._client.get_object, Bucket=self._buckets[bucket], Key=key
+            self._client.get_object, Bucket=self._buckets[bucket], Key=key, **extra
         )
         return await asyncio.to_thread(response["Body"].read)
 
@@ -159,8 +163,9 @@ class MemoryStorage:
         stored = self.objects.get((bucket, key))
         return None if stored is None else len(stored[0])
 
-    async def get(self, bucket: Bucket, key: str) -> bytes:
-        return self.objects[(bucket, key)][0]
+    async def get(self, bucket: Bucket, key: str, *, max_bytes: int | None = None) -> bytes:
+        data = self.objects[(bucket, key)][0]
+        return data if max_bytes is None else data[: max_bytes + 1]
 
     async def put(self, bucket: Bucket, key: str, data: bytes, *, content_type: str) -> None:
         self.objects[(bucket, key)] = (data, content_type)
