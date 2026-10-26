@@ -100,16 +100,19 @@ async def start_processing(db: AsyncSession, media_id: UUID, owner_id: UUID) -> 
     )
 
 
-async def owned_media(db: AsyncSession, media_id: UUID, owner_id: UUID) -> Row[Any] | None:
-    return (
-        await db.execute(
-            text(
-                "SELECT id, purpose, mime_type, status, width, height, variants, rejection_reason"
-                " FROM media WHERE id = :id AND owner_id = :owner AND deleted_at IS NULL"
-            ),
-            {"id": media_id, "owner": owner_id},
-        )
-    ).one_or_none()
+_OWNED_MEDIA = (
+    "SELECT id, purpose, mime_type, status, width, height, variants, rejection_reason"
+    " FROM media WHERE id = :id AND owner_id = :owner AND deleted_at IS NULL"
+)
+
+
+async def owned_media(
+    db: AsyncSession, media_id: UUID, owner_id: UUID, *, lock: bool = False
+) -> Row[Any] | None:
+    """`lock`: held FOR SHARE until the transaction ends, so the purge cannot delete a photo
+    being chosen as an avatar (see `mark_for_purge`)."""
+    query = text(_OWNED_MEDIA + " FOR SHARE") if lock else text(_OWNED_MEDIA)
+    return (await db.execute(query, {"id": media_id, "owner": owner_id})).one_or_none()
 
 
 async def media_to_process(db: AsyncSession, media_id: UUID) -> Row[Any] | None:
@@ -246,8 +249,12 @@ def _rowcount(result: Any) -> int:
 async def mark_for_purge(
     db: AsyncSession, *, now: datetime, abandoned_before: datetime, refused_before: datetime
 ) -> int:
-    """Purge, step 1: uploads never completed and avatar photos never chosen after 24 hours,
-    refusals past retention are marked deleted, so a worker can no longer make them ready."""
+    """Purge, step 1: uploads never completed, avatar photos never chosen and old refusals are
+    marked deleted, so a worker or a member can no longer make them ready or an avatar.
+
+    Avatar photos are locked first, skipping the ones a member is choosing right now
+    (`check_avatar` holds them FOR SHARE); the second statement sees the avatars chosen up to
+    the lock."""
     params = {"now": now, "abandoned_before": abandoned_before, "refused_before": refused_before}
     marked = 0
     for query in (
@@ -255,11 +262,27 @@ async def mark_for_purge(
         " AND status = 'uploading' AND created_at < :abandoned_before",
         "UPDATE media SET deleted_at = :now WHERE deleted_at IS NULL"
         " AND status = 'rejected' AND created_at < :refused_before",
-        "UPDATE media m SET deleted_at = :now WHERE m.deleted_at IS NULL"
-        " AND m.purpose = 'avatar' AND m.created_at < :abandoned_before"
-        " AND NOT EXISTS (SELECT 1 FROM users u WHERE u.avatar_media_id = m.id)",
     ):
-        marked += _rowcount(await db.execute(text(query), params))
+        result = await db.execute(text(query), params)
+        marked += _rowcount(result)
+    avatars: list[UUID] = list(
+        await db.scalars(
+            text(
+                "SELECT id FROM media WHERE purpose = 'avatar' AND deleted_at IS NULL"
+                " AND created_at < :abandoned_before FOR UPDATE SKIP LOCKED"
+            ),
+            {"abandoned_before": abandoned_before},
+        )
+    )
+    if avatars:
+        result = await db.execute(
+            text(
+                "UPDATE media m SET deleted_at = :now WHERE m.id = ANY(:ids)"
+                " AND NOT EXISTS (SELECT 1 FROM users u WHERE u.avatar_media_id = m.id)"
+            ),
+            {"now": now, "ids": avatars},
+        )
+        marked += _rowcount(result)
     return marked
 
 
@@ -300,3 +323,18 @@ async def delete_purged_rows(db: AsyncSession, *, deleted_before: datetime) -> i
         {"deleted_before": deleted_before},
     )
     return _rowcount(result)
+
+
+async def erased_files_pending(db: AsyncSession, *, erased_before: datetime) -> int:
+    """Media of erased accounts still in storage although erased before `erased_before`."""
+    return (
+        await db.scalar(
+            text(
+                "SELECT count(*) FROM media m JOIN users u ON u.id = m.owner_id"
+                " WHERE u.status = 'deleted' AND m.files_deleted_at IS NULL"
+                " AND m.deleted_at < :before"
+            ),
+            {"before": erased_before},
+        )
+        or 0
+    )

@@ -1,7 +1,8 @@
 """Erasure and purge of media (P2-T02c2): files of a deleted photo leave storage at the next
 hourly run, its row after 30 days; an erased account's at once; uploads never completed and
-avatar photos never chosen after 24 hours. A race with the worker."""
+avatar photos never chosen after 24 hours. Races with the worker and with the avatar choice."""
 
+import asyncio
 from collections.abc import Awaitable, Callable
 from datetime import timedelta
 from typing import Any
@@ -15,6 +16,7 @@ from tests.integration.identity.test_profile import make_account
 from trovelya.core.gdpr import registered_erasers
 from trovelya.modules.media import repository
 from trovelya.modules.media.adapters.storage import MemoryStorage, new_storage_key
+from trovelya.modules.media.service import purge
 from trovelya.modules.media.service.purge import purge_media
 from trovelya.shared.clock import FixedClock
 from trovelya.shared.ids import new_id
@@ -120,14 +122,33 @@ class HookedStorage(MemoryStorage):
 
 
 class FailingStorage(MemoryStorage):
-    def __init__(self) -> None:
+    """Fails to delete the originals in `failing` (every original when None)."""
+
+    def __init__(self, failing: set[str] | None = None) -> None:
         super().__init__()
-        self.failing = True
+        self.failing = failing
+        self.attempts = 0
 
     async def delete(self, bucket: Any, key: str) -> None:
-        if self.failing:
-            raise ConnectionError("storage unreachable")
+        if bucket == "originals":
+            self.attempts += 1
+            if self.failing is None or key in self.failing:
+                raise ConnectionError("storage unreachable")
         await super().delete(bucket, key)
+
+
+class _Recorder:
+    def __init__(self) -> None:
+        self.errors: list[tuple[str, dict[str, Any]]] = []
+
+    def error(self, event: str, **fields: Any) -> None:
+        self.errors.append((event, fields))
+
+    def exception(self, event: str, **fields: Any) -> None:
+        pass
+
+    def info(self, event: str, **fields: Any) -> None:
+        pass
 
 
 @pytest.fixture
@@ -215,9 +236,40 @@ async def test_files_kept_until_they_can_be_deleted(sessionmaker: Session) -> No
     media_id, keys = await _media(sessionmaker, storage, member.id, deleted_for=timedelta(days=31))
     await _purge(sessionmaker, storage)
     assert (await _row(sessionmaker, media_id)).files_deleted_at is None
-    storage.failing = False
+    storage.failing = set()
     await _purge(sessionmaker, storage)
     assert await _row(sessionmaker, media_id) is None and not any(_stored(storage, keys))
+
+
+async def test_failures_do_not_hold_back_the_others(
+    sessionmaker: Session, monkeypatch: pytest.MonkeyPatch
+) -> None:
+    """More failing media than a batch: the run goes on past them."""
+    monkeypatch.setattr(purge, "BATCH", 2)
+    storage = FailingStorage(set())
+    member = await make_account(sessionmaker, completed=True)
+    failing = [
+        await _media(sessionmaker, storage, member.id, deleted_for=timedelta(hours=1))
+        for _ in range(3)
+    ]
+    storage.failing = {keys[0] for _, keys in failing}
+    healthy = await _media(sessionmaker, storage, member.id, deleted_for=timedelta(hours=1))
+    await _purge(sessionmaker, storage)
+    assert (await _row(sessionmaker, healthy[0])).files_deleted_at is not None
+    for media_id, _ in failing:
+        assert (await _row(sessionmaker, media_id)).files_deleted_at is None
+
+
+async def test_storage_down_stops_the_run(
+    sessionmaker: Session, monkeypatch: pytest.MonkeyPatch
+) -> None:
+    monkeypatch.setattr(purge, "MAX_CONSECUTIVE_FAILURES", 3)
+    storage = FailingStorage()
+    member = await make_account(sessionmaker, completed=True)
+    for _ in range(5):
+        await _media(sessionmaker, storage, member.id, deleted_for=timedelta(hours=1))
+    await _purge(sessionmaker, storage)
+    assert storage.attempts == 3
 
 
 async def test_avatar_photo_never_chosen_purged_after_24h(
@@ -275,6 +327,28 @@ async def test_late_worker_cannot_make_a_purged_media_ready(sessionmaker: Sessio
     assert await _row(sessionmaker, media_id) is None
 
 
+async def test_photo_being_chosen_as_avatar_is_not_purged(
+    sessionmaker: Session, storage: MemoryStorage
+) -> None:
+    """`check_avatar` holds the photo while the profile is saved: the purge skips it, then
+    sees it chosen."""
+    member = await make_account(sessionmaker, completed=True)
+    media_id, keys = await _media(
+        sessionmaker, storage, member.id, age=timedelta(hours=25), purpose="avatar"
+    )
+    async with sessionmaker() as db:
+        assert await repository.owned_media(db, media_id, member.id, lock=True) is not None
+        # Waiting for the lock would hang the purge: it must skip the photo instead.
+        await asyncio.wait_for(_purge(sessionmaker, storage), timeout=10)
+        await db.execute(
+            text("UPDATE users SET avatar_media_id = :m WHERE id = :u"),
+            {"m": media_id, "u": member.id},
+        )
+        await db.commit()
+    await _purge(sessionmaker, storage)
+    assert (await _row(sessionmaker, media_id)).deleted_at is None and all(_stored(storage, keys))
+
+
 async def test_retention_is_a_setting(sessionmaker: Session, storage: MemoryStorage) -> None:
     member = await make_account(sessionmaker, completed=True)
     media_id, _ = await _media(sessionmaker, storage, member.id, deleted_for=timedelta(days=8))
@@ -298,3 +372,21 @@ async def test_retention_is_a_setting(sessionmaker: Session, storage: MemoryStor
                 )
             )
             await db.commit()
+
+
+async def test_erased_account_files_still_stored_are_reported(
+    sessionmaker: Session, monkeypatch: pytest.MonkeyPatch
+) -> None:
+    recorder = _Recorder()
+    monkeypatch.setattr(purge, "logger", recorder)
+    storage = FailingStorage()
+    member = await make_account(sessionmaker, completed=True)
+    await _media(sessionmaker, storage, member.id, deleted_for=timedelta(hours=49))
+    async with sessionmaker() as db:
+        await db.execute(
+            text("UPDATE users SET status = 'deleted' WHERE id = :id"), {"id": member.id}
+        )
+        await db.commit()
+    await _purge(sessionmaker, storage)
+    [(event, fields)] = recorder.errors
+    assert event == "media.erased_files_pending" and fields["count"] >= 1
