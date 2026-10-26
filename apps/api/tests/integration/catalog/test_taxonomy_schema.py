@@ -124,13 +124,39 @@ async def test_category_checks(
     assert constraint in await _fails(conn, _INSERT_CATEGORY, params)
 
 
-async def test_key_must_match_path(conn: AsyncConnection) -> None:
+async def test_path_must_end_with_key_label(conn: AsyncConnection) -> None:
     message = await _fails(
         conn,
         text("INSERT INTO categories (id, key, path, names) VALUES (:id, 't_a', 't_b', '{}')"),
         {"id": new_id()},
     )
-    assert "categories_path_matches_key" in message
+    assert "categories_path_ends_with_key" in message
+
+
+async def test_moved_category_keeps_its_key(conn: AsyncConnection) -> None:
+    old_parent = await _category(conn, "t_old")
+    new_parent = await _category(conn, "t_new")
+    moved = await _category(conn, "t_old.leaf", parent_id=old_parent)
+    await conn.execute(
+        text("UPDATE categories SET parent_id = :p, path = 't_new.leaf' WHERE id = :id"),
+        {"p": new_parent, "id": moved},
+    )
+    row = (await conn.execute(text("SELECT key FROM categories WHERE path = 't_new.leaf'"))).one()
+    assert row[0] == "t_old.leaf"
+
+
+async def test_path_unique(conn: AsyncConnection) -> None:
+    parent = await _category(conn, "t_dup")
+    await _category(conn, "t_dup.leaf", parent_id=parent)
+    message = await _fails(
+        conn,
+        text(
+            "INSERT INTO categories (id, parent_id, key, path, names)"
+            " VALUES (:id, :p, 't_elsewhere.leaf', 't_dup.leaf', '{}')"
+        ),
+        {"id": new_id(), "p": parent},
+    )
+    assert "categories_path_key" in message
 
 
 async def test_allowed_conditions_use_the_condition_type(conn: AsyncConnection) -> None:

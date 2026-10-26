@@ -5,8 +5,10 @@ Additions to the spec, recorded in docs/plans/P2-catalogue-annonces.md (P2-T01a)
   sealed cosmetics only (8.19).
 - `categories.brand_policy`: whether a listing of the category names a brand.
 - `attribute_definitions.constraints`: bounds of a value (min, max, step, max_length).
-- The `path` (ltree) is the category key itself, so the tree is readable and stable: a key is
-  never reused, a category leaves the tree by `is_active = false`.
+- The `key` identifies a category for good (listings, seed); the `path` (ltree) says where it
+  sits. A new category's key is its path; a moved category keeps its key and gets a new path
+  under its new parent, so only the last label is common to both. A key is never reused; a
+  category leaves the tree by `is_active = false`.
 - `enum_values` maps each value key to its labels ({"noir": {"fr": "Noir"}}), like `names`.
 - The listing types (`listing_status`, `item_condition`) are created here: categories use
   `item_condition` already; the listing tables follow in P2-T03a.
@@ -55,9 +57,12 @@ CREATE TABLE categories (
     CHECK (brand_policy IN ('required','optional','none')),
   created_at             TIMESTAMPTZ NOT NULL DEFAULT now(),
   updated_at             TIMESTAMPTZ NOT NULL DEFAULT now(),
-  CONSTRAINT categories_path_matches_key CHECK (path::text = key),
+  CONSTRAINT categories_path_ends_with_key CHECK (
+    ltree2text(subpath(path, -1)) = regexp_replace(key, '^.*\.', '')
+  ),
   CONSTRAINT categories_root_has_no_parent CHECK ((parent_id IS NULL) = (nlevel(path) = 1))
 );
+CREATE UNIQUE INDEX categories_path_key ON categories (path);
 CREATE INDEX categories_path_gist ON categories USING gist (path);
 CREATE INDEX categories_parent_idx ON categories (parent_id);
 CREATE TRIGGER categories_updated_at BEFORE UPDATE ON categories
