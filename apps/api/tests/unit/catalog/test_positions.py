@@ -14,8 +14,8 @@ LYON = (45.7578, 4.8320)
 
 
 def test_offset_drawn_by_the_system_generator() -> None:
-    assert isinstance(positions._SYSTEM_RANDOM, random.SystemRandom)  # pyright: ignore[reportPrivateUsage]
-    assert public_offset.__defaults__ == (positions._SYSTEM_RANDOM,)  # pyright: ignore[reportPrivateUsage]
+    assert isinstance(positions.SYSTEM_RANDOM, random.SystemRandom)
+    assert public_offset.__defaults__ == (positions.SYSTEM_RANDOM,)
 
 
 def test_offset_goes_every_way() -> None:

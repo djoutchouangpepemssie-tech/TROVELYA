@@ -435,9 +435,9 @@ tout ── T12 (parcours 2, démo, porte)
 
 ### P2-T03b — Brouillons, attributs, position et lecture d'une annonce
 
-*Livrée en trois PR : T03b1, les briques pures (validation des attributs, position publique, cellules H3, distance arrondie ; dépendance `h3` 4.5.0) ; T03b2, création et modification des brouillons ; T03b3, lecture, « mes annonces », grâce de l'effacement et purge des photos jamais rattachées.*
+*Livrée en trois PR : T03b1, les briques pures (validation des attributs, position publique, cellules H3, distance arrondie ; dépendance `h3` 4.5.0) ; T03b2, création et modification des brouillons, elle-même en deux PR (T03b2a : bornes Q21, décalage par source Q20 avec la table `listing_public_positions` (migration 0014) et la position tirée d'une adresse ou d'une zone ; T03b2b : routes `POST` et `PATCH`) ; T03b3, lecture, « mes annonces », grâce de l'effacement et purge des photos jamais rattachées.*
 
-*Questions de la revue de T03b1 tranchées par Arcel le 26 octobre 2026 : Q20 (décalage par source de position) et Q21 (bornes des entiers et des années), appliquées dans T03b2.*
+*Questions de la revue de T03b1 tranchées par Arcel le 26 octobre 2026 : Q20 (décalage par source de position) et Q21 (bornes des entiers et des années), appliquées dans T03b2a. Nom du lieu d'une adresse : sa commune, ou l'arrondissement déduit du code postal pour Paris, Lyon et Marseille (aucun appel au géocodeur) ; pays d'une zone : `FR`, le géocodeur de l'IGN ne couvrant que la France (E10 de P1).*
 
 **Branche :** `feat/P2-T03b-brouillons`.
 

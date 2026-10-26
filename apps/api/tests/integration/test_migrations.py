@@ -54,6 +54,7 @@ CATALOG_TABLES = {
     "listing_media",
     "favorites",
     "price_watches",
+    "listing_public_positions",
     "listing_price_history",
     "listing_status_history",
 }

@@ -21,7 +21,7 @@ MAX_LATITUDE = 85.0
 _A = 6378137.0
 _E2 = 6.69437999014e-3
 
-_SYSTEM_RANDOM = secrets.SystemRandom()
+SYSTEM_RANDOM = secrets.SystemRandom()
 _H3: Any = h3  # untyped library
 
 
@@ -32,7 +32,7 @@ def _radii(latitude: float) -> tuple[float, float]:
 
 
 def public_offset(
-    latitude: float, longitude: float, rng: Random = _SYSTEM_RANDOM
+    latitude: float, longitude: float, rng: Random = SYSTEM_RANDOM
 ) -> tuple[float, float]:
     """The real position moved 200 to 500 m (uniform) in a uniform direction. The ellipsoid's
     radii are taken at the middle of the move: exact to a tenth of a millimeter in Europe."""
