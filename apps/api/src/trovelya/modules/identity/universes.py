@@ -1,24 +1,5 @@
-"""Stable keys of the 16 universes of section 8.19 (E11 of the P1 plan).
+"""Universe keys, owned by the catalog (single source, P2 plan review point 2)."""
 
-The category tree arrives in P2; its seed (P2-T01) reuses these keys as they are, so
-preferences saved now keep their meaning.
-"""
+from trovelya.modules.catalog.universes import UNIVERSE_KEYS
 
-UNIVERSE_KEYS = (
-    "mode",
-    "montres_bijoux",
-    "maison_jardin",
-    "high_tech",
-    "culture_loisirs",
-    "collection",
-    "enfants_bebe",
-    "sport_plein_air",
-    "art_antiquites",
-    "beaute_bien_etre",
-    "animaux",
-    "materiel_pro",
-    "vehicules",
-    "immobilier",
-    "services",
-    "autres",
-)
+__all__ = ["UNIVERSE_KEYS"]

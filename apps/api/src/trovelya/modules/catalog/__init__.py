@@ -1,2 +1,1 @@
-"""Catalog module. Placeholder created in P0-T09 so that the architecture contract covers more
-than one module; filled in from P2."""
+"""Catalog module (P2): categories, attributes, brands and, from P2-T03, listings."""
