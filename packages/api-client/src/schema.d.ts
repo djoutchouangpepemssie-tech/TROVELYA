@@ -1597,7 +1597,7 @@ export interface components {
             /** Media Ids */
             media_ids: string[];
             /** Parcel Size */
-            parcel_size: string | null;
+            parcel_size: ("xs" | "s" | "m" | "l" | "xl") | null;
             /** Place Name */
             place_name: string;
             price: components["schemas"]["Money"];
@@ -2879,7 +2879,7 @@ export interface operations {
                 };
                 content?: never;
             };
-            /** @description A photo still processed, or already in another listing */
+            /** @description Photo processing or in another listing: retry with a new key */
             409: {
                 headers: {
                     [name: string]: unknown;

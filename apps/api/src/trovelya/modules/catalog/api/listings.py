@@ -23,7 +23,7 @@ Member = Annotated[CurrentUser, Depends(completed_user)]
     status_code=status.HTTP_201_CREATED,
     responses={
         404: {"description": "A photo that is not the caller's"},
-        409: {"description": "A photo still processed, or already in another listing"},
+        409: {"description": "Photo processing or in another listing: retry with a new key"},
         422: {"description": "Category, condition, brand, attributes, photos or place refused"},
     },
 )

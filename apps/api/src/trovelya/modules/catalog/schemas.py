@@ -81,7 +81,9 @@ class BrandList(BaseModel):
 
 
 def _printable(value: str) -> str:
-    """No control character but line breaks and tabs (PostgreSQL refuses NUL)."""
+    """Line breaks of any system become `\n`; no other control character but tabs (PostgreSQL
+    refuses NUL)."""
+    value = value.replace("\r\n", "\n").replace("\r", "\n")
     if any(unicodedata.category(c) == "Cc" and c not in "\n\t" for c in value):
         raise ValueError("control characters are not accepted")
     return value
@@ -92,6 +94,11 @@ def _one_line(value: str) -> str:
     if "\n" in value or "\t" in value:
         raise ValueError("one line")
     return value
+
+
+# An attribute's key as the seed writes them: never echoed back in another shape.
+AttributeKey = Annotated[str, StringConstraints(pattern=r"^[a-z][a-z0-9_]*$", max_length=64)]
+ParcelSize = Literal["xs", "s", "m", "l", "xl"]
 
 
 class Money(BaseModel):
@@ -124,7 +131,8 @@ class ListingDraftIn(BaseModel):
         StringConstraints(strip_whitespace=True, min_length=20, max_length=5000),
         AfterValidator(_printable),
     ]
-    category: str = Field(min_length=1, max_length=200)  # a leaf's key, from /v1/categories
+    # A leaf's key, from /v1/categories (the format the table checks).
+    category: str = Field(max_length=200, pattern=r"^[a-z0-9_]+(\.[a-z0-9_]+)*$")
     brand: (
         Annotated[
             str,
@@ -134,12 +142,14 @@ class ListingDraftIn(BaseModel):
         | None
     ) = None
     condition: ItemCondition
-    attributes: dict[str, Any] = Field(default_factory=dict[str, Any], max_length=100)
+    attributes: dict[AttributeKey, Any] = Field(
+        default_factory=dict[AttributeKey, Any], max_length=100
+    )
     price: Money
     accepts_offers: bool = True
     handover_enabled: bool = True
     shipping_enabled: bool = True
-    parcel_size: Literal["xs", "s", "m", "l", "xl"] | None = None
+    parcel_size: ParcelSize | None = None
     weight_g: int | None = Field(default=None, gt=0, le=1_000_000)
     location: ListingLocationIn
     # E16: the photos in display order, 1 at least; the category says how many at most.
@@ -170,7 +180,7 @@ class ListingOut(BaseModel):
     accepts_offers: bool
     handover_enabled: bool
     shipping_enabled: bool
-    parcel_size: str | None
+    parcel_size: ParcelSize | None
     weight_g: int | None
     place_name: str
     country_code: str

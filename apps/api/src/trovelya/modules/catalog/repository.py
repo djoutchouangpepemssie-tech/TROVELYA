@@ -478,7 +478,9 @@ _OWN_LISTING = text(
 )
 
 
-async def own_listing(db: AsyncSession, *, listing_id: UUID, seller_id: UUID) -> Row[Any] | None:
-    return (
-        await db.execute(_OWN_LISTING, {"id": listing_id, "seller_id": seller_id})
-    ).one_or_none()
+async def own_listing(
+    db: AsyncSession, *, listing_id: UUID, seller_id: UUID
+) -> dict[str, Any] | None:
+    params = {"id": listing_id, "seller_id": seller_id}
+    row = (await db.execute(_OWN_LISTING, params)).mappings().one_or_none()
+    return dict(row) if row is not None else None

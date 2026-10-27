@@ -1249,8 +1249,13 @@
             "type": "boolean"
           },
           "attributes": {
-            "additionalProperties": true,
             "maxProperties": 100,
+            "patternProperties": {
+              "^[a-z][a-z0-9_]*$": {}
+            },
+            "propertyNames": {
+              "maxLength": 64
+            },
             "title": "Attributes",
             "type": "object"
           },
@@ -1269,7 +1274,7 @@
           },
           "category": {
             "maxLength": 200,
-            "minLength": 1,
+            "pattern": "^[a-z0-9_]+(\\.[a-z0-9_]+)*$",
             "title": "Category",
             "type": "string"
           },
@@ -1448,6 +1453,13 @@
           "parcel_size": {
             "anyOf": [
               {
+                "enum": [
+                  "xs",
+                  "s",
+                  "m",
+                  "l",
+                  "xl"
+                ],
                 "type": "string"
               },
               {
@@ -3816,7 +3828,7 @@
             "description": "A photo that is not the caller's"
           },
           "409": {
-            "description": "A photo still processed, or already in another listing"
+            "description": "Photo processing or in another listing: retry with a new key"
           },
           "422": {
             "description": "Category, condition, brand, attributes, photos or place refused"

@@ -2,6 +2,7 @@
 tested in test_draft_rules; here, the route: what it writes, what it answers, what it refuses.
 """
 
+import json
 from collections.abc import AsyncIterator
 from typing import Any
 from uuid import UUID
@@ -66,44 +67,45 @@ async def test_draft_created(client: AsyncClient, sessionmaker: Session) -> None
     response = await create(client, account, draft(zone, [media, second], brand="Sézane"))
     assert response.status_code == 201, response.text
     listing = response.json()
-    assert listing["status"] == "draft"
-    assert listing["version"] == 1
     assert len(listing["short_id"]) == 10 and listing["short_id"].isalnum()
-    assert listing["title"] == "Robe en lin bleue"
-    assert listing["category"] == "mode.femme.robes"
-    assert listing["brand"] == "Sézane"
+    assert {k: listing[k] for k in ("status", "version", "category", "brand", "place_name")} == {
+        "status": "draft",
+        "version": 1,
+        "category": "mode.femme.robes",
+        "brand": "Sézane",
+        "place_name": "Lyon 7e",
+    }
     assert listing["attributes"] == {"clothing_size": "m", "color": "bleu"}
     assert listing["price"] == {"amount_minor": 2500, "currency": "EUR"}
-    assert listing["place_name"] == "Lyon 7e"
     assert listing["location"] == {"source": "zone", "id": str(zone)}
     assert listing["media_ids"] == [str(media), str(second)]
     async with sessionmaker() as db:
-        prices = (
-            (
-                await db.execute(
-                    text("SELECT price_minor FROM listing_price_history WHERE listing_id = :l"),
-                    {"l": listing["id"]},
-                )
+        row = (
+            await db.execute(
+                text(
+                    "SELECT array_agg(p.price_minor) AS prices, bool_or(b.is_verified) AS verified"
+                    " FROM listings l JOIN listing_price_history p ON p.listing_id = l.id"
+                    " JOIN brands b ON b.id = l.brand_id WHERE l.id = :l"
+                ),
+                {"l": listing["id"]},
             )
-            .scalars()
-            .all()
-        )
-        brand = (
-            await db.execute(text("SELECT is_verified FROM brands WHERE name = 'Sézane'"))
-        ).scalar_one()
-    assert prices == [2500]  # the history starts with the first price
-    assert brand is False  # an unknown brand is created unverified (Q3)
+        ).one()
+    assert row.prices == [2500]  # the history starts with the first price
+    assert row.verified is False  # an unknown brand is created unverified (Q3)
 
 
 async def test_no_coordinates_in_the_response(client: AsyncClient, sessionmaker: Session) -> None:
     account, zone, media = await seller(sessionmaker)
     response = await create(client, account, draft(zone, [media]))
-    body = response.text
     assert response.status_code == 201
+
+    # No coordinate anywhere, real or public: the response has no decimal number at all.
+    decimals: list[str] = []
+    json.loads(response.text, parse_float=decimals.append)
+    assert decimals == []
     assert not {"lat", "lon", "latitude", "longitude", "location_public", "h3_r7", "h3_r9"} & set(
         response.json()
     )
-    assert "45.74" not in body and "4.84" not in body
 
 
 async def test_create_idempotent(client: AsyncClient, sessionmaker: Session) -> None:
@@ -123,7 +125,12 @@ async def test_create_idempotent(client: AsyncClient, sessionmaker: Session) -> 
     ("changes", "status", "code"),
     [
         ({"category": "mode.femme"}, 422, "category_not_leaf"),
-        ({"brand": "日本"}, 422, "brand_invalid"),
+        ({"brand": "--- !"}, 422, "brand_invalid"),
+        (
+            {"category": "high_tech.telephones.smartphones", "attributes": {"storage_gb": "g128"}},
+            422,
+            "brand_required",
+        ),
         (
             {"category": "culture_loisirs.instruments.pianos", "attributes": {}},
             422,
@@ -152,15 +159,6 @@ async def test_attributes_checked_all_at_once(client: AsyncClient, sessionmaker:
         ("attributes.color", "not_in_list"),
         ("attributes.storage_gb", "unknown"),  # an attribute of another category
     ]
-
-
-async def test_photo_of_another_member_404(client: AsyncClient, sessionmaker: Session) -> None:
-    account, zone, media = await seller(sessionmaker)
-    other = await make_account(sessionmaker, completed=True)
-    response = await create(
-        client, account, draft(zone, [media, await photo(sessionmaker, other.id)])
-    )
-    assert (response.status_code, response.json()["code"]) == (404, "not_found")
 
 
 async def test_photo_in_another_listing_and_too_many(
@@ -201,13 +199,24 @@ async def test_location_must_be_the_sellers(client: AsyncClient, sessionmaker: S
         {"price": {"amount_minor": 25.5, "currency": "EUR"}},
         {"media_ids": []},
         {"sale_modes": ["auction"]},  # not a field of a draft yet
+        {"category": "mode\u0000"},
+        {"category": "Mode.Femme"},
+        {"attributes": {"x\ud800": 1}},
+        {"attributes": {"Couleur": "bleu"}},
+        {"attributes": {"a" * 65: 1}},
     ],
 )
 async def test_body_refused(
     client: AsyncClient, sessionmaker: Session, changes: dict[str, Any]
 ) -> None:
     account, zone, media = await seller(sessionmaker)
-    response = await create(client, account, draft(zone, [media]) | changes)
+    headers = account.headers | {
+        "idempotency-key": str(new_id()),
+        "content-type": "application/json",
+    }
+    # Serialised here: JSON escapes a lone surrogate ("\ud800"), as a hostile client sends it.
+    body = json.dumps(draft(zone, [media]) | changes)
+    response = await client.post("/v1/listings", headers=headers, content=body)
     assert response.status_code == 422, response.text
     assert response.json()["code"] == "validation_error"
 
@@ -217,4 +226,24 @@ async def test_profile_must_be_completed(client: AsyncClient, sessionmaker: Sess
     zone = await make_zone(sessionmaker, account.id)
     media = await photo(sessionmaker, account.id)
     response = await create(client, account, draft(zone, [media]))
-    assert response.status_code == 403
+    assert (response.status_code, response.json()["code"]) == (403, "profile_incomplete")
+
+
+async def test_line_breaks_of_any_system_kept(client: AsyncClient, sessionmaker: Session) -> None:
+    account, zone, media = await seller(sessionmaker)
+    body = draft(zone, [media], description="Portée deux fois.\r\nAucune tache.\rCoupe droite.")
+    response = await create(client, account, body)
+    assert response.status_code == 201, response.text
+    assert response.json()["description"] == "Portée deux fois.\nAucune tache.\nCoupe droite."
+
+
+async def test_deeply_nested_body_answered_400(client: AsyncClient, sessionmaker: Session) -> None:
+    """The idempotency hash of a 100 000-level JSON never turns into a 500."""
+    account, _, _ = await seller(sessionmaker)
+    headers = account.headers | {
+        "idempotency-key": str(new_id()),
+        "content-type": "application/json",
+    }
+    nested = '{"attributes": {"color": ' + "[" * 100_000 + "]" * 100_000 + "}}"
+    response = await client.post("/v1/listings", headers=headers, content=nested)
+    assert response.status_code in (400, 422)

@@ -14,7 +14,7 @@ from sqlalchemy.ext.asyncio import AsyncSession
 
 from trovelya.core.errors import AppError, ErrorCode
 from trovelya.modules.catalog import repository
-from trovelya.modules.catalog.schemas import ListingDraftIn, ListingLocationIn, ListingOut, Money
+from trovelya.modules.catalog.schemas import ListingDraftIn, ListingOut
 from trovelya.modules.catalog.service import draft_rules
 from trovelya.modules.catalog.service.locations import listing_location
 from trovelya.modules.media.service import listing_photos
@@ -54,7 +54,9 @@ async def create_draft(
         "title": body.title,
         "description": body.description,
         "category_id": category.id,
-        "brand_id": await draft_rules.brand_for(db, category.brand_policy, body.brand),
+        "brand_id": await draft_rules.brand_for(
+            db, category.brand_policy, body.brand, member_id=seller_id
+        ),
         "condition": body.condition.value,
         "attributes": attributes,
         "price_minor": body.price.amount_minor,
@@ -98,27 +100,10 @@ async def own_listing(db: AsyncSession, *, seller_id: UUID, listing_id: UUID) ->
     row = await repository.own_listing(db, listing_id=listing_id, seller_id=seller_id)
     if row is None:
         raise AppError(ErrorCode.NOT_FOUND, 404)
-    return ListingOut(
-        id=row.id,
-        short_id=row.short_id,
-        status=row.status,
-        version=row.version,
-        title=row.title,
-        description=row.description,
-        category=row.category,
-        brand=row.brand,
-        condition=row.condition,
-        attributes=row.attributes,
-        price=Money(amount_minor=row.price_minor, currency=row.currency),
-        accepts_offers=row.accepts_offers,
-        handover_enabled=row.handover_enabled,
-        shipping_enabled=row.shipping_enabled,
-        parcel_size=row.parcel_size,
-        weight_g=row.weight_g,
-        place_name=row.place_name,
-        country_code=row.country_code,
-        location=ListingLocationIn(source=row.location_source, id=row.location_source_id),
-        media_ids=row.media_ids,
-        created_at=row.created_at,
-        updated_at=row.updated_at,
+    return ListingOut.model_validate(
+        row
+        | {
+            "price": {"amount_minor": row["price_minor"], "currency": row["currency"]},
+            "location": {"source": row["location_source"], "id": row["location_source_id"]},
+        }
     )
