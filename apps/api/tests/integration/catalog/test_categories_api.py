@@ -32,7 +32,7 @@ async def seeded(sessionmaker: async_sessionmaker[AsyncSession]) -> None:
         await db.commit()
 
 
-async def _client(
+async def catalog_client(
     sessionmaker: async_sessionmaker[AsyncSession], redis_client: Redis, *, verticals: bool
 ) -> AsyncClient:
     app = create_app(make_settings())
@@ -50,7 +50,7 @@ async def _client(
 async def client(
     seeded: None, sessionmaker: async_sessionmaker[AsyncSession], redis_client: Redis
 ) -> AsyncIterator[AsyncClient]:
-    async with await _client(sessionmaker, redis_client, verticals=False) as c:
+    async with await catalog_client(sessionmaker, redis_client, verticals=False) as c:
         yield c
 
 
@@ -66,7 +66,7 @@ async def test_categories_hide_verticals_when_flag_off(client: AsyncClient) -> N
 async def test_categories_show_verticals_when_flag_on(
     seeded: None, sessionmaker: async_sessionmaker[AsyncSession], redis_client: Redis
 ) -> None:
-    async with await _client(sessionmaker, redis_client, verticals=True) as client:
+    async with await catalog_client(sessionmaker, redis_client, verticals=True) as client:
         tree = (await client.get("/v1/categories")).json()
     roots = [c["key"] for c in tree["categories"] if c["parent_key"] is None]
     assert roots == list(UNIVERSE_KEYS)
@@ -125,9 +125,9 @@ async def test_categories_cache_headers(client: AsyncClient) -> None:
 async def test_etag_changes_with_the_flag(
     seeded: None, sessionmaker: async_sessionmaker[AsyncSession], redis_client: Redis
 ) -> None:
-    async with await _client(sessionmaker, redis_client, verticals=False) as off:
+    async with await catalog_client(sessionmaker, redis_client, verticals=False) as off:
         etag_off = (await off.get("/v1/categories")).headers["etag"]
-    async with await _client(sessionmaker, redis_client, verticals=True) as on:
+    async with await catalog_client(sessionmaker, redis_client, verticals=True) as on:
         etag_on = (await on.get("/v1/categories")).headers["etag"]
     assert etag_off != etag_on
 
@@ -164,7 +164,7 @@ async def test_brands_query_length(client: AsyncClient, q: str) -> None:
 async def test_category_settings_served(
     seeded: None, sessionmaker: async_sessionmaker[AsyncSession], redis_client: Redis
 ) -> None:
-    async with await _client(sessionmaker, redis_client, verticals=True) as client:
+    async with await catalog_client(sessionmaker, redis_client, verticals=True) as client:
         tree = (await client.get("/v1/categories")).json()
     by_key = {c["key"]: c for c in tree["categories"]}
     fields = ("icon", "vertical", "transaction_model", "shipping_allowed", "max_photos")

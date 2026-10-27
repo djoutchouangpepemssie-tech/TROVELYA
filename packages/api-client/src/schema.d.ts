@@ -471,6 +471,26 @@ export interface paths {
         patch?: never;
         trace?: never;
     };
+    "/v1/listings": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        get?: never;
+        put?: never;
+        /**
+         * Post Listing
+         * @description A new draft. `Idempotency-Key` required: a retry never makes a second listing.
+         */
+        post: operations["listing_create"];
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
     "/v1/me": {
         parameters: {
             query?: never;
@@ -1483,6 +1503,126 @@ export interface components {
          * @enum {string}
          */
         ItemCondition: "new_with_tags" | "new_without_tags" | "very_good" | "good" | "fair" | "for_parts";
+        /**
+         * ListingDraftIn
+         * @description A new draft (section 11.5): what the seller says about the item.
+         */
+        ListingDraftIn: {
+            /**
+             * Accepts Offers
+             * @default true
+             */
+            accepts_offers: boolean;
+            /** Attributes */
+            attributes?: {
+                [key: string]: unknown;
+            };
+            /** Brand */
+            brand?: string | null;
+            /** Category */
+            category: string;
+            condition: components["schemas"]["ItemCondition"];
+            /** Description */
+            description: string;
+            /**
+             * Handover Enabled
+             * @default true
+             */
+            handover_enabled: boolean;
+            location: components["schemas"]["ListingLocationIn"];
+            /** Media Ids */
+            media_ids: string[];
+            /** Parcel Size */
+            parcel_size?: ("xs" | "s" | "m" | "l" | "xl") | null;
+            price: components["schemas"]["Money"];
+            /**
+             * Shipping Enabled
+             * @default true
+             */
+            shipping_enabled: boolean;
+            /** Title */
+            title: string;
+            /** Weight G */
+            weight_g?: number | null;
+        };
+        /**
+         * ListingLocationIn
+         * @description One of the seller's addresses or search zones (section 8.11).
+         */
+        ListingLocationIn: {
+            /**
+             * Id
+             * Format: uuid
+             */
+            id: string;
+            /**
+             * Source
+             * @enum {string}
+             */
+            source: "address" | "zone";
+        };
+        /**
+         * ListingOut
+         * @description The seller's own view of a listing. Never a coordinate: the place name only (8.11).
+         */
+        ListingOut: {
+            /** Accepts Offers */
+            accepts_offers: boolean;
+            /** Attributes */
+            attributes: {
+                [key: string]: unknown;
+            };
+            /** Brand */
+            brand: string | null;
+            /** Category */
+            category: string;
+            condition: components["schemas"]["ItemCondition"];
+            /** Country Code */
+            country_code: string;
+            /**
+             * Created At
+             * Format: date-time
+             */
+            created_at: string;
+            /** Description */
+            description: string;
+            /** Handover Enabled */
+            handover_enabled: boolean;
+            /**
+             * Id
+             * Format: uuid
+             */
+            id: string;
+            location: components["schemas"]["ListingLocationIn"];
+            /** Media Ids */
+            media_ids: string[];
+            /** Parcel Size */
+            parcel_size: string | null;
+            /** Place Name */
+            place_name: string;
+            price: components["schemas"]["Money"];
+            /** Shipping Enabled */
+            shipping_enabled: boolean;
+            /** Short Id */
+            short_id: string;
+            status: components["schemas"]["ListingStatus"];
+            /** Title */
+            title: string;
+            /**
+             * Updated At
+             * Format: date-time
+             */
+            updated_at: string;
+            /** Version */
+            version: number;
+            /** Weight G */
+            weight_g: number | null;
+        };
+        /**
+         * ListingStatus
+         * @enum {string}
+         */
+        ListingStatus: "draft" | "pending_review" | "active" | "reserved" | "sold" | "withdrawn" | "removed" | "expired";
         /** MagicLinkRequest */
         MagicLinkRequest: {
             /** Captcha Token */
@@ -1563,6 +1703,20 @@ export interface components {
             variants: components["schemas"]["VariantOut"][];
             /** Width */
             width: number | null;
+        };
+        /**
+         * Money
+         * @description Section 11.1: an amount in minor units and its currency; euros only for now.
+         */
+        Money: {
+            /** Amount Minor */
+            amount_minor: number;
+            /**
+             * Currency
+             * @default EUR
+             * @constant
+             */
+            currency: "EUR";
         };
         /** PasskeyList */
         PasskeyList: {
@@ -2691,6 +2845,53 @@ export interface operations {
                 content: {
                     "application/json": components["schemas"]["HTTPValidationError"];
                 };
+            };
+        };
+    };
+    listing_create: {
+        parameters: {
+            query?: never;
+            header?: {
+                "Idempotency-Key"?: string | null;
+            };
+            path?: never;
+            cookie?: never;
+        };
+        requestBody: {
+            content: {
+                "application/json": components["schemas"]["ListingDraftIn"];
+            };
+        };
+        responses: {
+            /** @description Successful Response */
+            201: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ListingOut"];
+                };
+            };
+            /** @description A photo that is not the caller's */
+            404: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content?: never;
+            };
+            /** @description A photo still processed, or already in another listing */
+            409: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content?: never;
+            };
+            /** @description Category, condition, brand, attributes, photos or place refused */
+            422: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content?: never;
             };
         };
     };
