@@ -2,11 +2,13 @@
 
 Its category must be an active leaf (real estate, vehicles and services only with the
 `verticals` flag); its condition one the category accepts; shipping only where the category
-allows it; its brand as the category's policy says (an unknown brand is created unverified);
+allows it; its brand as the category's policy says (an unknown brand is created unverified for the
+member, E19);
 its attributes checked against the category's (all errors at once); at most the category's
 number of photos.
 """
 
+import hashlib
 from typing import Any
 from uuid import UUID
 from zoneinfo import ZoneInfo
@@ -69,17 +71,31 @@ async def checked_attributes(
     return accepted
 
 
-async def brand_for(db: AsyncSession, policy: str, name: str | None) -> UUID | None:
+def brand_slug(name: str) -> str | None:
+    """The latin slug of the name; for a name in another alphabet (Greek, Cyrillic…), a stable
+    `b-` slug from its case-folded form; None without any letter or digit."""
+    if not any(c.isalnum() for c in name):
+        return None
+    slug = slugify(name)
+    if slug:
+        return slug
+    return "b-" + hashlib.sha256(name.casefold().encode()).hexdigest()[:16]
+
+
+async def brand_for(
+    db: AsyncSession, policy: str, name: str | None, *, member_id: UUID
+) -> UUID | None:
+    """The brand the category's policy calls for; an unknown one is created for the member."""
     if name is None:
         if policy == "required":
             raise _invalid(ErrorCode.BRAND_REQUIRED)
         return None
     if policy == "none":
         raise _invalid(ErrorCode.BRAND_NOT_ALLOWED)
-    slug = slugify(name)
-    if not slug:
+    slug = brand_slug(name)
+    if slug is None:
         raise _invalid(ErrorCode.BRAND_INVALID)
-    return await repository.brand_id(db, name=name, slug=slug)
+    return await repository.brand_id(db, name=name, slug=slug, member_id=member_id)
 
 
 async def checked_category(

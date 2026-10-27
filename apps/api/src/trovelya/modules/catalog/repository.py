@@ -111,10 +111,13 @@ _ATTRIBUTES = text(
 )
 
 # Prefix matches first, then the closest names (pg_trgm), on `name::text` so the trigram
-# index serves both; the caller escapes LIKE wildcards in the prefix.
+# index serves both; the caller escapes LIKE wildcards in the prefix. A brand typed by a member
+# is suggested only once an active (moderated) listing carries it (E19).
 _SEARCH_BRANDS = text(
-    "SELECT name::text AS name, slug FROM brands"
-    " WHERE name::text ILIKE :prefix ESCAPE '\\' OR name::text % :q"
+    "SELECT name::text AS name, slug FROM brands b"
+    " WHERE (name::text ILIKE :prefix ESCAPE '\\' OR name::text % :q)"
+    " AND (b.origin = 'seed' OR EXISTS ("
+    " SELECT 1 FROM listings l WHERE l.brand_id = b.id AND l.status = 'active'))"
     " ORDER BY name::text ILIKE :prefix ESCAPE '\\' DESC, similarity(name::text, :q) DESC,"
     " name LIMIT :limit"
 )
@@ -256,6 +259,11 @@ _EXPORT_PRICE_WATCHES = text(
     " JOIN listings l ON l.id = w.listing_id WHERE w.user_id = :user_id ORDER BY w.created_at"
 )
 
+# Brands the member typed (E19).
+_EXPORT_BRANDS = text(
+    "SELECT name::text AS name, created_at FROM brands WHERE created_by = :user_id"
+    " ORDER BY created_at, name"
+)
 # The member's places kept for public positions, with the date of the draw; not the public
 # position itself (derived). The place is kept even once its address or zone is gone.
 _EXPORT_PUBLIC_POSITIONS = text(
@@ -273,6 +281,7 @@ async def export_catalog(db: AsyncSession, user_id: UUID) -> dict[str, list[dict
             ("favorites", _EXPORT_FAVORITES),
             ("price_watches", _EXPORT_PRICE_WATCHES),
             ("listing_public_positions", _EXPORT_PUBLIC_POSITIONS),
+            ("brands", _EXPORT_BRANDS),
         )
     }
 
@@ -294,6 +303,15 @@ async def erase_catalog(db: AsyncSession, user_id: UUID) -> None:
     await db.execute(text("DELETE FROM price_watches WHERE user_id = :u"), params)
     await db.execute(text("DELETE FROM listings WHERE seller_id = :u"), params)
     await db.execute(text("DELETE FROM listing_public_positions WHERE seller_id = :u"), params)
+    # Brands the member typed: gone when no listing carries them, else kept and unlinked.
+    await db.execute(
+        text(
+            "DELETE FROM brands b WHERE b.created_by = :u"
+            " AND NOT EXISTS (SELECT 1 FROM listings l WHERE l.brand_id = b.id)"
+        ),
+        params,
+    )
+    await db.execute(text("UPDATE brands SET created_by = NULL WHERE created_by = :u"), params)
 
 
 # Q20 and E18: one draw per place of the seller. Under the seller's lock, the nearest kept place
@@ -378,7 +396,8 @@ _FIND_BRAND = text(
     "SELECT id FROM brands WHERE name = :name OR slug = :slug ORDER BY name = :name DESC LIMIT 1"
 )
 _CREATE_BRAND = text(
-    "INSERT INTO brands (id, name, slug) VALUES (:id, :name, :slug) ON CONFLICT DO NOTHING"
+    "INSERT INTO brands (id, name, slug, origin, created_by)"
+    " VALUES (:id, :name, :slug, 'member', :member_id) ON CONFLICT DO NOTHING"
 )
 _INSERT_LISTING = text(
     "INSERT INTO listings (id, short_id, seller_id, title, description, category_id, brand_id,"
@@ -403,13 +422,16 @@ async def attribute_rules(db: AsyncSession, category_id: UUID) -> Sequence[Row[A
     return (await db.execute(_ATTRIBUTE_RULES, {"category_id": category_id})).all()
 
 
-async def brand_id(db: AsyncSession, *, name: str, slug: str) -> UUID:
-    """The brand of that name or slug; created unverified when there is none (Q3)."""
+async def brand_id(db: AsyncSession, *, name: str, slug: str, member_id: UUID) -> UUID:
+    """The brand of that name or slug; created unverified, typed by the member, when there is
+    none (Q3, E19)."""
     params = {"name": name, "slug": slug}
     found = await db.scalar(_FIND_BRAND, params)
     if found is None:
-        await db.execute(_CREATE_BRAND, {**params, "id": new_id()})
+        await db.execute(_CREATE_BRAND, {**params, "id": new_id(), "member_id": member_id})
         found = await db.scalar(_FIND_BRAND, params)
+    if found is None:  # inserted or found by a concurrent writer: never neither
+        raise RuntimeError("brand neither found nor created")
     return found
 
 
