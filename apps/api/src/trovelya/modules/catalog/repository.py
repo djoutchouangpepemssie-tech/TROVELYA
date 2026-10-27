@@ -347,3 +347,54 @@ async def public_position(
         },
     )
     return drawn
+
+
+# --- Drafts (P2-T03b2b1) ----------------------------------------------------------------------
+
+# The category of a new listing: active along its whole chain of parents, a leaf when none of
+# its children is active.
+_LISTING_CATEGORY = text(
+    "WITH RECURSIVE chain AS ("
+    " SELECT id, parent_id, is_active FROM categories WHERE key = :key"
+    " UNION ALL"
+    " SELECT p.id, p.parent_id, p.is_active FROM categories p JOIN chain c ON p.id = c.parent_id"
+    ")"
+    " SELECT c.id, c.vertical, c.brand_policy, c.shipping_allowed, c.max_photos,"
+    " c.allowed_conditions::text[] AS allowed_conditions,"
+    " (SELECT bool_and(is_active) FROM chain) AS is_active,"
+    " NOT EXISTS (SELECT 1 FROM categories ch WHERE ch.parent_id = c.id AND ch.is_active)"
+    " AS is_leaf"
+    " FROM categories c WHERE c.key = :key"
+)
+_ATTRIBUTE_RULES = text(
+    "SELECT a.key, a.data_type, ca.is_required,"
+    " (SELECT array_agg(v->>'key') FROM jsonb_array_elements(a.enum_values) v) AS enum_keys,"
+    " a.constraints"
+    " FROM category_attributes ca JOIN attribute_definitions a ON a.id = ca.attribute_id"
+    " WHERE ca.category_id = :category_id ORDER BY ca.position, a.key"
+)
+# A brand is found by name (citext) or by slug ("Saint Laurent" and "Saint-Laurent" are one).
+_FIND_BRAND = text(
+    "SELECT id FROM brands WHERE name = :name OR slug = :slug ORDER BY name = :name DESC LIMIT 1"
+)
+_CREATE_BRAND = text(
+    "INSERT INTO brands (id, name, slug) VALUES (:id, :name, :slug) ON CONFLICT DO NOTHING"
+)
+
+
+async def listing_category(db: AsyncSession, key: str) -> Row[Any] | None:
+    return (await db.execute(_LISTING_CATEGORY, {"key": key})).one_or_none()
+
+
+async def attribute_rules(db: AsyncSession, category_id: UUID) -> Sequence[Row[Any]]:
+    return (await db.execute(_ATTRIBUTE_RULES, {"category_id": category_id})).all()
+
+
+async def brand_id(db: AsyncSession, *, name: str, slug: str) -> UUID:
+    """The brand of that name or slug; created unverified when there is none (Q3)."""
+    params = {"name": name, "slug": slug}
+    found = await db.scalar(_FIND_BRAND, params)
+    if found is None:
+        await db.execute(_CREATE_BRAND, {**params, "id": new_id()})
+        found = await db.scalar(_FIND_BRAND, params)
+    return found

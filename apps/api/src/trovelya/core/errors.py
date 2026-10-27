@@ -55,6 +55,19 @@ class ErrorCode(StrEnum):
     MEDIA_NOT_READY = "media_not_ready"
     MEDIA_NOT_AVATAR = "media_not_avatar"
     MEDIA_REJECTED = "media_rejected"
+    MEDIA_NOT_LISTING = "media_not_listing"
+    MEDIA_IN_USE = "media_in_use"
+    MEDIA_LIMIT = "media_limit"
+    CATEGORY_UNKNOWN = "category_unknown"
+    CATEGORY_INACTIVE = "category_inactive"
+    CATEGORY_NOT_LEAF = "category_not_leaf"
+    CONDITION_NOT_ALLOWED = "condition_not_allowed"
+    INVALID_ATTRIBUTES = "invalid_attributes"
+    BRAND_REQUIRED = "brand_required"
+    BRAND_NOT_ALLOWED = "brand_not_allowed"
+    BRAND_INVALID = "brand_invalid"
+    SHIPPING_NOT_ALLOWED = "shipping_not_allowed"
+    LOCATION_UNAVAILABLE = "location_unavailable"
 
 
 # French titles by default (section 2); translation by Accept-Language arrives with P1.
@@ -97,6 +110,19 @@ _TITLES: dict[ErrorCode, str] = {
     ErrorCode.MEDIA_NOT_READY: "Cette photo est encore en cours de traitement",
     ErrorCode.MEDIA_NOT_AVATAR: "Cette photo n'a pas été envoyée comme photo de profil",
     ErrorCode.MEDIA_REJECTED: "Cette photo a été refusée, envoyez-en une autre",
+    ErrorCode.MEDIA_NOT_LISTING: "Cette photo n'a pas été envoyée pour une annonce",
+    ErrorCode.MEDIA_IN_USE: "Cette photo est déjà dans une autre annonce",
+    ErrorCode.MEDIA_LIMIT: "Trop de photos pour cette catégorie",
+    ErrorCode.CATEGORY_UNKNOWN: "Catégorie inconnue",
+    ErrorCode.CATEGORY_INACTIVE: "Catégorie indisponible",
+    ErrorCode.CATEGORY_NOT_LEAF: "Choisissez une sous-catégorie plus précise",
+    ErrorCode.CONDITION_NOT_ALLOWED: "État non accepté dans cette catégorie",
+    ErrorCode.INVALID_ATTRIBUTES: "Caractéristiques invalides",
+    ErrorCode.BRAND_REQUIRED: "Marque obligatoire dans cette catégorie",
+    ErrorCode.BRAND_NOT_ALLOWED: "Pas de marque dans cette catégorie",
+    ErrorCode.BRAND_INVALID: "Nom de marque invalide",
+    ErrorCode.SHIPPING_NOT_ALLOWED: "Envoi impossible dans cette catégorie, main propre seulement",
+    ErrorCode.LOCATION_UNAVAILABLE: "Adresse ou zone introuvable ou sans position",
 }
 
 _STATUS_CODES: dict[int, ErrorCode] = {
