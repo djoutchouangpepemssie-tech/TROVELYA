@@ -1,4 +1,4 @@
-"""Brands typed by members (plan P2, Q3 and E19, P2-T03b2b1).
+"""Brands typed by members (plan P2, Q3 and E19, P2-T03b2b0).
 
 A brand a member types that the catalog does not know is created unverified (Q3). It is free
 text nobody moderated: it is suggested to others (`GET /v1/brands`) only once an active

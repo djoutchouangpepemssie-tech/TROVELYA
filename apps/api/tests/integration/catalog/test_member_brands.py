@@ -17,7 +17,7 @@ from tests.integration.catalog.test_categories_api import (
 from tests.integration.catalog.test_listing_gdpr import _listing  # pyright: ignore[reportPrivateUsage]
 from tests.integration.identity.test_profile import make_account
 from trovelya.core.gdpr import registered_erasers, registered_exporters
-from trovelya.modules.catalog.service import draft_rules
+from trovelya.shared.ids import new_id
 
 Session = async_sessionmaker[AsyncSession]
 
@@ -33,10 +33,17 @@ async def client(
 
 
 async def _brand(sessionmaker: Session, member: UUID, name: str) -> UUID:
+    """A brand as a member's draft creates it (P2-T03b2b1)."""
+    brand = new_id()
     async with sessionmaker() as db:
-        brand = await draft_rules.brand_for(db, "optional", name, member_id=member)
+        await db.execute(
+            text(
+                "INSERT INTO brands (id, name, slug, origin, created_by)"
+                " VALUES (:id, :name, :slug, 'member', :member)"
+            ),
+            {"id": brand, "name": name, "slug": f"t-{brand.hex}", "member": member},
+        )
         await db.commit()
-    assert brand is not None
     return brand
 
 
