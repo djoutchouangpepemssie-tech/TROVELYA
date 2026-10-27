@@ -1,6 +1,6 @@
 """Rules a draft follows (P2-T03b2b1), on the real seed: dresses (clothing size required),
-smartphones (brand and storage required), make-up (new and sealed items only), pianos (handover
-only), car parts (a vertical); plus the seller's listing photos (E16)."""
+smartphones (storage required), make-up (new and sealed items only), pianos (handover only), car
+parts (a vertical); brands typed by members (Q3, E19); the seller's listing photos (E16)."""
 
 from collections.abc import AsyncIterator
 from datetime import UTC, datetime
@@ -165,34 +165,73 @@ async def test_year_of_attributes_is_the_french_one(db: AsyncSession) -> None:
         ("required", None, "brand_required"),
         ("none", "Sézane", "brand_not_allowed"),
         ("optional", None, None),
-        ("optional", "日本", "brand_invalid"),  # no letter a slug can keep
+        ("optional", "--- !", "brand_invalid"),  # neither a letter nor a digit
     ],
 )
 async def test_brand_policy(
-    db: AsyncSession, policy: str, name: str | None, result: str | None
+    db: AsyncSession, sessionmaker: Session, policy: str, name: str | None, result: str | None
 ) -> None:
+    member = await make_account(sessionmaker, completed=True)
     try:
-        brand = await draft_rules.brand_for(db, policy, name)
+        brand = await draft_rules.brand_for(db, policy, name, member_id=member.id)
     except AppError as error:
         assert (error.status, error.code.value) == (422, result)
         return
     assert result is None and brand is None
 
 
-async def test_unknown_brand_created_unverified_then_reused(db: AsyncSession) -> None:
-    created = await draft_rules.brand_for(db, "optional", "Atelier Témoin Unique")
-    again = await draft_rules.brand_for(db, "required", "atelier-temoin unique")  # same slug
-    assert created is not None and again == created
-    verified = await db.scalar(
-        text("SELECT is_verified FROM brands WHERE id = :id"), {"id": created}
+async def test_required_brand_of_smartphones_in_the_seed(db: AsyncSession) -> None:
+    policy = await db.scalar(
+        text("SELECT brand_policy FROM categories WHERE key = 'high_tech.telephones.smartphones'")
     )
-    assert verified is False  # Q3
+    assert policy == "required"
 
 
-async def test_seeded_brand_reused(db: AsyncSession) -> None:
-    row = (await db.execute(text("SELECT id, name::text AS name FROM brands LIMIT 1"))).one()
-    seeded_id, name = row.id, row.name
-    assert await draft_rules.brand_for(db, "optional", name.upper()) == seeded_id  # citext
+async def test_member_brand_created_unverified_then_reused(
+    db: AsyncSession, sessionmaker: Session
+) -> None:
+    member = await make_account(sessionmaker, completed=True)
+    other = await make_account(sessionmaker, completed=True)
+    created = await draft_rules.brand_for(
+        db, "optional", "Atelier Témoin Unique", member_id=member.id
+    )
+    again = await draft_rules.brand_for(
+        db,
+        "required",
+        "atelier-temoin unique",
+        member_id=other.id,  # same slug
+    )
+    assert created is not None and again == created
+    row = (
+        await db.execute(
+            text("SELECT is_verified, origin, created_by FROM brands WHERE id = :id"),
+            {"id": created},
+        )
+    ).one()
+    assert (row.is_verified, row.origin, row.created_by) == (False, "member", member.id)  # Q3
+
+
+@pytest.mark.parametrize("name", ["Ζάρα Ελλάς", "Българска марка", "日本ブランド"])
+async def test_brands_in_any_alphabet(db: AsyncSession, sessionmaker: Session, name: str) -> None:
+    """Free entry (Q3) in every EU alphabet: a slug is made even without a latin letter."""
+    member = await make_account(sessionmaker, completed=True)
+    brand = await draft_rules.brand_for(db, "optional", name, member_id=member.id)
+    again = await draft_rules.brand_for(db, "optional", name.upper(), member_id=member.id)
+    assert brand is not None and again == brand
+    slug = await db.scalar(text("SELECT slug FROM brands WHERE id = :id"), {"id": brand})
+    assert slug.startswith("b-")
+
+
+async def test_seeded_brand_reused(db: AsyncSession, sessionmaker: Session) -> None:
+    member = await make_account(sessionmaker, completed=True)
+    row = (
+        await db.execute(
+            text("SELECT id, name::text AS name FROM brands WHERE origin = 'seed' LIMIT 1")
+        )
+    ).one()
+    assert (
+        await draft_rules.brand_for(db, "optional", row.name.upper(), member_id=member.id) == row.id
+    )
 
 
 @pytest.mark.parametrize(

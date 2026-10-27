@@ -43,8 +43,8 @@ def _is_number(value: Any) -> bool:
 
 def _clean_text(value: str) -> str | None:
     """Trimmed text without its invisible format characters; None when it holds a control
-    character (PostgreSQL refuses NUL in JSONB, the brand search refuses the same)."""
-    if any(unicodedata.category(c) == "Cc" for c in value):
+    character or a lone surrogate (PostgreSQL refuses both in JSONB)."""
+    if any(unicodedata.category(c) in ("Cc", "Cs") for c in value):
         return None
     return "".join(c for c in value if unicodedata.category(c) != "Cf").strip()
 
