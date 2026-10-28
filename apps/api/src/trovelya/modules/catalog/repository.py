@@ -489,7 +489,7 @@ async def own_listing(
 # --- Edits of drafts (P2-T03b2c) --------------------------------------------------------------
 
 _LOCK_OWN_LISTING = text(
-    "SELECT status::text AS status, version, price_minor FROM listings"
+    "SELECT status::text AS status, version, price_minor, brand_id FROM listings"
     " WHERE id = :id AND seller_id = :seller_id AND deleted_at IS NULL FOR UPDATE"
 )
 # The position changes only when the seller picks another address or zone (`:locate`).
@@ -531,4 +531,50 @@ async def detach_photos(db: AsyncSession, listing_id: UUID) -> None:
     await db.execute(
         text("DELETE FROM listing_media WHERE listing_id = :listing_id"),
         {"listing_id": listing_id},
+    )
+
+
+async def lock_seller_listings(db: AsyncSession, seller_id: UUID) -> None:
+    """One write of a seller's listings at a time: photos are taken in a single order, so two
+    drafts never deadlock over them. Taken first, before any other lock."""
+    await db.execute(
+        text("SELECT pg_advisory_xact_lock(hashtextextended('trovelya.listings:' || :s, 0))"),
+        {"s": str(seller_id)},
+    )
+
+
+async def photos_in_other_listings(
+    db: AsyncSession, listing_id: UUID, media_ids: Sequence[UUID]
+) -> bool:
+    return bool(
+        await db.scalar(
+            text(
+                "SELECT EXISTS (SELECT 1 FROM listing_media"
+                " WHERE media_id = ANY(:ids) AND listing_id <> :listing_id)"
+            ),
+            {"ids": list(media_ids), "listing_id": listing_id},
+        )
+    )
+
+
+async def bump_version_if(db: AsyncSession, listing_id: UUID, *, unchanged_from: int) -> None:
+    """One more version when the content's triggers did not move it already."""
+    await db.execute(
+        text(
+            "UPDATE listings SET version = version + 1, updated_at = now()"
+            " WHERE id = :id AND version = :version"
+        ),
+        {"id": listing_id, "version": unchanged_from},
+    )
+
+
+async def drop_member_brand_if_unused(db: AsyncSession, *, brand_id: UUID, member_id: UUID) -> None:
+    """A brand the member typed and no listing carries any more (E19)."""
+    await db.execute(
+        text(
+            "DELETE FROM brands b WHERE b.id = :id AND b.origin = 'member'"
+            " AND b.created_by = :member"
+            " AND NOT EXISTS (SELECT 1 FROM listings l WHERE l.brand_id = b.id)"
+        ),
+        {"id": brand_id, "member": member_id},
     )

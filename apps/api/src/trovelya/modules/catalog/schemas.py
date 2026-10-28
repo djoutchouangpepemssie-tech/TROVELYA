@@ -173,20 +173,22 @@ class ListingDraftPatch(BaseModel):
 
     model_config = ConfigDict(extra="forbid")
 
-    title: Title | None = None
-    description: Description | None = None
-    category: CategoryKey | None = None
+    # Absent by default; null is refused by the field's type except for the three clearable
+    # fields, so the published schema says the truth.
+    title: Annotated[Title, Field(default=None)]
+    description: Annotated[Description, Field(default=None)]
+    category: Annotated[CategoryKey, Field(default=None)]
     brand: BrandName | None = None
-    condition: ItemCondition | None = None
-    attributes: Attributes | None = None
-    price: Money | None = None
-    accepts_offers: bool | None = None
-    handover_enabled: bool | None = None
-    shipping_enabled: bool | None = None
+    condition: Annotated[ItemCondition, Field(default=None)]
+    attributes: Annotated[Attributes, Field(default=None)]
+    price: Annotated[Money, Field(default=None)]
+    accepts_offers: Annotated[bool, Field(default=None)]
+    handover_enabled: Annotated[bool, Field(default=None)]
+    shipping_enabled: Annotated[bool, Field(default=None)]
     parcel_size: ParcelSize | None = None
     weight_g: WeightG | None = None
-    location: ListingLocationIn | None = None
-    media_ids: MediaIds | None = None
+    location: Annotated[ListingLocationIn, Field(default=None)]
+    media_ids: Annotated[MediaIds, Field(default=None)]
 
 
 class ListingOut(BaseModel):

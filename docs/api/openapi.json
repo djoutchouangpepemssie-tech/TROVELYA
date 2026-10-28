@@ -1368,33 +1368,19 @@
         "description": "The fields of a draft that change (`PATCH`); the others stay. `brand`, `parcel_size` and\n`weight_g` are removed with null; `attributes` and `media_ids` are replaced whole.",
         "properties": {
           "accepts_offers": {
-            "anyOf": [
-              {
-                "type": "boolean"
-              },
-              {
-                "type": "null"
-              }
-            ],
-            "title": "Accepts Offers"
+            "title": "Accepts Offers",
+            "type": "boolean"
           },
           "attributes": {
-            "anyOf": [
-              {
-                "maxProperties": 100,
-                "patternProperties": {
-                  "^[a-z][a-z0-9_]*$": {}
-                },
-                "propertyNames": {
-                  "maxLength": 64
-                },
-                "type": "object"
-              },
-              {
-                "type": "null"
-              }
-            ],
-            "title": "Attributes"
+            "maxProperties": 100,
+            "patternProperties": {
+              "^[a-z][a-z0-9_]*$": {}
+            },
+            "propertyNames": {
+              "maxLength": 64
+            },
+            "title": "Attributes",
+            "type": "object"
           },
           "brand": {
             "anyOf": [
@@ -1410,78 +1396,36 @@
             "title": "Brand"
           },
           "category": {
-            "anyOf": [
-              {
-                "maxLength": 200,
-                "pattern": "^[a-z0-9_]+(\\.[a-z0-9_]+)*$",
-                "type": "string"
-              },
-              {
-                "type": "null"
-              }
-            ],
-            "title": "Category"
+            "maxLength": 200,
+            "pattern": "^[a-z0-9_]+(\\.[a-z0-9_]+)*$",
+            "title": "Category",
+            "type": "string"
           },
           "condition": {
-            "anyOf": [
-              {
-                "$ref": "#/components/schemas/ItemCondition"
-              },
-              {
-                "type": "null"
-              }
-            ]
+            "$ref": "#/components/schemas/ItemCondition"
           },
           "description": {
-            "anyOf": [
-              {
-                "maxLength": 5000,
-                "minLength": 20,
-                "type": "string"
-              },
-              {
-                "type": "null"
-              }
-            ],
-            "title": "Description"
+            "maxLength": 5000,
+            "minLength": 20,
+            "title": "Description",
+            "type": "string"
           },
           "handover_enabled": {
-            "anyOf": [
-              {
-                "type": "boolean"
-              },
-              {
-                "type": "null"
-              }
-            ],
-            "title": "Handover Enabled"
+            "title": "Handover Enabled",
+            "type": "boolean"
           },
           "location": {
-            "anyOf": [
-              {
-                "$ref": "#/components/schemas/ListingLocationIn"
-              },
-              {
-                "type": "null"
-              }
-            ]
+            "$ref": "#/components/schemas/ListingLocationIn"
           },
           "media_ids": {
-            "anyOf": [
-              {
-                "items": {
-                  "format": "uuid",
-                  "type": "string"
-                },
-                "maxItems": 50,
-                "minItems": 1,
-                "type": "array"
-              },
-              {
-                "type": "null"
-              }
-            ],
-            "title": "Media Ids"
+            "items": {
+              "format": "uuid",
+              "type": "string"
+            },
+            "maxItems": 50,
+            "minItems": 1,
+            "title": "Media Ids",
+            "type": "array"
           },
           "parcel_size": {
             "anyOf": [
@@ -1502,38 +1446,17 @@
             "title": "Parcel Size"
           },
           "price": {
-            "anyOf": [
-              {
-                "$ref": "#/components/schemas/Money"
-              },
-              {
-                "type": "null"
-              }
-            ]
+            "$ref": "#/components/schemas/Money"
           },
           "shipping_enabled": {
-            "anyOf": [
-              {
-                "type": "boolean"
-              },
-              {
-                "type": "null"
-              }
-            ],
-            "title": "Shipping Enabled"
+            "title": "Shipping Enabled",
+            "type": "boolean"
           },
           "title": {
-            "anyOf": [
-              {
-                "maxLength": 120,
-                "minLength": 5,
-                "type": "string"
-              },
-              {
-                "type": "null"
-              }
-            ],
-            "title": "Title"
+            "maxLength": 120,
+            "minLength": 5,
+            "title": "Title",
+            "type": "string"
           },
           "weight_g": {
             "anyOf": [

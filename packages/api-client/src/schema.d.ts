@@ -1572,30 +1572,30 @@ export interface components {
          */
         ListingDraftPatch: {
             /** Accepts Offers */
-            accepts_offers?: boolean | null;
+            accepts_offers?: boolean;
             /** Attributes */
             attributes?: {
                 [key: string]: unknown;
-            } | null;
+            };
             /** Brand */
             brand?: string | null;
             /** Category */
-            category?: string | null;
-            condition?: components["schemas"]["ItemCondition"] | null;
+            category?: string;
+            condition?: components["schemas"]["ItemCondition"];
             /** Description */
-            description?: string | null;
+            description?: string;
             /** Handover Enabled */
-            handover_enabled?: boolean | null;
-            location?: components["schemas"]["ListingLocationIn"] | null;
+            handover_enabled?: boolean;
+            location?: components["schemas"]["ListingLocationIn"];
             /** Media Ids */
-            media_ids?: string[] | null;
+            media_ids?: string[];
             /** Parcel Size */
             parcel_size?: ("xs" | "s" | "m" | "l" | "xl") | null;
-            price?: components["schemas"]["Money"] | null;
+            price?: components["schemas"]["Money"];
             /** Shipping Enabled */
-            shipping_enabled?: boolean | null;
+            shipping_enabled?: boolean;
             /** Title */
-            title?: string | null;
+            title?: string;
             /** Weight G */
             weight_g?: number | null;
         };
