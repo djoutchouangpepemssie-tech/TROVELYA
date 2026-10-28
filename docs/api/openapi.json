@@ -1363,6 +1363,195 @@
         "title": "ListingDraftIn",
         "type": "object"
       },
+      "ListingDraftPatch": {
+        "additionalProperties": false,
+        "description": "The fields of a draft that change (`PATCH`); the others stay. `brand`, `parcel_size` and\n`weight_g` are removed with null; `attributes` and `media_ids` are replaced whole.",
+        "properties": {
+          "accepts_offers": {
+            "anyOf": [
+              {
+                "type": "boolean"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Accepts Offers"
+          },
+          "attributes": {
+            "anyOf": [
+              {
+                "maxProperties": 100,
+                "patternProperties": {
+                  "^[a-z][a-z0-9_]*$": {}
+                },
+                "propertyNames": {
+                  "maxLength": 64
+                },
+                "type": "object"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Attributes"
+          },
+          "brand": {
+            "anyOf": [
+              {
+                "maxLength": 80,
+                "minLength": 1,
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Brand"
+          },
+          "category": {
+            "anyOf": [
+              {
+                "maxLength": 200,
+                "pattern": "^[a-z0-9_]+(\\.[a-z0-9_]+)*$",
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Category"
+          },
+          "condition": {
+            "anyOf": [
+              {
+                "$ref": "#/components/schemas/ItemCondition"
+              },
+              {
+                "type": "null"
+              }
+            ]
+          },
+          "description": {
+            "anyOf": [
+              {
+                "maxLength": 5000,
+                "minLength": 20,
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Description"
+          },
+          "handover_enabled": {
+            "anyOf": [
+              {
+                "type": "boolean"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Handover Enabled"
+          },
+          "location": {
+            "anyOf": [
+              {
+                "$ref": "#/components/schemas/ListingLocationIn"
+              },
+              {
+                "type": "null"
+              }
+            ]
+          },
+          "media_ids": {
+            "anyOf": [
+              {
+                "items": {
+                  "format": "uuid",
+                  "type": "string"
+                },
+                "maxItems": 50,
+                "minItems": 1,
+                "type": "array"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Media Ids"
+          },
+          "parcel_size": {
+            "anyOf": [
+              {
+                "enum": [
+                  "xs",
+                  "s",
+                  "m",
+                  "l",
+                  "xl"
+                ],
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Parcel Size"
+          },
+          "price": {
+            "anyOf": [
+              {
+                "$ref": "#/components/schemas/Money"
+              },
+              {
+                "type": "null"
+              }
+            ]
+          },
+          "shipping_enabled": {
+            "anyOf": [
+              {
+                "type": "boolean"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Shipping Enabled"
+          },
+          "title": {
+            "anyOf": [
+              {
+                "maxLength": 120,
+                "minLength": 5,
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Title"
+          },
+          "weight_g": {
+            "anyOf": [
+              {
+                "exclusiveMinimum": 0.0,
+                "maximum": 1000000.0,
+                "type": "integer"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Weight G"
+          }
+        },
+        "title": "ListingDraftPatch",
+        "type": "object"
+      },
       "ListingLocationIn": {
         "description": "One of the seller's addresses or search zones (section 8.11).",
         "properties": {
@@ -3835,6 +4024,65 @@
           }
         },
         "summary": "Post Listing",
+        "tags": [
+          "catalog"
+        ]
+      }
+    },
+    "/v1/listings/{listing_id}": {
+      "patch": {
+        "description": "Change a draft. `If-Match: <version>` required.",
+        "operationId": "listing_update",
+        "parameters": [
+          {
+            "in": "path",
+            "name": "listing_id",
+            "required": true,
+            "schema": {
+              "format": "uuid",
+              "title": "Listing Id",
+              "type": "string"
+            }
+          }
+        ],
+        "requestBody": {
+          "content": {
+            "application/json": {
+              "schema": {
+                "$ref": "#/components/schemas/ListingDraftPatch"
+              }
+            }
+          },
+          "required": true
+        },
+        "responses": {
+          "200": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ListingOut"
+                }
+              }
+            },
+            "description": "Successful Response"
+          },
+          "404": {
+            "description": "Not the caller's listing"
+          },
+          "409": {
+            "description": "No longer a draft, or a photo in another listing or processing"
+          },
+          "412": {
+            "description": "If-Match is not the listing's version"
+          },
+          "422": {
+            "description": "The draft as it becomes breaks a rule of its category"
+          },
+          "428": {
+            "description": "If-Match missing"
+          }
+        },
+        "summary": "Patch Listing",
         "tags": [
           "catalog"
         ]

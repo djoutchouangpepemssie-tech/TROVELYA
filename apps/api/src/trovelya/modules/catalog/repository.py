@@ -484,3 +484,51 @@ async def own_listing(
     params = {"id": listing_id, "seller_id": seller_id}
     row = (await db.execute(_OWN_LISTING, params)).mappings().one_or_none()
     return dict(row) if row is not None else None
+
+
+# --- Edits of drafts (P2-T03b2c) --------------------------------------------------------------
+
+_LOCK_OWN_LISTING = text(
+    "SELECT status::text AS status, version, price_minor FROM listings"
+    " WHERE id = :id AND seller_id = :seller_id AND deleted_at IS NULL FOR UPDATE"
+)
+# The position changes only when the seller picks another address or zone (`:locate`).
+_UPDATE_LISTING = text(
+    "UPDATE listings SET title = :title, description = :description,"
+    " category_id = :category_id, brand_id = :brand_id,"
+    " condition = CAST(:condition AS item_condition), attributes = CAST(:attributes AS jsonb),"
+    " price_minor = :price_minor, currency = :currency, accepts_offers = :accepts_offers,"
+    " handover_enabled = :handover_enabled, shipping_enabled = :shipping_enabled,"
+    " parcel_size = :parcel_size, weight_g = :weight_g,"
+    " location = CASE WHEN :locate THEN ST_MakePoint(:lon, :lat)::geography ELSE location END,"
+    " location_public = CASE WHEN :locate"
+    " THEN ST_MakePoint(:public_lon, :public_lat)::geography ELSE location_public END,"
+    " h3_r7 = CASE WHEN :locate THEN :h3_r7 ELSE h3_r7 END,"
+    " h3_r9 = CASE WHEN :locate THEN :h3_r9 ELSE h3_r9 END,"
+    " place_name = CASE WHEN :locate THEN :place_name ELSE place_name END,"
+    " country_code = CASE WHEN :locate THEN :country_code ELSE country_code END,"
+    " location_source = CASE WHEN :locate THEN :location_source ELSE location_source END,"
+    " location_source_id = CASE WHEN :locate"
+    " THEN CAST(:location_source_id AS uuid) ELSE location_source_id END"
+    " WHERE id = :id"
+)
+
+
+async def lock_own_listing(
+    db: AsyncSession, *, listing_id: UUID, seller_id: UUID
+) -> Row[Any] | None:
+    params = {"id": listing_id, "seller_id": seller_id}
+    return (await db.execute(_LOCK_OWN_LISTING, params)).one_or_none()
+
+
+async def update_listing(db: AsyncSession, listing_id: UUID, values: Mapping[str, Any]) -> None:
+    """The content of a locked listing; its version moves only if the content changed."""
+    params = {**values, "id": listing_id, "attributes": json.dumps(values["attributes"])}
+    await db.execute(_UPDATE_LISTING, params)
+
+
+async def detach_photos(db: AsyncSession, listing_id: UUID) -> None:
+    await db.execute(
+        text("DELETE FROM listing_media WHERE listing_id = :listing_id"),
+        {"listing_id": listing_id},
+    )
