@@ -484,3 +484,12 @@ async def own_listing(
     params = {"id": listing_id, "seller_id": seller_id}
     row = (await db.execute(_OWN_LISTING, params)).mappings().one_or_none()
     return dict(row) if row is not None else None
+
+
+async def lock_seller_listings(db: AsyncSession, seller_id: UUID) -> None:
+    """One write of a seller's listings at a time: photos are taken in a single order, so two
+    drafts never deadlock over them. Taken first, before any other lock."""
+    await db.execute(
+        text("SELECT pg_advisory_xact_lock(hashtextextended('trovelya.listings:' || :s, 0))"),
+        {"s": str(seller_id)},
+    )

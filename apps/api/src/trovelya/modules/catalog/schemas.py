@@ -11,7 +11,6 @@ from pydantic import (
     ConfigDict,
     Field,
     StringConstraints,
-    field_validator,
 )
 
 from trovelya.modules.catalog.models import (
@@ -115,52 +114,57 @@ class ListingLocationIn(BaseModel):
     id: UUID
 
 
+def _distinct(media_ids: list[UUID]) -> list[UUID]:
+    if len(set(media_ids)) != len(media_ids):
+        raise ValueError("each photo once")
+    return media_ids
+
+
+# Trimmed before the lengths are checked (the database checks the same lengths).
+Title = Annotated[
+    str,
+    StringConstraints(strip_whitespace=True, min_length=5, max_length=120),
+    AfterValidator(_one_line),
+]
+Description = Annotated[
+    str,
+    StringConstraints(strip_whitespace=True, min_length=20, max_length=5000),
+    AfterValidator(_printable),
+]
+# A leaf's key, from /v1/categories (the format the table checks).
+CategoryKey = Annotated[
+    str, StringConstraints(max_length=200, pattern=r"^[a-z0-9_]+(\.[a-z0-9_]+)*$")
+]
+BrandName = Annotated[
+    str,
+    StringConstraints(strip_whitespace=True, min_length=1, max_length=80),
+    AfterValidator(_one_line),
+]
+Attributes = Annotated[dict[AttributeKey, Any], Field(max_length=100)]
+WeightG = Annotated[int, Field(gt=0, le=1_000_000)]
+# E16: the photos in display order, 1 at least; the category says how many at most.
+MediaIds = Annotated[list[UUID], Field(min_length=1, max_length=50), AfterValidator(_distinct)]
+
+
 class ListingDraftIn(BaseModel):
     """A new draft (section 11.5): what the seller says about the item."""
 
     model_config = ConfigDict(extra="forbid")
 
-    # Trimmed before the lengths are checked (the database checks the same lengths).
-    title: Annotated[
-        str,
-        StringConstraints(strip_whitespace=True, min_length=5, max_length=120),
-        AfterValidator(_one_line),
-    ]
-    description: Annotated[
-        str,
-        StringConstraints(strip_whitespace=True, min_length=20, max_length=5000),
-        AfterValidator(_printable),
-    ]
-    # A leaf's key, from /v1/categories (the format the table checks).
-    category: str = Field(max_length=200, pattern=r"^[a-z0-9_]+(\.[a-z0-9_]+)*$")
-    brand: (
-        Annotated[
-            str,
-            StringConstraints(strip_whitespace=True, min_length=1, max_length=80),
-            AfterValidator(_one_line),
-        ]
-        | None
-    ) = None
+    title: Title
+    description: Description
+    category: CategoryKey
+    brand: BrandName | None = None
     condition: ItemCondition
-    attributes: dict[AttributeKey, Any] = Field(
-        default_factory=dict[AttributeKey, Any], max_length=100
-    )
+    attributes: Attributes = Field(default_factory=dict[AttributeKey, Any])
     price: Money
     accepts_offers: bool = True
     handover_enabled: bool = True
     shipping_enabled: bool = True
     parcel_size: ParcelSize | None = None
-    weight_g: int | None = Field(default=None, gt=0, le=1_000_000)
+    weight_g: WeightG | None = None
     location: ListingLocationIn
-    # E16: the photos in display order, 1 at least; the category says how many at most.
-    media_ids: list[UUID] = Field(min_length=1, max_length=50)
-
-    @field_validator("media_ids")
-    @classmethod
-    def _distinct(cls, media_ids: list[UUID]) -> list[UUID]:
-        if len(set(media_ids)) != len(media_ids):
-            raise ValueError("each photo once")
-        return media_ids
+    media_ids: MediaIds
 
 
 class ListingOut(BaseModel):
