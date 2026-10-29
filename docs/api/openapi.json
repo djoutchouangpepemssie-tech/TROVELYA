@@ -1280,7 +1280,7 @@
         "type": "object"
       },
       "FavoriteItem": {
-        "description": "A listing in the member's favorites; `available` False once it left (sold, withdrawn,\nexpired, removed, or its seller is not shown).",
+        "description": "A listing in the member's favorites; `available` False once it left (sold, withdrawn,\nexpired, removed, or its seller is not shown). Removed or awaiting review: no title nor\nprice (a text not moderated, or taken down).",
         "properties": {
           "available": {
             "title": "Available",
@@ -1311,7 +1311,14 @@
             "type": "string"
           },
           "price": {
-            "$ref": "#/components/schemas/Money"
+            "anyOf": [
+              {
+                "$ref": "#/components/schemas/Money"
+              },
+              {
+                "type": "null"
+              }
+            ]
           },
           "price_watch": {
             "anyOf": [
@@ -1328,8 +1335,15 @@
             "type": "string"
           },
           "title": {
-            "title": "Title",
-            "type": "string"
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Title"
           }
         },
         "required": [
@@ -2809,11 +2823,14 @@
         "type": "object"
       },
       "PriceWatchIn": {
+        "additionalProperties": false,
         "description": "Q43: from 1 € to below the current price; none to be told of any drop.",
         "properties": {
           "target_minor": {
             "anyOf": [
               {
+                "maximum": 100000000.0,
+                "minimum": 100.0,
                 "type": "integer"
               },
               {

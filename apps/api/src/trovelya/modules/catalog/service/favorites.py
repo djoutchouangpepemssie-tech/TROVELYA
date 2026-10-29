@@ -2,8 +2,10 @@
 
 A member puts in favorites, or watches the price of, someone else's listing online (404 for any
 other, 409 for their own); doing it twice changes nothing, taking it back always works. The
-listing's favorite count moves in the same statement as the favorite. The price drop is only
-recorded in P2: the member is told with the notifications (P3)."""
+listing's favorite count moves in the same statement as the favorite; the listing is locked
+first, as the purge and the erasure do. Watching a price puts the listing in favorites, taking
+the favorite back stops the watch (Q43). The price drop is only recorded in P2: the member is
+told with the notifications (P3)."""
 
 from datetime import datetime
 from typing import Any
@@ -55,6 +57,7 @@ async def watch_price(
             message="Le prix visé doit être d'au moins 1 € et sous le prix actuel",
         )
         raise AppError(ErrorCode.VALIDATION_ERROR, 422, errors=[error])
+    await repository.add_favorite(db, member_id, listing_id, now)  # Q43: watching is favoring
     await repository.set_price_watch(db, member_id, listing_id, target_minor, now)
 
 
@@ -72,39 +75,32 @@ async def my_favorites(
     media_public_url: str | None,
 ) -> FavoritePage:
     """The member's favorites still online (`available`), or the others, the latest first."""
-    after = decode_cursor(cursor)
-    kept: list[dict[str, Any]] = []
-    exhausted = False
-    while len(kept) <= limit and not exhausted:
-        rows = await repository.my_favorites(db, user_id=member_id, after=after, limit=limit + 1)
-        exhausted = len(rows) <= limit
-        shown = await shown_sellers(db, list({row["seller_id"] for row in rows}))
-        for row in rows:
-            row["available"] = row["status"] == "active" and row["seller_id"] in shown
-            if row["available"] == available:
-                kept.append(row)
-        if rows:
-            after = (rows[-1]["favorited_at"], rows[-1]["id"])
-    page, has_more = kept[:limit], len(kept) > limit
+    rows = await repository.my_favorites(
+        db, user_id=member_id, available=available, after=decode_cursor(cursor), limit=limit + 1
+    )
+    page, has_more = rows[:limit], len(rows) > limit
     photos = await listing_photos.photo_variants_by_id(
         db, [m for row in page for m in row["media_ids"]], public_url=media_public_url
     )
+    data: list[dict[str, Any]] = []
+    for row in page:
+        shown = row["shown"]  # removed, or awaiting review: neither title nor price
+        data.append(
+            row
+            | {
+                "title": row["title"] if shown else None,
+                "price": {"amount_minor": row["price_minor"], "currency": row["currency"]}
+                if shown
+                else None,
+                "cover": next((photos[m] for m in row["media_ids"] if m in photos), None),
+                "price_watch": {"target_minor": row["target_minor"]} if row["watching"] else None,
+            }
+        )
+    last = page[-1] if has_more else None
     return FavoritePage.model_validate(
         {
-            "data": [
-                row
-                | {
-                    "price": {"amount_minor": row["price_minor"], "currency": row["currency"]},
-                    "cover": next((photos[m] for m in row["media_ids"] if m in photos), None),
-                    "price_watch": {"target_minor": row["target_minor"]}
-                    if row["watching"]
-                    else None,
-                }
-                for row in page
-            ],
-            "next_cursor": encode_cursor(page[-1]["favorited_at"], page[-1]["id"])
-            if has_more
-            else None,
+            "data": data,
+            "next_cursor": encode_cursor(last["favorited_at"], last["id"]) if last else None,
             "has_more": has_more,
         }
     )

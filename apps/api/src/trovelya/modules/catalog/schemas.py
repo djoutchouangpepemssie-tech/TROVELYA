@@ -340,17 +340,20 @@ class PriceWatch(BaseModel):
 class PriceWatchIn(BaseModel):
     """Q43: from 1 € to below the current price; none to be told of any drop."""
 
-    target_minor: int | None = Field(default=None, strict=True)
+    model_config = ConfigDict(extra="forbid")
+
+    target_minor: int | None = Field(default=None, strict=True, ge=100, le=100_000_000)
 
 
 class FavoriteItem(BaseModel):
     """A listing in the member's favorites; `available` False once it left (sold, withdrawn,
-    expired, removed, or its seller is not shown)."""
+    expired, removed, or its seller is not shown). Removed or awaiting review: no title nor
+    price (a text not moderated, or taken down)."""
 
     id: UUID
     short_id: str
-    title: str
-    price: Money
+    title: str | None
+    price: Money | None
     cover: list[PhotoVariant] | None
     available: bool
     favorited_at: datetime

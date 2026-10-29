@@ -1772,7 +1772,8 @@ export interface components {
         /**
          * FavoriteItem
          * @description A listing in the member's favorites; `available` False once it left (sold, withdrawn,
-         *     expired, removed, or its seller is not shown).
+         *     expired, removed, or its seller is not shown). Removed or awaiting review: no title nor
+         *     price (a text not moderated, or taken down).
          */
         FavoriteItem: {
             /** Available */
@@ -1789,12 +1790,12 @@ export interface components {
              * Format: uuid
              */
             id: string;
-            price: components["schemas"]["Money"];
+            price: components["schemas"]["Money"] | null;
             price_watch: components["schemas"]["PriceWatch"] | null;
             /** Short Id */
             short_id: string;
             /** Title */
-            title: string;
+            title: string | null;
         };
         /** FavoritePage */
         FavoritePage: {
