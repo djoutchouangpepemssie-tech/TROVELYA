@@ -2,7 +2,7 @@
 
 from datetime import UTC, datetime, timedelta
 
-from trovelya.modules.catalog.service.publishing import retry_after
+from trovelya.shared.quota import retry_after
 
 NOW = datetime(2026, 10, 29, 12, tzinfo=UTC)
 
