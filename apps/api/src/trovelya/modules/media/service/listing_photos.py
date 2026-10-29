@@ -40,6 +40,13 @@ async def photos_taken_off(db: AsyncSession, media_ids: Sequence[UUID], *, at: d
         await repository.mark_detached(db, media_ids, at)
 
 
+async def discard_photos(db: AsyncSession, media_ids: Sequence[UUID], *, now: datetime) -> None:
+    """The photos of a listing being purged are deleted; the media purge removes their files
+    at its next run (ADR-0019)."""
+    for media_id in media_ids:
+        await repository.mark_deleted(db, media_id, now)
+
+
 def _public(variants: list[dict[str, Any]], base: str) -> list[dict[str, Any]]:
     return [
         {

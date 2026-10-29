@@ -746,3 +746,63 @@ _LOCK_DUE_LISTINGS = text(
 async def lock_due_listings(db: AsyncSession, *, now: datetime, limit: int) -> list[UUID]:
     """Active listings whose time is up, locked; the ones locked elsewhere are skipped."""
     return list(await db.scalars(_LOCK_DUE_LISTINGS, {"now": now, "limit": limit}))
+
+
+# --- Retention of ended listings (P2-T04e, Q19) ---------------------------------------------
+
+# When the listing reached its status: the last transition to it (the creation for a listing
+# that never moved). Sold listings wait for the orders of P4.
+_LOCK_LISTINGS_TO_PURGE = text(
+    "SELECT l.id FROM listings l"
+    " WHERE (l.deleted_at IS NOT NULL AND l.deleted_at < :deleted_before)"
+    " OR (l.deleted_at IS NULL AND l.status IN ('withdrawn', 'expired', 'removed')"
+    " AND coalesce((SELECT max(h.created_at) FROM listing_status_history h"
+    " WHERE h.listing_id = l.id AND h.to_status = l.status), l.created_at)"
+    " < CASE WHEN l.status = 'removed' THEN CAST(:removed_before AS timestamptz)"
+    " ELSE CAST(:ended_before AS timestamptz) END)"
+    " ORDER BY l.id LIMIT :limit FOR UPDATE SKIP LOCKED"
+)
+_PHOTOS_OF = text("SELECT media_id FROM listing_media WHERE listing_id = ANY(:ids)")
+_DELETE_LISTINGS = text("DELETE FROM listings WHERE id = ANY(:ids)")
+# Q20, E18: a kept place is used while a listing of its seller stands within REUSE_M of it.
+_SELLERS_WITH_UNUSED_PLACES = text(
+    "SELECT DISTINCT p.seller_id FROM listing_public_positions p WHERE NOT EXISTS"
+    " (SELECT 1 FROM listings l WHERE l.seller_id = p.seller_id"
+    " AND ST_DWithin(l.location, p.location, :reuse_m))"
+)
+_TRY_LOCK_SELLER_PLACES = text(
+    "SELECT pg_try_advisory_xact_lock("
+    "hashtextextended('trovelya.public_position:' || :seller_id, 0))"
+)
+_DELETE_UNUSED_PLACES = text(
+    "DELETE FROM listing_public_positions p WHERE p.seller_id = :seller_id AND NOT EXISTS"
+    " (SELECT 1 FROM listings l WHERE l.seller_id = p.seller_id"
+    " AND ST_DWithin(l.location, p.location, :reuse_m))"
+)
+
+
+async def lock_listings_to_purge(
+    db: AsyncSession, cutoffs: Mapping[str, datetime], *, limit: int
+) -> list[UUID]:
+    return list(await db.scalars(_LOCK_LISTINGS_TO_PURGE, {**cutoffs, "limit": limit}))
+
+
+async def photos_of(db: AsyncSession, listing_ids: Sequence[UUID]) -> list[UUID]:
+    return list(await db.scalars(_PHOTOS_OF, {"ids": list(listing_ids)}))
+
+
+async def delete_listings(db: AsyncSession, listing_ids: Sequence[UUID]) -> None:
+    """Their photo links, favorites, price watches and histories go with them (cascade)."""
+    await db.execute(_DELETE_LISTINGS, {"ids": list(listing_ids)})
+
+
+async def sellers_with_unused_places(db: AsyncSession, *, reuse_m: float) -> list[UUID]:
+    return list(await db.scalars(_SELLERS_WITH_UNUSED_PLACES, {"reuse_m": reuse_m}))
+
+
+async def delete_unused_places(db: AsyncSession, seller_id: UUID, *, reuse_m: float) -> bool:
+    """False, and nothing deleted, while the seller is drawing a position (their lock)."""
+    if not await db.scalar(_TRY_LOCK_SELLER_PLACES, {"seller_id": str(seller_id)}):
+        return False
+    await db.execute(_DELETE_UNUSED_PLACES, {"seller_id": seller_id, "reuse_m": reuse_m})
+    return True
