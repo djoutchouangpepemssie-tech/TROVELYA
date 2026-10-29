@@ -527,7 +527,7 @@ tout ── T12 (parcours 2, démo, porte)
   - `active` + `remove` → `removed` ; `removed` + `appeal_accepted` → `active` ;
   - `active` + `expire` → `expired` ; `expired` + `renew` → `active` ;
   - `active` ↔ `reserved` et `reserved` → `sold` : présents dans la table, **sans route** (P4).
-- Publication : politique Q1, au moins 1 photo `ready`, quota de 50 par jour compté sur `listing_status_history` (verrou `FOR UPDATE` sur l'annonce), `published_at`, `expires_at` (E12).
+- Publication : politique Q1, au moins 1 photo `ready`, quota de Q24 compté sur `listing_status_history` (verrou consultatif du vendeur puis `FOR UPDATE` sur l'annonce), `published_at`, `expires_at` (E12) fixés dans la même mise à jour que le statut. Ordre des erreurs : 404, 403 `publish_forbidden` avec sa raison (`profile_incomplete`, `too_young`, `account_restricted` : compte suspendu, banni ou en cours d'effacement ; un compte `restricted` publie), 409, 422 `photo_required`, 429 (le quota n'est pas consommé par une action invalide) ; la modération décide en dernier.
 - Retrait, republication et renouvellement par le propriétaire.
 - Job d'expiration quotidien idempotent : identifiants des annonces `active` dont `expires_at <= now()` (`FOR UPDATE SKIP LOCKED`, par lots), puis `apply_transition` pour chacune (historique et événement), jamais un `UPDATE` du statut en masse.
 - Purge quotidienne des annonces terminées selon Q19 (durées en [PARAM], seuils comptés depuis `deleted_at`, le statut final ou `sold_at` ; photos, historiques, favoris et alertes partent avec l'annonce) ; tests aux bornes avec horloge fixe, une annonce vendue liée à une commande garde sa fiche minimale (P4).
