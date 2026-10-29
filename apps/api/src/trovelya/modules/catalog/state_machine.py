@@ -58,6 +58,7 @@ class InvalidTransition(Exception):  # noqa: N818 — the name section 9 gives i
 
 
 def next_status(status: ListingStatus, event: ListingEvent) -> ListingStatus:
+    """Where `event` leads from `status`; `InvalidTransition` when the table says nowhere."""
     try:
         return TRANSITIONS[(status, event)]
     except KeyError:

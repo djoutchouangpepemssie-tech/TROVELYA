@@ -664,7 +664,8 @@ async def seller_listings(
 # --- State machine (P2-T04a) ------------------------------------------------------------------
 
 _LOCK_LISTING_STATUS = text(
-    "SELECT status::text FROM listings WHERE id = :id AND deleted_at IS NULL FOR UPDATE"
+    "SELECT status::text AS status, seller_id FROM listings"
+    " WHERE id = :id AND deleted_at IS NULL FOR UPDATE"
 )
 _SET_LISTING_STATUS = text(
     "UPDATE listings SET status = CAST(:status AS listing_status) WHERE id = :id"
@@ -678,16 +679,18 @@ _RECORD_TRANSITION = text(
 )
 
 
-async def lock_listing_status(db: AsyncSession, listing_id: UUID) -> str | None:
-    """The status of a listing not deleted, locked until the transaction ends."""
-    return await db.scalar(_LOCK_LISTING_STATUS, {"id": listing_id})
+async def lock_listing_status(db: AsyncSession, listing_id: UUID) -> Row[Any] | None:
+    """Status and seller of a listing not deleted, locked until the transaction ends."""
+    return (await db.execute(_LOCK_LISTING_STATUS, {"id": listing_id})).one_or_none()
 
 
 async def set_listing_status(db: AsyncSession, listing_id: UUID, status: str) -> None:
+    """The status alone; the version trigger moves `version` and `updated_at` with it."""
     await db.execute(_SET_LISTING_STATUS, {"id": listing_id, "status": status})
 
 
 async def record_transition(db: AsyncSession, values: Mapping[str, Any]) -> None:
+    """One row of `listing_status_history` (E8): append only."""
     await db.execute(_RECORD_TRANSITION, values)
 
 

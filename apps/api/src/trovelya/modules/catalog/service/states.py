@@ -17,22 +17,22 @@ from trovelya.shared.clock import Clock
 from trovelya.shared.events import emit_event
 from trovelya.shared.ids import new_id
 
-# Section 5.6 names `listing.published`, `listing.withdrawn` and `listing.sold`; the others
-# follow the same pattern. The payload says which transition it was.
+# Named by their effect (plan Q25, section 5.6): what the consumers act on is whether the
+# listing enters or leaves the shop window. The payload says which transition it was.
 EVENT_TYPES: dict[ListingEvent, str] = {
     ListingEvent.PUBLISH: "listing.published",
-    ListingEvent.SUBMIT_FOR_REVIEW: "listing.submitted_for_review",
-    ListingEvent.APPROVE: "listing.approved",
-    ListingEvent.REJECT: "listing.rejected",
-    ListingEvent.RESERVE: "listing.reserved",
-    ListingEvent.RELEASE: "listing.released",
-    ListingEvent.SELL: "listing.sold",
+    ListingEvent.APPROVE: "listing.published",
+    ListingEvent.REPUBLISH: "listing.published",
+    ListingEvent.RENEW: "listing.published",
+    ListingEvent.APPEAL_ACCEPTED: "listing.published",
+    ListingEvent.RELEASE: "listing.published",
     ListingEvent.WITHDRAW: "listing.withdrawn",
-    ListingEvent.REPUBLISH: "listing.republished",
-    ListingEvent.REMOVE: "listing.removed",
-    ListingEvent.APPEAL_ACCEPTED: "listing.reinstated",
-    ListingEvent.EXPIRE: "listing.expired",
-    ListingEvent.RENEW: "listing.renewed",
+    ListingEvent.REMOVE: "listing.withdrawn",
+    ListingEvent.REJECT: "listing.withdrawn",
+    ListingEvent.EXPIRE: "listing.withdrawn",
+    ListingEvent.SELL: "listing.sold",
+    ListingEvent.SUBMIT_FOR_REVIEW: "listing.submitted_for_review",
+    ListingEvent.RESERVE: "listing.reserved",
 }
 
 ActorKind = Literal["user", "staff", "system"]
@@ -55,6 +55,8 @@ SYSTEM = Actor("system")
 
 @dataclass(frozen=True, slots=True)
 class Transition:
+    """The statuses before and after; the listing's `version` moved with its status."""
+
     from_status: ListingStatus
     to_status: ListingStatus
 
@@ -70,11 +72,17 @@ async def apply_transition(
     reason_text: str | None = None,
 ) -> Transition:
     """404 for a listing that does not exist or was deleted; 409 `invalid_transition` when
-    the table does not allow `event` from the listing's status (nothing is written)."""
+    the table does not allow `event` from the listing's status (nothing is written).
+
+    Who may do it is the caller's business: this never checks that `actor` owns the listing.
+    A seller's route takes `lock_seller_listings` then `lock_own_listing` first (the order of
+    the drafts, so a publication and an edit never deadlock); a staff decision writes the audit
+    log in the same transaction (E8). `reason_code` and `reason_text` come from the code or a
+    validated staff form: the history's checks reject anything else."""
     current = await repository.lock_listing_status(db, listing_id)
     if current is None:
         raise AppError(ErrorCode.NOT_FOUND, 404)
-    from_status = ListingStatus(current)
+    from_status = ListingStatus(current.status)
     try:
         to_status = next_status(from_status, event)
     except InvalidTransition as exc:
@@ -100,6 +108,13 @@ async def apply_transition(
         type=EVENT_TYPES[event],
         aggregate_type="listing",
         aggregate_id=listing_id,
-        payload={"event": event.value, "from": from_status.value, "to": to_status.value},
+        payload={
+            "event": event.value,
+            "from": from_status.value,
+            "to": to_status.value,
+            "seller_id": str(current.seller_id),
+            "actor_kind": actor.kind,
+            "reason_code": reason_code,
+        },
     )
     return Transition(from_status, to_status)

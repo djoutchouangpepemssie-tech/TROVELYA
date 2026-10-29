@@ -3,6 +3,7 @@ changes, the transition is written in `listing_status_history` with its actor an
 domain event leaves through the outbox — all in the caller's transaction, or nothing."""
 
 import asyncio
+from datetime import UTC, datetime
 from typing import Any
 from uuid import UUID
 
@@ -23,6 +24,24 @@ from trovelya.shared.clock import FixedClock, SystemClock
 from trovelya.shared.ids import new_id
 
 Session = async_sessionmaker[AsyncSession]
+
+# Plan Q25: named by their effect on the shop window.
+EXPECTED_TYPES = {
+    ListingEvent.PUBLISH: "listing.published",
+    ListingEvent.APPROVE: "listing.published",
+    ListingEvent.REPUBLISH: "listing.published",
+    ListingEvent.RENEW: "listing.published",
+    ListingEvent.APPEAL_ACCEPTED: "listing.published",
+    ListingEvent.RELEASE: "listing.published",
+    ListingEvent.WITHDRAW: "listing.withdrawn",
+    ListingEvent.REMOVE: "listing.withdrawn",
+    ListingEvent.REJECT: "listing.withdrawn",
+    ListingEvent.EXPIRE: "listing.withdrawn",
+    ListingEvent.SELL: "listing.sold",
+    ListingEvent.SUBMIT_FOR_REVIEW: "listing.submitted_for_review",
+    ListingEvent.RESERVE: "listing.reserved",
+}
+AT = datetime(2030, 1, 1, 12, tzinfo=UTC)  # far from now: the history's time is the clock's
 
 
 async def _set_status(sessionmaker: Session, listing_id: UUID, status: ListingStatus) -> None:
@@ -86,36 +105,56 @@ async def test_each_transition_writes_history_and_event(
     member = await make_account(sessionmaker, completed=True)
     listing_id = await _listing(sessionmaker, member.id, category, "Lampe opaline verte")
     await _set_status(sessionmaker, listing_id, start)
-    async with sessionmaker() as db:
-        now = await db.scalar(text("SELECT now()"))
     actor = Actor("user", member.id)
     async with sessionmaker() as db:
+        version = await db.scalar(
+            text("SELECT version FROM listings WHERE id = :l"), {"l": listing_id}
+        )
         moved = await apply_transition(
             db,
             listing_id=listing_id,
             event=event,
             actor=actor,
-            clock=FixedClock(now),
+            clock=FixedClock(AT),
             reason_code="test_reason",
+            reason_text="Motif lisible",
         )
         await db.commit()
     to = TRANSITIONS[(start, event)]
     assert (moved.from_status, moved.to_status) == (start, to)
     assert await _status(sessionmaker, listing_id) == to.value
+    async with sessionmaker() as db:
+        after = await db.scalar(
+            text("SELECT version FROM listings WHERE id = :l"), {"l": listing_id}
+        )
+    assert after == version + 1  # If-Match: a client on the old status is stale
     [row] = await _history(sessionmaker, listing_id)
     assert (row.from_status, row.to_status, row.event) == (start.value, to.value, event.value)
-    assert (row.actor_id, row.actor_kind, row.reason_code) == (member.id, "user", "test_reason")
-    assert row.created_at == now
+    assert (row.actor_id, row.actor_kind) == (member.id, "user")
+    assert (row.reason_code, row.reason_text, row.created_at) == (
+        "test_reason",
+        "Motif lisible",
+        AT,
+    )
     [outbox] = await _events(sessionmaker, listing_id)
-    assert outbox.aggregate_type == "listing" and outbox.type.startswith("listing.")
-    assert outbox.payload == {"event": event.value, "from": start.value, "to": to.value, "v": 1}
+    assert (outbox.aggregate_type, outbox.type) == ("listing", EXPECTED_TYPES[event])
+    assert outbox.payload == {
+        "event": event.value,
+        "from": start.value,
+        "to": to.value,
+        "seller_id": str(member.id),
+        "actor_kind": "user",
+        "reason_code": "test_reason",
+        "v": 1,
+    }
 
 
-async def test_published_withdrawn_and_sold_named_as_the_spec(
+async def test_system_transitions_named_as_the_spec(
     sessionmaker: Session,
     category: UUID,  # noqa: F811
 ) -> None:
-    """Section 5.6 names `listing.published`, `listing.withdrawn` and `listing.sold`."""
+    """Section 5.6 names `listing.published`, `listing.withdrawn` and `listing.sold`; a
+    transition by the platform has no actor."""
     member = await make_account(sessionmaker, completed=True)
     listing_id = await _listing(sessionmaker, member.id, category, "Lampe opaline verte")
     for event in (ListingEvent.PUBLISH, ListingEvent.WITHDRAW):
@@ -151,6 +190,7 @@ async def test_invalid_transition_409_and_nothing_written(
                 actor=Actor("user", member.id),
                 clock=SystemClock(),
             )
+        await db.commit()  # what a route does once the error is its answer
     assert (refused.value.status, refused.value.code) == (409, "invalid_transition")
     assert await _history(sessionmaker, listing_id) == []
     assert await _events(sessionmaker, listing_id) == []
