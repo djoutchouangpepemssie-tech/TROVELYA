@@ -14,6 +14,7 @@ from uuid import UUID
 from httpx import AsyncClient, Response
 from sqlalchemy import text
 
+from tests.integration.catalog.test_draft_rules import photo
 from tests.integration.catalog.test_drafts import Session, create, draft, seller
 from tests.integration.identity.test_profile import Account, make_account
 from trovelya.modules.identity.service.profile import current_year
@@ -105,7 +106,9 @@ async def test_publish_requires_adult(client: AsyncClient, sessionmaker: Session
         sessionmaker, "UPDATE users SET birth_year = :y WHERE id = :u", y=year - 18, u=account.id
     )
     response = await _publish(client, account, listing["id"])
-    assert (response.status_code, response.json()["code"]) == (403, "publish_forbidden")
+    assert _refusal(response) == "too_young"
+    await _execute(sessionmaker, "UPDATE users SET birth_year = NULL WHERE id = :u", u=account.id)
+    assert _refusal(await _publish(client, account, listing["id"])) == "too_young"
     await _execute(
         sessionmaker, "UPDATE users SET birth_year = :y WHERE id = :u", y=year - 19, u=account.id
     )
@@ -119,20 +122,43 @@ async def test_publish_refused_during_erasure_grace(
     await _execute(
         sessionmaker, "UPDATE users SET erasure_requested_at = now() WHERE id = :u", u=account.id
     )
-    response = await _publish(client, account, listing["id"])
-    assert (response.status_code, response.json()["code"]) == (403, "publish_forbidden")
+    assert _refusal(await _publish(client, account, listing["id"])) == "account_restricted"
+
+
+async def test_restricted_account_may_publish(client: AsyncClient, sessionmaker: Session) -> None:
+    """`restricted` lowers the visibility of the account's listings; it is no suspension."""
+    account, listing = await _draft(client, sessionmaker)
+    await _execute(
+        sessionmaker, "UPDATE users SET status = 'restricted' WHERE id = :u", u=account.id
+    )
+    assert (await _publish(client, account, listing["id"])).status_code == 200
+
+
+def _refusal(response: Response) -> str:
+    """The reason of a 403 `publish_forbidden` (plan P2, access answers)."""
+    problem = response.json()
+    assert (response.status_code, problem["code"]) == (403, "publish_forbidden")
+    [reason] = problem["errors"]
+    assert reason["field"] == "account"
+    return str(reason["code"])
 
 
 async def test_publish_requires_ready_photo(client: AsyncClient, sessionmaker: Session) -> None:
-    """Its only photo removed by moderation meanwhile: nothing to show, 422."""
+    """Its only photo back in processing, then removed by moderation: nothing to show, 422."""
     account, listing = await _draft(client, sessionmaker)
-    await _execute(
-        sessionmaker,
-        "UPDATE media SET deleted_at = now() WHERE id = :m",
-        m=listing["media_ids"][0],
-    )
-    response = await _publish(client, account, listing["id"])
-    assert (response.status_code, response.json()["code"]) == (422, "photo_required")
+    for change in ("status = 'processing'", "status = 'ready', deleted_at = now()"):
+        await _execute(
+            sessionmaker,
+            {
+                "status = 'processing'": "UPDATE media SET status = 'processing' WHERE id = :m",
+                "status = 'ready', deleted_at = now()": (
+                    "UPDATE media SET status = 'ready', deleted_at = now() WHERE id = :m"
+                ),
+            }[change],
+            m=listing["media_ids"][0],
+        )
+        response = await _publish(client, account, listing["id"])
+        assert (response.status_code, response.json()["code"]) == (422, "photo_required")
     async with sessionmaker() as db:
         status = await db.scalar(
             text("SELECT status::text FROM listings WHERE id = :l"), {"l": listing["id"]}
@@ -170,7 +196,7 @@ async def test_publication_limit_50_over_24_hours(
     await _put_online(sessionmaker, account.id, ago=timedelta(hours=25), n=10)  # out of window
     refused = await _publish(client, account, listing["id"])
     assert (refused.status_code, refused.json()["code"]) == (429, "publication_limit")
-    # The oldest of the window leaves it in an hour.
+    # The oldest of the window leaves it in about an hour (exact values: test_quota_window).
     assert 3500 <= int(refused.headers["retry-after"]) <= 3601
     await _execute(
         sessionmaker,
@@ -181,20 +207,78 @@ async def test_publication_limit_50_over_24_hours(
     assert (await _publish(client, account, listing["id"])).status_code == 200
 
 
-async def test_staff_and_system_transitions_not_counted(
+async def test_only_puttings_online_by_the_seller_counted(
     client: AsyncClient, sessionmaker: Session
 ) -> None:
-    """Only what the seller put online counts: a moderator's approval is not theirs."""
+    """Q24: a withdrawal is no putting online, and an approval by a moderator (even one who
+    sells too) or the platform is not the seller's."""
     account, listing = await _draft(client, sessionmaker)
     await _put_online(sessionmaker, account.id, ago=timedelta(hours=1), n=49)
+    for event, kind, actor in (
+        ("withdraw", "user", account.id),
+        ("approve", "staff", account.id),
+        ("renew", "system", None),
+    ):
+        await _execute(
+            sessionmaker,
+            "INSERT INTO listing_status_history (id, listing_id, from_status, to_status, event,"
+            " actor_id, actor_kind) VALUES (:id, :l, 'draft', 'active', :e, :a, :k)",
+            id=new_id(),
+            l=listing["id"],
+            e=event,
+            a=actor,
+            k=kind,
+        )
+    assert (await _publish(client, account, listing["id"])).status_code == 200
+
+
+async def test_errors_in_order(client: AsyncClient, sessionmaker: Session) -> None:
+    """With the quota used up, a listing that cannot go online says why first: 409 for a
+    published one, 422 for one with no ready photo; the quota is not spent on them."""
+    account, listing = await _draft(client, sessionmaker)
+    assert (await _publish(client, account, listing["id"])).status_code == 200
+    await _put_online(sessionmaker, account.id, ago=timedelta(hours=1), n=50)
+    assert (await _publish(client, account, listing["id"])).status_code == 409
+    zone = listing["location"]["id"]
+    media = await photo(sessionmaker, account.id)
+    other = (await create(client, account, draft(zone, [media]))).json()
+    await _execute(sessionmaker, "UPDATE media SET deleted_at = now() WHERE id = :m", m=media)
+    assert (await _publish(client, account, other["id"])).status_code == 422
+
+
+async def test_quota_held_for_two_listings_at_once(
+    client: AsyncClient, sessionmaker: Session
+) -> None:
+    """One put online left: two drafts published at once cannot both take it (the seller's
+    lock, not only the listing's)."""
+    account, first = await _draft(client, sessionmaker)
+    zone = first["location"]["id"]
+    second = (
+        await create(client, account, draft(zone, [await photo(sessionmaker, account.id)]))
+    ).json()
+    await _put_online(sessionmaker, account.id, ago=timedelta(hours=1), n=49)
+    responses = await asyncio.gather(
+        _publish(client, account, first["id"]), _publish(client, account, second["id"])
+    )
+    assert sorted(r.status_code for r in responses) == [200, 429]
+
+
+async def test_expiry_days_is_a_setting(client: AsyncClient, sessionmaker: Session) -> None:
+    account, listing = await _draft(client, sessionmaker)
     await _execute(
         sessionmaker,
-        "INSERT INTO listing_status_history (id, listing_id, from_status, to_status, event,"
-        " actor_kind) VALUES (:id, :l, 'expired', 'active', 'renew', 'system')",
-        id=new_id(),
-        l=listing["id"],
+        "UPDATE platform_settings SET value = '30' WHERE key = 'listings.expiry_days'",
     )
-    assert (await _publish(client, account, listing["id"])).status_code == 200
+    try:
+        published = (await _publish(client, account, listing["id"])).json()
+    finally:
+        await _execute(
+            sessionmaker,
+            "UPDATE platform_settings SET value = '120' WHERE key = 'listings.expiry_days'",
+        )
+    at = datetime.fromisoformat(published["published_at"])
+    assert datetime.fromisoformat(published["expires_at"]) == at + timedelta(days=30)
+    assert published["version"] == listing["version"] + 1  # one change, one version
 
 
 async def test_concurrent_publish_single_transition(

@@ -4,11 +4,12 @@ from uuid import UUID
 
 from sqlalchemy.ext.asyncio import AsyncSession
 
-from trovelya.modules.identity.service import may_trade
+from trovelya.modules.identity.service import trade_refusal
 from trovelya.shared.clock import Clock
 
 
-async def can_publish_listing(db: AsyncSession, user_id: UUID, *, clock: Clock) -> bool:
-    """Q1: a completed profile, 18 or over (rule E14), not suspended, no erasure in progress.
-    From P4, the `listing.publish` permission (seller activation) is required as well."""
-    return await may_trade(db, user_id, clock=clock)
+async def publish_refusal(db: AsyncSession, user_id: UUID, *, clock: Clock) -> str | None:
+    """`can_publish_listing` of Q1: why the member may not put a listing online
+    (`profile_incomplete`, `too_young`, `account_restricted`), None when they may. From P4, the
+    `listing.publish` permission (seller activation) is required as well."""
+    return await trade_refusal(db, user_id, clock=clock)
