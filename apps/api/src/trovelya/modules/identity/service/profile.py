@@ -253,6 +253,11 @@ async def public_seller(
     }
 
 
+async def shown_sellers(db: AsyncSession, user_ids: list[UUID]) -> set[UUID]:
+    """Of these members, the ones whose listings are shown to others (`public_seller`'s rule)."""
+    return await repository.shown_sellers(db, user_ids)
+
+
 async def default_zone_center(db: AsyncSession, user_id: UUID) -> tuple[float, float] | None:
     """The centre of the member's default search zone, from which distances are shown (Q17)."""
     row = await repository.default_zone_center(db, user_id)

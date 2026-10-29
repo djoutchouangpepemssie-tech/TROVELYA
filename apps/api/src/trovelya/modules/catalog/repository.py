@@ -980,3 +980,95 @@ async def review_queue(db: AsyncSession, *, staff_id: UUID, limit: int) -> list[
     the reviewer's own (they may not decide on them)."""
     rows = (await db.execute(_REVIEW_QUEUE, {"staff": staff_id, "limit": limit})).mappings()
     return [dict(row) for row in rows]
+
+
+# --- Favorites and price watches (P2-T08) -----------------------------------------------------
+
+_FAVORITE_TARGET = text(
+    "SELECT status::text AS status, seller_id, price_minor, currency FROM listings"
+    " WHERE id = :id AND deleted_at IS NULL FOR NO KEY UPDATE"
+)
+_ADD_FAVORITE = text(
+    "WITH added AS (INSERT INTO favorites (user_id, listing_id, created_at)"
+    " VALUES (:user_id, :listing_id, :now) ON CONFLICT DO NOTHING RETURNING listing_id)"
+    " UPDATE listings SET favorite_count = favorite_count + 1"
+    " WHERE id IN (SELECT listing_id FROM added)"
+)
+_REMOVE_FAVORITE = text(
+    "WITH gone AS (DELETE FROM favorites WHERE user_id = :user_id AND listing_id = :listing_id"
+    " RETURNING listing_id)"
+    " UPDATE listings SET favorite_count = GREATEST(favorite_count - 1, 0)"
+    " WHERE id IN (SELECT listing_id FROM gone)"
+)
+_LOCK_FAVORITED = text("SELECT 1 FROM listings WHERE id = :listing_id FOR NO KEY UPDATE")
+_REMOVE_WATCH = text(
+    "DELETE FROM price_watches WHERE user_id = :user_id AND listing_id = :listing_id"
+)
+_UPSERT_WATCH = text(
+    "INSERT INTO price_watches (user_id, listing_id, target_minor, created_at)"
+    " VALUES (:user_id, :listing_id, :target_minor, :now)"
+    " ON CONFLICT (user_id, listing_id) DO UPDATE SET target_minor = EXCLUDED.target_minor"
+)
+# Available: online and its seller shown (the rule of identity's `public_seller`, applied here
+# so that a page is one query, whatever the member's history of sold listings). A listing whose
+# text is not (or no longer) moderated shows neither title nor price.
+_MY_FAVORITES = text(
+    "SELECT * FROM (SELECT l.id, l.short_id, l.status::text AS status,"
+    " l.status IN ('active', 'sold', 'expired', 'withdrawn') AS shown, l.title, l.price_minor,"
+    " l.currency, f.created_at AS favorited_at, w.target_minor, w.user_id IS NOT NULL AS watching,"
+    " l.status = 'active' AND EXISTS (SELECT 1 FROM users u WHERE u.id = l.seller_id"
+    " AND u.status IN ('active', 'restricted') AND u.erasure_requested_at IS NULL"
+    " AND u.profile_completed_at IS NOT NULL) AS available,"
+    " ARRAY(SELECT m.media_id FROM listing_media m WHERE m.listing_id = l.id"
+    " ORDER BY m.position) AS media_ids"
+    " FROM favorites f JOIN listings l ON l.id = f.listing_id"
+    " LEFT JOIN price_watches w ON w.user_id = f.user_id AND w.listing_id = f.listing_id"
+    " WHERE f.user_id = :user_id AND l.deleted_at IS NULL"
+    " AND (CAST(:at AS timestamptz) IS NULL OR (f.created_at, f.listing_id)"
+    " < (CAST(:at AS timestamptz), CAST(:after_id AS uuid)))) mine"
+    " WHERE available = :available"
+    " ORDER BY favorited_at DESC, id DESC LIMIT :limit"
+)
+
+
+async def favorite_target(db: AsyncSession, listing_id: UUID) -> Row[Any] | None:
+    return (await db.execute(_FAVORITE_TARGET, {"id": listing_id})).one_or_none()
+
+
+async def add_favorite(db: AsyncSession, user_id: UUID, listing_id: UUID, now: datetime) -> None:
+    """Idempotent; the count moves only for a favorite actually added (same statement)."""
+    await db.execute(_ADD_FAVORITE, {"user_id": user_id, "listing_id": listing_id, "now": now})
+
+
+async def remove_favorite(db: AsyncSession, user_id: UUID, listing_id: UUID) -> None:
+    """The listing is locked first, in the order of the purge and the erasure (no deadlock)."""
+    params = {"user_id": user_id, "listing_id": listing_id}
+    await db.execute(_LOCK_FAVORITED, params)
+    await db.execute(_REMOVE_FAVORITE, params)
+    await db.execute(_REMOVE_WATCH, params)
+
+
+async def set_price_watch(
+    db: AsyncSession, user_id: UUID, listing_id: UUID, target_minor: int | None, now: datetime
+) -> None:
+    params = {"user_id": user_id, "listing_id": listing_id, "target_minor": target_minor}
+    await db.execute(_UPSERT_WATCH, params | {"now": now})
+
+
+async def remove_price_watch(db: AsyncSession, user_id: UUID, listing_id: UUID) -> None:
+    await db.execute(_REMOVE_WATCH, {"user_id": user_id, "listing_id": listing_id})
+
+
+async def my_favorites(
+    db: AsyncSession,
+    *,
+    user_id: UUID,
+    available: bool,
+    after: tuple[datetime, UUID] | None,
+    limit: int,
+) -> list[dict[str, Any]]:
+    """The member's favorites available or not, the latest first, after `after`."""
+    at, after_id = after or (None, None)
+    params: dict[str, Any] = {"user_id": user_id, "available": available, "limit": limit}
+    params |= {"at": at, "after_id": after_id}
+    return [dict(row) for row in (await db.execute(_MY_FAVORITES, params)).mappings()]

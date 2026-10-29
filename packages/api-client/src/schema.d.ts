@@ -516,6 +516,51 @@ export interface paths {
         patch: operations["listing_update"];
         trace?: never;
     };
+    "/v1/listings/{listing_id}/favorite": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        get?: never;
+        put?: never;
+        /**
+         * Add Favorite
+         * @description Idempotent: a listing already in favorites stays once.
+         */
+        post: operations["favorite_add"];
+        /**
+         * Remove Favorite
+         * @description Always possible, the listing online or not; idempotent.
+         */
+        delete: operations["favorite_remove"];
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/v1/listings/{listing_id}/price-watch": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        get?: never;
+        put?: never;
+        /**
+         * Watch Price
+         * @description Watches the price, to a target or any drop; sent again, the target is replaced.
+         */
+        post: operations["price_watch_set"];
+        /** Unwatch Price */
+        delete: operations["price_watch_remove"];
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
     "/v1/listings/{listing_id}/publish": {
         parameters: {
             query?: never;
@@ -807,6 +852,26 @@ export interface paths {
         put?: never;
         /** Post Erasure Cancel */
         post: operations["me_erasure_cancel"];
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/v1/me/favorites": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        /**
+         * My Favorites
+         * @description The caller's favorites still online (`available`, the default), or the others.
+         */
+        get: operations["me_favorites"];
+        put?: never;
+        post?: never;
         delete?: never;
         options?: never;
         head?: never;
@@ -1704,6 +1769,43 @@ export interface components {
              */
             erase_at: string;
         };
+        /**
+         * FavoriteItem
+         * @description A listing in the member's favorites; `available` False once it left (sold, withdrawn,
+         *     expired, removed, or its seller is not shown). Removed or awaiting review: no title nor
+         *     price (a text not moderated, or taken down).
+         */
+        FavoriteItem: {
+            /** Available */
+            available: boolean;
+            /** Cover */
+            cover: components["schemas"]["PhotoVariant"][] | null;
+            /**
+             * Favorited At
+             * Format: date-time
+             */
+            favorited_at: string;
+            /**
+             * Id
+             * Format: uuid
+             */
+            id: string;
+            price: components["schemas"]["Money"] | null;
+            price_watch: components["schemas"]["PriceWatch"] | null;
+            /** Short Id */
+            short_id: string;
+            /** Title */
+            title: string | null;
+        };
+        /** FavoritePage */
+        FavoritePage: {
+            /** Data */
+            data: components["schemas"]["FavoriteItem"][];
+            /** Has More */
+            has_more: boolean;
+            /** Next Cursor */
+            next_cursor: string | null;
+        };
         /** HTTPValidationError */
         HTTPValidationError: {
             /** Detail */
@@ -2203,6 +2305,19 @@ export interface components {
             sizes?: {
                 [key: string]: string;
             };
+        };
+        /** PriceWatch */
+        PriceWatch: {
+            /** Target Minor */
+            target_minor: number | null;
+        };
+        /**
+         * PriceWatchIn
+         * @description Q43: from 1 € to below the current price; none to be told of any drop.
+         */
+        PriceWatchIn: {
+            /** Target Minor */
+            target_minor?: number | null;
         };
         /**
          * ProfilePatch
@@ -3571,6 +3686,152 @@ export interface operations {
             };
         };
     };
+    favorite_add: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                listing_id: string;
+            };
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description Successful Response */
+            204: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content?: never;
+            };
+            /** @description No such listing online */
+            404: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content?: never;
+            };
+            /** @description The caller's own listing */
+            409: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content?: never;
+            };
+            /** @description Validation Error */
+            422: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["HTTPValidationError"];
+                };
+            };
+        };
+    };
+    favorite_remove: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                listing_id: string;
+            };
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description Successful Response */
+            204: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content?: never;
+            };
+            /** @description Validation Error */
+            422: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["HTTPValidationError"];
+                };
+            };
+        };
+    };
+    price_watch_set: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                listing_id: string;
+            };
+            cookie?: never;
+        };
+        requestBody: {
+            content: {
+                "application/json": components["schemas"]["PriceWatchIn"];
+            };
+        };
+        responses: {
+            /** @description Successful Response */
+            204: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content?: never;
+            };
+            /** @description No such listing online */
+            404: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content?: never;
+            };
+            /** @description The caller's own listing */
+            409: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content?: never;
+            };
+            /** @description Target below 1 € or not below the price */
+            422: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content?: never;
+            };
+        };
+    };
+    price_watch_remove: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                listing_id: string;
+            };
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description Successful Response */
+            204: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content?: never;
+            };
+            /** @description Validation Error */
+            422: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["HTTPValidationError"];
+                };
+            };
+        };
+    };
     listing_publish: {
         parameters: {
             query?: never;
@@ -4189,6 +4450,39 @@ export interface operations {
                     [name: string]: unknown;
                 };
                 content?: never;
+            };
+        };
+    };
+    me_favorites: {
+        parameters: {
+            query?: {
+                available?: boolean;
+                cursor?: string | null;
+                limit?: number;
+            };
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description Successful Response */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["FavoritePage"];
+                };
+            };
+            /** @description Validation Error */
+            422: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["HTTPValidationError"];
+                };
             };
         };
     };

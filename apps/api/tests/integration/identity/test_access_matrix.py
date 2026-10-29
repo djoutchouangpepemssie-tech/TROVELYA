@@ -74,6 +74,12 @@ SELF_ROUTES = {
     "POST /v1/media/uploads",
     "POST /v1/listings",
     "GET /v1/me/listings",
+    # The listing in the path is someone else's: the favorite or watch is the caller's own.
+    "POST /v1/listings/{listing_id}/favorite",
+    "DELETE /v1/listings/{listing_id}/favorite",
+    "POST /v1/listings/{listing_id}/price-watch",
+    "DELETE /v1/listings/{listing_id}/price-watch",
+    "GET /v1/me/favorites",
 }
 OWNED_ROUTES = {
     "DELETE /v1/me/sessions/{session_id}",
