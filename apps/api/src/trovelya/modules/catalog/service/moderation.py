@@ -43,8 +43,8 @@ _TOKEN_RE = re.compile(r"\([^)]*\)\??|\S+")
 
 
 def _term(term: str) -> str:
-    """A term of the list: words, `(a|b c)` one of them, `~` any one word, `?` after a word
-    or a group: optional."""
+    """A term of the list: words, `(a|b c)` one of them, `~` any one word, `#` a number, `?`
+    after a word or a group: optional."""
     out = ""
     for piece in _TOKEN_RE.findall(term):
         optional = piece.endswith("?")
@@ -54,6 +54,8 @@ def _term(term: str) -> str:
             part = "(?:" + "|".join(alternatives) + ")"
         elif piece == "~":
             part = "[a-z0-9]+"
+        elif piece == "#":
+            part = "[0-9]+"
         else:
             part = _word(piece)
         sep = " " if out else ""
