@@ -5,6 +5,8 @@
    and committed, so a worker finishing late (`mark_ready` needs a media not deleted) cannot
    race with the deletion of its files; a photo a member is choosing as their avatar or
    attaching to a listing is skipped (`mark_for_purge`).
+1b. Quarantined photos (plan Q40): their variants move from the public bucket to a private
+   copy (same keys, `originals` bucket), kept for the appeal; deleted with the photo.
 2. Files of every deleted media: original and variants leave storage at the next run, an
    hour at most after the photo was withdrawn or the account erased (ADR-0019: a withdrawn
    photo's public URL must stop working). A failure is recorded on the row; the media is
@@ -66,6 +68,8 @@ async def _delete_files(
                 await storage.delete("originals", row.storage_key)
                 for variant in row.variants:
                     await storage.delete("variants", variant["key"])
+                    if row.quarantine_moved_at is not None:  # its private copy (Q40)
+                        await storage.delete("originals", variant["key"])
             except Exception:
                 logger.exception("media.purge_failed", media_id=str(row.id))
                 async with sessionmaker() as db:
@@ -83,6 +87,33 @@ async def _delete_files(
             run.deleted += 1
 
 
+async def _move_quarantined(sessionmaker: Session, storage: ObjectStorage, *, clock: Clock) -> None:
+    """Q40: a quarantined photo's variants leave the public bucket for a private copy (copied
+    before deleted: never lost; a variant already gone has nothing to move). A failure leaves
+    the photo for the next run; failures in a row stop this step, not the purge."""
+    async with sessionmaker() as db:
+        rows = await repository.quarantined_to_move(db, limit=BATCH)
+    failures = 0
+    for row in rows:
+        try:
+            for variant in row.variants:
+                if await storage.size("variants", variant["key"]) is None:
+                    continue
+                data = await storage.get("variants", variant["key"])
+                await storage.put("originals", variant["key"], data, content_type="image/webp")
+                await storage.delete("variants", variant["key"])
+        except Exception:
+            logger.exception("media.quarantine_failed", media_id=str(row.id))
+            failures += 1
+            if failures >= MAX_CONSECUTIVE_FAILURES:
+                return
+            continue
+        failures = 0
+        async with sessionmaker() as db:
+            await repository.mark_quarantine_moved(db, row.id, clock.now())
+            await commit(db)
+
+
 async def purge_media(sessionmaker: Session, storage: ObjectStorage, *, clock: Clock) -> int:
     """Returns the number of media whose files were deleted."""
     now = clock.now()
@@ -93,6 +124,7 @@ async def purge_media(sessionmaker: Session, storage: ObjectStorage, *, clock: C
         )
         await commit(db)
     run = _Run(now)
+    await _move_quarantined(sessionmaker, storage, clock=clock)
     await _delete_files(sessionmaker, storage, run, clock=clock, retry=False)
     await _delete_files(sessionmaker, storage, run, clock=clock, retry=True)
     files = run.deleted

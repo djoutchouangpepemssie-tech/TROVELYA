@@ -1,7 +1,7 @@
 """The staff's decisions on listings (P2-T05c1, 8.17, plan Q6, Q16, E9). Never commits.
 
 Approving puts a listing online; rejecting or removing one takes a reason from a closed list,
-its photos kept for the appeal (Q40, private copy in T05c1b). Each decision is a transition and
+its photos quarantined for the appeal (Q40). Each decision is a transition and
 an audit line in one transaction; nobody decides on a listing of their own."""
 
 from datetime import timedelta
@@ -97,6 +97,8 @@ async def _decide(
         reason_text=reason_text,
         online_until=online_until,
     )
+    if transition.to_status is ListingStatus.REMOVED:
+        await quarantine_listing_photos(db, listing_id, clock=now)
     await record_audit(
         db,
         actor_type="staff",
@@ -109,6 +111,13 @@ async def _decide(
         after={"status": transition.to_status.value},
     )
     return transition.to_status
+
+
+async def quarantine_listing_photos(db: AsyncSession, listing_id: UUID, *, clock: Clock) -> None:
+    """Q40: the photos of a listing removed by the moderation leave the public bucket, a
+    private copy kept for the appeal."""
+    media_ids = await repository.listing_media_ids(db, listing_id)
+    await listing_photos.quarantine_photos(db, media_ids, now=clock.now())
 
 
 async def approve(db: AsyncSession, *, listing_id: UUID, staff_id: UUID, clock: Clock) -> str:

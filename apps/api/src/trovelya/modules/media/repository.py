@@ -241,8 +241,8 @@ async def ready_variants_of(
     """The variants of each ready, not deleted media among `media_ids`, in one query."""
     rows = await db.execute(
         text(
-            "SELECT id, variants FROM media"
-            " WHERE id = ANY(:ids) AND status = 'ready' AND deleted_at IS NULL"
+            "SELECT id, variants FROM media WHERE id = ANY(:ids) AND status = 'ready'"
+            " AND deleted_at IS NULL AND quarantined_at IS NULL"
         ),
         {"ids": list(media_ids)},
     )
@@ -334,13 +334,13 @@ async def mark_for_purge(
 
 
 _FILES_TO_DELETE = text(
-    "SELECT id, storage_key, variants FROM media"
+    "SELECT id, storage_key, variants, quarantine_moved_at FROM media"
     " WHERE deleted_at IS NOT NULL AND files_deleted_at IS NULL"
     " AND files_purge_failed_at IS NULL"
     " AND (CAST(:after AS uuid) IS NULL OR id > :after) ORDER BY id LIMIT :limit"
 )
 _FILES_TO_RETRY = text(
-    "SELECT id, storage_key, variants FROM media"
+    "SELECT id, storage_key, variants, quarantine_moved_at FROM media"
     " WHERE deleted_at IS NOT NULL AND files_deleted_at IS NULL"
     " AND files_purge_failed_at < :failed_before"
     " AND (CAST(:after AS uuid) IS NULL OR id > :after) ORDER BY id LIMIT :limit"
@@ -423,3 +423,36 @@ async def ready_moderation_of(
         {"ids": list(media_ids)},
     )
     return {row.id: row.moderation for row in rows}
+
+
+# --- Quarantine (P2-T05c1b, plan Q40) ---------------------------------------------------------
+
+
+async def quarantine(db: AsyncSession, media_ids: Sequence[UUID], now: datetime) -> None:
+    await db.execute(
+        text(
+            "UPDATE media SET quarantined_at = :now WHERE id = ANY(:ids)"
+            " AND quarantined_at IS NULL AND deleted_at IS NULL"
+        ),
+        {"ids": list(media_ids), "now": now},
+    )
+
+
+async def quarantined_to_move(db: AsyncSession, *, limit: int) -> list[Row[Any]]:
+    """Quarantined photos whose variants are still public: (id, variants)."""
+    return list(
+        await db.execute(
+            text(
+                "SELECT id, variants FROM media WHERE quarantined_at IS NOT NULL"
+                " AND quarantine_moved_at IS NULL AND deleted_at IS NULL ORDER BY id LIMIT :limit"
+            ),
+            {"limit": limit},
+        )
+    )
+
+
+async def mark_quarantine_moved(db: AsyncSession, media_id: UUID, now: datetime) -> None:
+    await db.execute(
+        text("UPDATE media SET quarantine_moved_at = :now WHERE id = :id"),
+        {"id": media_id, "now": now},
+    )
