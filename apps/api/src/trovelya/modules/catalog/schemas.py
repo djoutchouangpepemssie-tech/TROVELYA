@@ -126,6 +126,12 @@ Title = Annotated[
     StringConstraints(strip_whitespace=True, min_length=5, max_length=120),
     AfterValidator(_one_line),
 ]
+# What the AI says a photo shows (P2-T06a): one line, embedded with the listing (T11).
+Caption = Annotated[
+    str,
+    StringConstraints(strip_whitespace=True, min_length=1, max_length=300),
+    AfterValidator(_one_line),
+]
 Description = Annotated[
     str,
     StringConstraints(strip_whitespace=True, min_length=20, max_length=5000),
@@ -342,6 +348,36 @@ class ListingSummary(BaseModel):
     updated_at: datetime
     published_at: datetime | None
     expires_at: datetime | None
+
+
+class AssistIn(BaseModel):
+    """From 1 to 4 of the member's photos, sent for a listing and processed (P2-T06a)."""
+
+    model_config = ConfigDict(extra="forbid")
+
+    media_ids: Annotated[list[UUID], Field(min_length=1, max_length=4)]
+
+
+class PriceRange(BaseModel):
+    """The 25th to 75th percentile of comparable listings online, in whole euros (Q44)."""
+
+    low: Money
+    high: Money
+
+
+class AssistOut(BaseModel):
+    """What the AI proposes, once the catalogue kept what it allows; each field may be none.
+    `suggestion_id` names the suggestion when the draft is created from it."""
+
+    suggestion_id: UUID
+    title: str | None
+    category: CategoryRef | None
+    brand: str | None
+    condition: ItemCondition | None
+    attributes: dict[str, Any]
+    caption: str | None
+    confidence: dict[str, float]  # per field kept, from 0 to 1
+    price_range: PriceRange | None
 
 
 class PriceWatch(BaseModel):

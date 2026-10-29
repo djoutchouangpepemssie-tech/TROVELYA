@@ -491,6 +491,27 @@ export interface paths {
         patch?: never;
         trace?: never;
     };
+    "/v1/listings/assist": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        get?: never;
+        put?: never;
+        /**
+         * Assist Listing
+         * @description What the AI proposes from the photos, for the member to check (P2-T06a). Every call
+         *     counts in a cap of `ai.assist_per_day` over 24 hours (Q45).
+         */
+        post: operations["listing_assist"];
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
     "/v1/listings/{listing_id}": {
         parameters: {
             query?: never;
@@ -1488,6 +1509,43 @@ export interface components {
              */
             status: "pending" | "done" | "approved" | "rejected";
         };
+        /**
+         * AssistIn
+         * @description From 1 to 4 of the member's photos, sent for a listing and processed (P2-T06a).
+         */
+        AssistIn: {
+            /** Media Ids */
+            media_ids: string[];
+        };
+        /**
+         * AssistOut
+         * @description What the AI proposes, once the catalogue kept what it allows; each field may be none.
+         *     `suggestion_id` names the suggestion when the draft is created from it.
+         */
+        AssistOut: {
+            /** Attributes */
+            attributes: {
+                [key: string]: unknown;
+            };
+            /** Brand */
+            brand: string | null;
+            /** Caption */
+            caption: string | null;
+            category: components["schemas"]["CategoryRef"] | null;
+            condition: components["schemas"]["ItemCondition"] | null;
+            /** Confidence */
+            confidence: {
+                [key: string]: number;
+            };
+            price_range: components["schemas"]["PriceRange"] | null;
+            /**
+             * Suggestion Id
+             * Format: uuid
+             */
+            suggestion_id: string;
+            /** Title */
+            title: string | null;
+        };
         /** AttributeOut */
         AttributeOut: {
             /** Key */
@@ -2345,6 +2403,14 @@ export interface components {
              */
             at: string;
             price: components["schemas"]["Money"];
+        };
+        /**
+         * PriceRange
+         * @description The 25th to 75th percentile of comparable listings online, in whole euros (Q44).
+         */
+        PriceRange: {
+            high: components["schemas"]["Money"];
+            low: components["schemas"]["Money"];
         };
         /** PriceWatch */
         PriceWatch: {
@@ -3638,6 +3704,65 @@ export interface operations {
             };
             /** @description Category, condition, brand, attributes, photos or place refused */
             422: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content?: never;
+            };
+        };
+    };
+    listing_assist: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        requestBody: {
+            content: {
+                "application/json": components["schemas"]["AssistIn"];
+            };
+        };
+        responses: {
+            /** @description Successful Response */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["AssistOut"];
+                };
+            };
+            /** @description A photo that is not the caller's */
+            404: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content?: never;
+            };
+            /** @description A photo still being processed */
+            409: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content?: never;
+            };
+            /** @description Not 1 to 4 photos, or a photo not sent for a listing */
+            422: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content?: never;
+            };
+            /** @description `ai_limit`: the daily cap (Retry-After) or a suggestion too dear */
+            429: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content?: never;
+            };
+            /** @description `ai_unavailable`: AI help off or failing; list without it */
+            503: {
                 headers: {
                     [name: string]: unknown;
                 };

@@ -8,15 +8,18 @@ from fastapi import APIRouter, Depends, Request, Response, status
 from trovelya.core.db import Uow
 from trovelya.core.idempotency import require_idempotency_key
 from trovelya.core.preconditions import if_match_version
+from trovelya.modules.ai.service import unavailable as ai_unavailable
 from trovelya.modules.catalog.adapters.embedder import current_model
 from trovelya.modules.catalog.schemas import (
+    AssistIn,
+    AssistOut,
     ListingDraftIn,
     ListingDraftPatch,
     ListingOut,
     ListingPage,
     PublishedOut,
 )
-from trovelya.modules.catalog.service import listings, publishing, reading
+from trovelya.modules.catalog.service import assist, listings, publishing, reading
 from trovelya.modules.identity.service import CurrentUser, get_clock
 from trovelya.modules.identity.service.auth import completed_user, optional_user
 from trovelya.shared.clock import Clock
@@ -50,6 +53,39 @@ async def post_listing(
     verticals = await request.app.state.flags.is_enabled("verticals")
     return await listings.create_draft(
         db, seller_id=me.id, body=body, verticals=verticals, clock=clock
+    )
+
+
+@router.post(
+    "/assist",
+    operation_id="listing_assist",
+    responses={
+        404: {"description": "A photo that is not the caller's"},
+        409: {"description": "A photo still being processed"},
+        422: {"description": "Not 1 to 4 photos, or a photo not sent for a listing"},
+        429: {"description": "`ai_limit`: the daily cap (Retry-After) or a suggestion too dear"},
+        503: {"description": "`ai_unavailable`: AI help off or failing; list without it"},
+    },
+)
+async def assist_listing(
+    body: AssistIn,
+    request: Request,
+    me: Member,
+    clock: Annotated[Clock, Depends(get_clock)],
+) -> AssistOut:
+    """What the AI proposes from the photos, for the member to check (P2-T06a). Every call
+    counts in a cap of `ai.assist_per_day` over 24 hours (Q45)."""
+    flags = request.app.state.flags
+    provider = request.app.state.ai_provider
+    if provider is None or not await flags.is_enabled("ai.assist", user_id=me.id):
+        raise ai_unavailable()
+    return await assist.assist(
+        request.app.state.sessionmaker,
+        provider,
+        member_id=me.id,
+        media_ids=list(dict.fromkeys(body.media_ids)),
+        verticals=await flags.is_enabled("verticals"),
+        clock=clock,
     )
 
 
