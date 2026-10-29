@@ -53,7 +53,8 @@ CREATE INDEX circumvention_detections_source_idx
 CREATE INDEX circumvention_detections_pending_idx ON circumvention_detections (created_at)
   WHERE review_status = 'pending';
 -- The daily purge of reviewed detections (Q36).
-CREATE INDEX circumvention_detections_reviewed_idx ON circumvention_detections (created_at)
+CREATE INDEX circumvention_detections_reviewed_idx
+  ON circumvention_detections ((COALESCE(reviewed_at, created_at)))
   WHERE review_status <> 'pending';
 
 INSERT INTO platform_settings (key, value, description) VALUES

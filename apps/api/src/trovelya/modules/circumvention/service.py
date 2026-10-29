@@ -11,6 +11,7 @@ from collections.abc import Mapping, Sequence
 from typing import Any, Literal
 from uuid import UUID
 
+import structlog
 from sqlalchemy.ext.asyncio import AsyncSession
 
 from trovelya.core.config import Settings
@@ -20,7 +21,7 @@ from trovelya.modules.circumvention.models import Detection
 from trovelya.modules.circumvention.rules import MASK, MASK_AT, detect, mask
 from trovelya.shared.audit import record_audit
 from trovelya.shared.clock import Clock
-from trovelya.shared.crypto import derive_key, open_sealed, seal
+from trovelya.shared.crypto import SealError, derive_key, open_sealed, seal
 from trovelya.shared.ids import new_id
 
 __all__ = [
@@ -32,6 +33,8 @@ __all__ = [
     "open_original",
     "screen",
 ]
+
+logger = structlog.get_logger(__name__)
 
 SourceType = Literal["message", "listing", "image", "live_chat", "live_audio", "profile"]
 _PURPOSE = "circumvention-original"
@@ -122,13 +125,20 @@ async def open_original(
 
 
 async def _export(db: AsyncSession, user_id: UUID, settings: Settings) -> dict[str, Any]:
-    """Q35: the member's detections with the original text they wrote (right of access)."""
+    """Q35: the member's detections with the original text they wrote (right of access). A
+    text that no longer opens (a damaged row, a lost key) is said unavailable: it never
+    stops the rest of the export."""
     rows = await repository.export_detections(db, user_id)
     for row in rows:
         sealed = row.pop("original_sealed")
-        row["original_text"] = open_sealed(
-            bytes(sealed), key=_key(settings), aad=_aad({**row, "user_id": user_id})
-        ).decode()
+        try:
+            row["original_text"] = open_sealed(
+                bytes(sealed), key=_key(settings), aad=_aad({**row, "user_id": user_id})
+            ).decode()
+        except SealError:
+            logger.warning("circumvention.original_unavailable", detection_id=str(row["id"]))
+            row["original_text"] = None
+        row["original_unavailable"] = row["original_text"] is None
     return {"circumvention_detections": rows}
 
 
