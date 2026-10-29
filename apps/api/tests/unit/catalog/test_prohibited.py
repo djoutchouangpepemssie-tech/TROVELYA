@@ -2,6 +2,8 @@
 is refused with its reason, an ambiguous one goes to review, known innocent phrases are never
 flagged. Accents, capitals, look-alike digits (« r0lex ») and punctuation make no difference."""
 
+from pathlib import Path
+
 import pytest
 
 from trovelya.modules.catalog.service.moderation import PROHIBITED, prohibited
@@ -12,8 +14,8 @@ REFUSED = [
     ("Montre R0LEX contrefaçon parfaite", "counterfeit"),
     ("Sac faux Louis Vuitton", "counterfeit"),
     ("Boîte de Xanax", "medicines"),
-    ("Médicaments périmés", "medicines"),
-    ("Cocaïne", "drugs"),
+    ("Lot de médicaments périmés", "medicines"),
+    ("Cannabis", "drugs"),
     ("Paquet de cigarettes neuf", "tobacco"),
     ("E-liquide fraise 10 ml", "tobacco"),
     ("Bouteille de whisky 12 ans", "alcohol"),  # Q33: alcohol refused for everyone in P2
@@ -22,10 +24,10 @@ REFUSED = [
     ("Défense d'éléphant sculptée", "protected_species"),
     ("Sextoy neuf jamais servi", "adult"),
     ("Compte Netflix premium", "digital_accounts"),
-    ("Billet de train Paris Lyon", "transport_tickets"),
+    ("Billets nominatifs pour le concert", "transport_tickets"),
     ("Produit rappelé par le fabricant", "recalled"),
     ("Vélo volé, prix cassé", "stolen"),
-    ("Passeport français", "identity_documents"),
+    ("Passeport vierge", "identity_documents"),
 ]
 
 
@@ -37,8 +39,8 @@ def test_prohibited_refused_with_reason(text: str, reason: str) -> None:
 
 REVIEWED = [
     ("Pistolet ancien de collection", "weapons"),
-    ("Réplique airsoft", "weapons"),
-    ("Robe couleur champagne et vin", "alcohol"),
+    ("Airsoft M4 complet", "weapons"),
+    ("Vin rouge de Bordeaux", "alcohol"),
     ("Statuette en ivoire", "protected_species"),
     ("Héroïne du roman, tome 2", "drugs"),
     ("Billets pour le concert de samedi", "transport_tickets"),
@@ -102,3 +104,29 @@ def test_every_reason_has_a_readable_label() -> None:
 def test_a_word_changing_the_object_turns_refusal_into_review(text: str, reason: str) -> None:
     found = prohibited(text, "")
     assert (found.outcome, found.reasons) == ("review", (reason,)), found
+
+
+def _corpus(name: str) -> list[str]:
+    lines = (Path(__file__).parent / "data" / name).read_text(encoding="utf-8").splitlines()
+    return [line for line in lines if line and not line.startswith("#")]
+
+
+@pytest.mark.parametrize("text", _corpus("honest_listings.txt"))
+def test_honest_listing_never_refused(text: str) -> None:
+    """A refusal is final (`removed`): an honest listing is at worst reviewed."""
+    assert prohibited(text, "Très bon état.").outcome != "refused"
+
+
+@pytest.mark.parametrize("text", _corpus("prohibited_listings.txt"))
+def test_prohibited_listing_never_online(text: str) -> None:
+    """Misspelt, spaced out, in English or in slang: refused or reviewed, never online."""
+    assert prohibited(text, "Très bon état.").outcome != "online"
+
+
+def test_masked_text_cut_before_a_mask() -> None:
+    from trovelya.modules.catalog.service.moderation import _fit  # pyright: ignore[reportPrivateUsage]
+    from trovelya.modules.circumvention.service import MASK
+
+    cut = _fit(f"Vélo {MASK} {MASK} {MASK}", 120)
+    assert len(cut) <= 120 and cut.endswith("…")
+    assert cut.replace(MASK, "").strip(" …") == "Vélo"

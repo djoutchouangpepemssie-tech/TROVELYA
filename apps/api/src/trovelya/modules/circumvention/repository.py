@@ -9,11 +9,16 @@ from uuid import UUID
 from sqlalchemy import text
 from sqlalchemy.ext.asyncio import AsyncSession
 
+# The same passages of the same source found again (a listing put back online) are one
+# detection, not a new case for the review or the sanctions.
 _INSERT = text(
     "INSERT INTO circumvention_detections (id, user_id, source_type, source_id, signals,"
     " matched_spans, confidence, action_taken, review_status, original_sealed, created_at)"
-    " VALUES (:id, :user_id, :source_type, :source_id, :signals, CAST(:spans AS jsonb),"
-    " :confidence, :action_taken, :review_status, :original_sealed, :created_at)"
+    " SELECT :id, :user_id, :source_type, :source_id, :signals, CAST(:spans AS jsonb),"
+    " :confidence, :action_taken, :review_status, :original_sealed, :created_at"
+    " WHERE NOT EXISTS (SELECT 1 FROM circumvention_detections WHERE user_id = :user_id"
+    " AND source_type = :source_type AND source_id = :source_id"
+    " AND action_taken = :action_taken AND matched_spans = CAST(:spans AS jsonb))"
 )
 _EXPORT = text(
     "SELECT id, source_type, source_id, signals, matched_spans, confidence, action_taken,"

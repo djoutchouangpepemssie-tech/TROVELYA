@@ -163,3 +163,14 @@ async def test_withdraw_pending_review(client: AsyncClient, sessionmaker: Sessio
     assert withdrawn.status_code == 200, withdrawn.text
     assert withdrawn.json()["status"] == "withdrawn"
     assert (await _history(sessionmaker, listing["id"]))[-1][:2] == ("withdraw", "withdrawn")
+
+
+async def test_refused_listing_masked_too(client: AsyncClient, sessionmaker: Session) -> None:
+    """An accepted appeal puts a refused listing back as it is: its contact details are
+    masked at the refusal already."""
+    _, listing = await _put_online(
+        client, sessionmaker, description="Bouteille de whisky 12 ans, appelez le 06 12 34 56 78."
+    )
+    assert listing["status"] == "removed"
+    assert listing["description"] == f"Bouteille de whisky 12 ans, appelez le {MASK}."
+    assert listing["moderation"]["notice"] is None  # nothing to remind on a refusal

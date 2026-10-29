@@ -125,6 +125,8 @@ async def _put_online(
                 actor=actor,
                 clock=now,
                 reason_code=verdict.reasons[0],
+                # Every reason, for the statement of reasons (DSA art. 17).
+                reason_text=", ".join(label(c) for c in verdict.reasons),
             )
     listing = await own_listing(db, seller_id=seller_id, listing_id=listing_id)
     return PublishedOut(

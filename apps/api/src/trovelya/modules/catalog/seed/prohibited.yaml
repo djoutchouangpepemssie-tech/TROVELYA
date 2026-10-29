@@ -1,167 +1,207 @@
 # Interdits à la vente (cahier 8.17, plan P2 Q33, Q34), lus par la modération à la publication.
 #
-# - `refuse` : termes sans ambiguïté, l'annonce est refusée avec le motif (`label`).
-# - `review` : termes ambigus, l'annonce part en revue humaine sans être mise en ligne.
-# - `unless` : mots qui changent l'objet (« peluche chiot », « fusil jouet ») : un refus
-#   devient une mise en revue.
-# - `except` (en bas) : expressions innocentes retirées du texte avant la recherche
-#   (« pistolet à colle », « cave à vin »).
+# Principe : un refus est définitif (`removed`, recours seul). `refuse` ne contient donc que
+# des expressions qui désignent sans doute possible la vente de l'objet (« bouteille de
+# whisky », « fusil à pompe ») ; un mot seul, souvent innocent (« cognac » est une couleur,
+# « Revolver » un album), va dans `review` ou nulle part.
 #
-# Les termes s'écrivent en minuscules, sans accents ; une apostrophe ou un tiret vaut une
-# espace. Un terme correspond à des mots entiers ; `*` à la fin accepte toute fin de mot
-# (« munition* » : munition, munitions). Les chiffres sosies des lettres (« r0lex ») sont lus
-# comme des lettres. Modifier ce fichier passe par une PR (relue) ; l'édition par le staff
-# viendra avec le back-office.
+# - `refuse` : l'annonce est refusée avec le motif (`label`).
+# - `review` : l'annonce part en revue humaine sans être mise en ligne.
+# - `unless` (en bas, commun à tous les motifs) : un mot qui change l'objet (« étui »,
+#   « vide », « couleur », « livre », « chocolat »…) ailleurs dans le texte fait d'un refus
+#   une mise en revue.
+# - `except` (en bas) : expressions innocentes retirées du texte avant la recherche.
+#
+# Écriture des termes : minuscules sans accents, une apostrophe ou un tiret vaut une espace ;
+# mots entiers ; `*` en fin de mot accepte toute fin (« munition* ») ; `(a|b c)` : l'une des
+# expressions ; `~` : un mot quelconque ; `?` après un mot ou un groupe : facultatif
+# (« defense d? elephant »). Les chiffres et
+# symboles sosies (« r0lex », « vodk@ ») et les lettres espacées (« g l o c k ») sont lus
+# comme des mots. Ce filtre est un premier filet : la revue humaine et la modération des
+# images (T05b2) prennent le relais. Modifier ce fichier passe par une PR relue.
 
 reasons:
   weapons:
     label: Armes et munitions
     refuse:
-      - fusil de chasse
-      - arme a feu
-      - armes a feu
-      - revolver*
-      - munition*
-      - cartouches de chasse
-      - kalachnikov
+      - fusil* de chasse
+      - fusil* a pompe
+      - arme* a feu
+      - kalachnikov*
       - ak47
       - ak 47
-      - glock
       - poing americain
-      - taser
-      - bombe lacrymogene
-      - gaz lacrymogene
       - matraque telescopique
+      - (bombe|gaz) lacrymogene
+      - munition* (9mm|9|22lr|22|calibre*)
+      - balle* (9mm|22lr)
+      - cartouche* calibre 12
+      - glock (17|19|26)
     review:
       - fusil*
       - pistolet*
+      - revolver*
+      - revolvre*
       - carabine*
       - arme
       - armes
-      - replique*
+      - munition*
+      - cartouches de chasse
       - airsoft
       - couteau papillon
       - balisong
       - arbalete*
       - baionnette*
-      - obus
-    unless: [jouet*, nerf, deguisement*, costume*, figurine*, playmobil, lego, decoratif*]
+      - glock*
+      - glok*
+      - kalash*
+      - taser*
+      - tazer*
+      - shocker
+      - lacrymo*
+      - calibre 12
+      - shotgun*
+      - rifle*
+      - handgun*
+      - ammo
+      - stun gun
+      - pepper spray
+      - knuckle duster
 
   counterfeit:
     label: Contrefaçons
     refuse:
       - contrefacon*
       - contre facon*
-      - faux louis vuitton
-      - faux rolex
-      - faux chanel
-      - faux gucci
-      - faux dior
-      - faux hermes
-      - faux nike
-      - fake
-      - copie de marque
+      - contrefait*
+      - copie 1 1
+      - faux (louis|rolex|chanel|gucci|dior|hermes|nike|cartier|prada)
     review:
-      - replica
-      - imitation
+      - replica*
+      - replique*
+      - copie
+      - imitation*
+      - counterfeit
+      - faks
+      - (louis vuitton|rolex|chanel|gucci|dior|hermes|nike|cartier|prada) faux
+      - fake
 
   medicines:
     label: Médicaments
     refuse:
+      - (viagra|cialis|ozempic|xanax|lexomil|valium|tramadol|subutex|methadone)
+      - (boite|boites|plaquette*|lot) de (medicament*|antibiotique*|comprimes|gelules)
+    review:
       - medicament*
-      - antibiotique*
-      - viagra
-      - cialis
-      - ozempic
-      - xanax
-      - lexomil
-      - valium
-      - tramadol
+      - antibio*
       - codeine
       - morphine
-      - subutex
-      - methadone
-      - sur ordonnance
-    review:
-      - pilule*
-      - comprime*
-      - gelule*
+      - alprazolam
+      - zolpidem
+      - stilnox
+      - rivotril
+      - lyrica
+      - pregabaline
+      - doliprane
+      - amoxicilline
+      - ozempik
+      - viagr*
+      - xanaxx
+      - gelules
+      - plaquette de comprimes
 
   drugs:
     label: Stupéfiants
     refuse:
-      - cocaine
-      - cannabis
-      - haschisch
-      - hashish
-      - marijuana
-      - mdma
-      - lsd
-      - champignons hallucinogenes
+      - (cannabis|haschisch|hashish|marijuana|mdma|ketamine|ganja)
+      - champignons (hallucinogenes|magiques)
+      - (cocaine|coke) pure
+      - herbe a fumer
     review:
+      - cocaine
+      - coc aine
       - heroine
+      - heroin
       - ecstasy
       - cbd
       - weed
+      - beuh
+      - shit
+      - kush
+      - lsd
+      - psilocybe*
 
   tobacco:
     label: Produits du tabac et vapotage
     refuse:
-      - cigarettes
-      - paquet de cigarettes
-      - cartouche de cigarettes
+      - (paquet|paquets|cartouche|cartouches) de (cigarettes|clopes|tabac)
       - tabac a rouler
-      - e liquide*
-      - eliquide*
+      - (eliquide|eliquides)
+      - e (liquide|liquides)
       - vapoteuse*
-      - cigarette electronique
-      - cigarettes electroniques
+      - cigarette* electronique*
     review:
-      - tabac
+      - cigarettes
+      - clopes
+      - marlboro*
       - cigare*
       - chicha
       - puff
+      - e cig*
+      - juul
+      - ejuice
+      - pod juul
 
   alcohol:
     label: Alcool
     refuse:
+      - (bouteille|bouteilles|caisse|caisses|carton|cartons|pack|packs|lot|magnum) (de|d)? (whisky|whiskey|vodka|rhum|rum|tequila|cognac|armagnac|calvados|pastis|ricard|absinthe|gin|vin|vins|champagne|biere|bieres|liqueur|porto)
+      - (whisky|whiskey|vodka|rhum|rum|tequila|cognac|armagnac|calvados|pastis|ricard|gin|porto) (70cl|70|75cl|75|1l|1|50cl|litre*)
+      - (whisky|whiskey|rhum|cognac|armagnac) (8|10|12|15|18|20|21|25|30) ans
+    review:
       - whisky
       - whiskey
+      - wisky
+      - whysky
       - vodka
+      - vodk*
+      - vod ka
       - rhum
+      - rum
       - tequila
-      - cognac
       - armagnac
       - calvados
       - pastis
+      - ricard
       - absinthe
-      - liqueur*
-      - bouteille de vin
-      - bouteilles de vin
-      - bouteille de champagne
-      - bouteilles de champagne
-      - pack de bieres
-      - biere artisanale
-      - bieres artisanales
-      - grand cru classe
-    review:
-      - vin
+      - jack daniel*
+      - jagermeister
+      - havana club
+      - moet
+      - dom perignon
+      - veuve clicquot
+      - ruinart
+      - grand cru*
+      - chateau margaux
+      - vin (rouge|blanc|rose)
       - vins
-      - champagne
-      - biere
-      - bieres
-      - gin
-      - cidre
+      - liqueur*
       - alcool*
 
   animals:
     label: Animaux vivants
     refuse:
+      - (chiot|chiots|chaton|chatons|chienne|chien|chat|lapin|lapins) ~? ~? (a|de) (vendre|donner|adopter|reserver)
+      - (animal|animaux) (vivant|vivants)
+      - (puppies|kittens|puppy|kitten) for sale
+    review:
       - chiot*
       - chaton*
-      - animal vivant
-      - animaux vivants
-    review:
+      - puppy
+      - puppies
+      - kitten*
+      - chien de race
+      - lapin nain
       - perroquet*
       - perruche*
       - hamster*
@@ -172,87 +212,62 @@ reasons:
       - reptile*
       - gecko*
       - python royal
+      - serpent des bles
       - mygale*
-    unless:
-      - peluche*
-      - figurine*
-      - jouet*
-      - doudou*
-      - livre*
-      - poster*
-      - tableau*
-      - deguisement*
-      - costume*
-      - coussin*
-      - statue*
-      - statuette*
-      - puzzle*
-      - playmobil
-      - lego
-      - pyjama*
+      - chevre naine
 
   protected_species:
     label: Espèces protégées
     refuse:
-      - ivoire d elephant
-      - ivoire veritable
-      - defense d elephant
-      - defenses d elephant
-      - corne de rhinoceros
-      - peau de tigre
-      - peau de leopard
+      - ivoire d? elephant
+      - defense* d? elephant*
+      - corne* de? rhinoceros
+      - corne rhino
     review:
-      - ivoire
+      - ivoire veritable
+      - en ivoire
       - ecaille de tortue
+      - carapace de tortue
       - corail
       - taxidermie
-      - naturalise
-      - naturalisee
+      - naturalise*
       - empaille*
+      - peau de (tigre|leopard)
 
   adult:
     label: Contenus pour adultes
     refuse:
-      - sextoy*
-      - sex toy*
+      - (sextoy|sextoys)
+      - sex (toy|toys)
       - godemichet*
-      - gode
       - vibromasseur*
-      - film x
-      - films x
-      - dvd x
-      - porno*
-      - pornographique*
-      - culotte portee
-      - culottes portees
-      - escort
+      - film* (porno|pornographique*)
+      - culotte* portee*
+      - escort girl*
     review:
+      - gode
+      - dildo*
+      - vibro
+      - porno*
       - erotique*
       - coquin*
       - fetish*
+      - film x
+      - films x
 
   digital_accounts:
     label: Données et comptes numériques
     refuse:
-      - compte netflix
-      - compte spotify
-      - compte disney
-      - compte fortnite
-      - compte steam
-      - compte playstation
-      - compte psn
-      - compte xbox
-      - compte instagram
-      - compte tiktok
-      - compte facebook
-      - compte snapchat
-      - compte valorant
-      - abonnement netflix
-      - fichier clients
-      - fichier client
-      - base de donnees clients
-      - followers
+      - compte (netflix|spotify|disney|fortnite|steam|playstation|psn|xbox|instagram|tiktok|facebook|snapchat|valorant)
+      - (netflix|spotify|fortnite|steam|instagram|tiktok) account
+      - abonnes instagram
+      - (fichier|base) de (prospects|clients|donnees clients|emails)
+      - base de donnees (emails|clients|prospects)
     review:
+      - abonnement netflix
+      - spotify premium
+      - followers
+      - fichier clients
       - cle d activation
       - code d activation
       - cle steam
@@ -262,44 +277,34 @@ reasons:
   transport_tickets:
     label: Titres de transport et billets nominatifs
     refuse:
-      - billet nominatif
-      - billets nominatifs
-      - billet de train
-      - billets de train
-      - billet d avion
-      - billets d avion
-      - titre de transport
-      - titres de transport
-      - pass navigo
-      - carte navigo
-      - ticket de metro
-      - tickets de metro
+      - billet* nominatif*
+      - titre* de transport
     review:
+      - billet* de train
+      - billet* d avion
+      - pass navigo
+      - navigo mensuel
+      - ticket* de? metro
       - billet
       - billets
-      - place de concert
-      - places de concert
+      - place* de concert
       - e billet*
 
   recalled:
     label: Produits rappelés (sécurité des produits)
     refuse:
-      - produit rappele
-      - produits rappeles
-      - rappele par le fabricant
+      - produit* rappele*
+      - rappele* par le fabricant
       - rappel conso
     review: []
 
   stolen:
     label: Objets volés
     refuse:
-      - objet vole
-      - objets voles
-      - telephone vole
-      - velo vole
-      - marchandise volee
-      - tombe du camion
-      - tombee du camion
+      - objet* vole*
+      - marchandise* volee*
+      - (telephone|iphone|velo|scooter|voiture) vole
+      - tombe* du camion
     review:
       - sans facture
       - provenance inconnue
@@ -311,57 +316,118 @@ reasons:
   identity_documents:
     label: Documents d'identité
     refuse:
-      - carte d identite
-      - cartes d identite
-      - passeport*
-      - permis de conduire
-      - carte vitale
-      - titre de sejour
       - faux papiers
+      - (passeport|carte d identite|permis de conduire|carte vitale) (vierge|a vendre)
       - carte grise vierge
-    review: []
+      - titre de sejour
+    review:
+      - passeport*
+      - passport
+      - carte d identite
+      - permis de conduire
+      - permis b
+      - carte vitale
+
+# Mots qui changent l'objet : présents ailleurs dans le texte, un refus devient une revue.
+unless:
+  - vide*
+  - etui*
+  - housse*
+  - coque*
+  - pochette*
+  - porte
+  - couverture*
+  - couleur*
+  - coloris
+  - motif*
+  - imprime*
+  - facon
+  - style
+  - livre*
+  - roman*
+  - bd
+  - dvd
+  - blu
+  - vinyle*
+  - album*
+  - cd
+  - poster*
+  - affiche*
+  - collection*
+  - collectionneur*
+  - ancien*
+  - vintage
+  - decoratif*
+  - decorative*
+  - deco
+  - decoration*
+  - chocolat*
+  - bonbon*
+  - gateau*
+  - sirop*
+  - parfum*
+  - bougie*
+  - jouet*
+  - figurine*
+  - peluche*
+  - miniature*
+  - maquette*
+  - deguisement*
+  - costume*
+  - lego
+  - playmobil
+  - ceramique*
+  - statue*
+  - statuette*
+  - calendrier*
+  - puzzle*
+  - panier*
+  - gamelle*
+  - collier*
+  - harnais*
+  - croquette*
+  - laisse*
+  - niche*
+  - griffoir*
+  - jeu
+  - jeux
 
 # Expressions innocentes retirées du texte avant la recherche.
 except:
-  - pistolet a colle
-  - pistolet a peinture
-  - pistolet a silicone
-  - pistolet a calfeutrer
-  - pistolet d arrosage
-  - pistolet arrosage
-  - pistolet a eau
-  - pistolet thermique
-  - pistolet de massage
-  - pistolet a clous
-  - pistolet a air chaud
-  - pistolet a mastic
+  - pistolet (a|de|pour)? (colle|peinture|silicone|calfeutrer|arrosage|eau|thermique|massage|clous|mastic|karcher|graisse|agrafe*|agrafeur|souder|soudure|gonflage|carburant|pneumatique|nettoyage|douche|decapeur|cartouche)
+  - pistolet a air (chaud|comprime)
   - fusil a aiguiser
-  - cave a vin
-  - caves a vin
-  - verre a vin
-  - verres a vin
-  - verre a whisky
-  - verres a whisky
-  - carafe a whisky
-  - seau a champagne
-  - flute a champagne
-  - flutes a champagne
-  - verre a biere
-  - verres a biere
-  - tireuse a biere
-  - porte passeport
-  - protege passeport
-  - etui passeport
-  - etui a passeport
-  - pochette passeport
-  - porte carte d identite
-  - etui carte d identite
-  - porte permis
+  - fusil de chasse sous marine
+  - chasse sous marine
+  - (cave|caves|verre|verres|carafe|seau|flute|flutes|tireuse|pierres|service|cuillere|fontaine) (a|de|pour)? (vin|whisky|champagne|biere|bieres|liqueur|absinthe)
+  - (porte|range|casier) (a|de)? bouteille*
+  - baba au rhum
+  - raisin* au rhum
+  - rhum raisin
+  - au (cognac|whisky|rhum|armagnac)
+  - a l (armagnac|absinthe)
+  - a la liqueur
+  - sans alcool
+  - (couleur|cuir|ton) (cognac|champagne|ivoire|tabac)
+  - (etui|porte|protege|pochette|housse|coque|couverture|bloc) (a|pour|de)? (passeport|carte d identite|carte vitale|permis|navigo|pass navigo|cigarettes)
   - code de la route
-  - preparation au permis de conduire
-  - billet de banque
-  - billets de banque
-  - ticket de caisse
-  - boite a cigares
-  - boites a cigares
-  - coupe cigare
+  - (preparation|livre|code) (au|du)? permis de conduire
+  - billet* de banque
+  - ticket* de caisse
+  - (boite|boites|coupe) a? cigare*
+  - (motif|imprime|imitation|facon) peau de (tigre|leopard)
+  - biscuit* cigarette*
+  - cigarettes russes
+  - cigarettes en chocolat
+  - blague a tabac
+  - (armoire|boite|pilulier) a medicaments
+  - boite a munitions
+  - sur ordonnance
+  - (panier|gamelle|collier|harnais|croquettes|lait|litiere|jouet|coussin|cage) (pour|de|a)? (chiot|chaton|chien|chat|lapin|hamster|perruche|furet)
+  - touche* de piano
+  - ford escort
+  - x men
+  - x files
+  - fake (leather|fur|cuir)
+  - imitation cuir
+  - (reproduction|replique) de la tour eiffel
