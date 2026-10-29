@@ -20,6 +20,8 @@ from trovelya.modules.catalog.service.positions import round_distance
 from trovelya.modules.identity.service import default_zone_center, public_seller
 from trovelya.modules.media.service import listing_photos
 
+NIL_ID = UUID(int=0)
+
 
 def _not_found() -> AppError:
     return AppError(ErrorCode.NOT_FOUND, 404)
@@ -60,13 +62,18 @@ async def listing_page(
 ) -> ListingPage:
     viewer = await default_zone_center(db, viewer_id) if viewer_id else None
     row = await repository.listing_page(db, listing_id, viewer)
-    if row is None:
-        raise _not_found()
-    own = viewer_id == row["seller_id"]
-    if not own and row["status"] != "active":
-        raise _not_found()
-    seller = await public_seller(db, row["seller_id"], media_public_url=media_public_url, own=own)
-    if seller is None:
+    own = row is not None and viewer_id == row["seller_id"]
+    visible = row is not None and (own or row["status"] == "active")
+    # The seller is read whatever happens (a nil id when the listing is not to be shown): every
+    # 404 costs the same queries, so its time says nothing of why (unknown, someone else's draft,
+    # seller in erasure grace or sanctioned).
+    seller = await public_seller(
+        db,
+        row["seller_id"] if row and visible else NIL_ID,
+        media_public_url=media_public_url,
+        own=own,
+    )
+    if row is None or not visible or seller is None:
         raise _not_found()
     return ListingPage.model_validate(
         {
