@@ -1,5 +1,4 @@
-"""The staff's decisions on listings (`/v1/staff/*`, P2-T05c1, plan Q16, E9): staff accounts in
-an admin session holding the permission, every decision audited."""
+"""Staff decisions on listings (`/v1/staff/*`, P2-T05c1, plan Q16, E9), each one audited."""
 
 from typing import Annotated
 from uuid import UUID

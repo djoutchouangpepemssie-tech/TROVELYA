@@ -1,12 +1,8 @@
-"""The staff's decisions on listings (P2-T05c1, section 8.17, plan Q6, Q16, E9). Never commits.
+"""The staff's decisions on listings (P2-T05c1, 8.17, plan Q6, Q16, E9). Never commits.
 
-The review queue lists the listings awaiting moderation, the longest waiting first, with their
-reasons, photos and what the anti-circumvention found (never the original text). Approving puts
-a listing online for `listings.expiry_days`; rejecting one awaiting review, or removing an
-active one, takes a reason from a closed list and deletes its photos from storage (Q6). Each
-decision is a transition with the staff member as actor, and a line of the audit log, in the
-same transaction. A staff member never decides on a listing of their own.
-"""
+Approving puts a listing online; rejecting or removing one takes a reason from a closed list
+and its photos leave storage (Q6). Each decision is a transition by the staff member and a line
+of the audit log, in one transaction; nobody decides on a listing of their own."""
 
 from datetime import timedelta
 from typing import Any
@@ -40,20 +36,13 @@ STAFF_REASONS = {
 
 def check_reason(reason_code: str | None, reason_text: str | None) -> None:
     """422 `validation_error` for a reason off the list, or `other` without its explanation."""
+    error = None
     if reason_code not in STAFF_REASONS:
-        message = "Motif à choisir dans la liste"
-        raise AppError(
-            ErrorCode.VALIDATION_ERROR,
-            422,
-            errors=[FieldError(field="reason_code", code="unknown_reason", message=message)],
-        )
-    if reason_code == OTHER and not (reason_text or "").strip():
-        message = "Préciser le motif"
-        raise AppError(
-            ErrorCode.VALIDATION_ERROR,
-            422,
-            errors=[FieldError(field="reason_text", code="required", message=message)],
-        )
+        error = FieldError(field="reason_code", code="unknown_reason", message="Motif inconnu")
+    elif reason_code == OTHER and not (reason_text or "").strip():
+        error = FieldError(field="reason_text", code="required", message="Préciser le motif")
+    if error is not None:
+        raise AppError(ErrorCode.VALIDATION_ERROR, 422, errors=[error])
 
 
 async def queue(db: AsyncSession, *, public_url: str | None, limit: int) -> list[dict[str, Any]]:

@@ -1,8 +1,8 @@
-"""The staff's review queue of listings (P2-T05c1, plan Q6, Q16, E9): the listings awaiting
-moderation, oldest first, with their reasons; approving puts one online, rejecting (a reason
-from the closed list) removes it and its photos leave storage; an active listing may be
-removed (`listing.remove_any`). Every decision is in the history and the audit log."""
+"""The staff's review queue (P2-T05c1, plan Q6, Q16, E9): listings awaiting moderation, oldest
+first; approve puts one online, reject (closed list of reasons) or remove (`listing.remove_any`)
+takes it down with its photos. Every decision is in the history and the audit log."""
 
+import asyncio
 from datetime import UTC, datetime
 from typing import Any
 
@@ -73,16 +73,11 @@ async def _photos_deleted(sessionmaker: Session, listing_id: str) -> bool:
         )
 
 
-async def test_member_gets_403(client: AsyncClient, sessionmaker: Session) -> None:
-    member, listing = await _in_review(client, sessionmaker)
-    assert (await client.get(QUEUE, headers=member.headers)).status_code == 403
-    response = await client.post(f"{QUEUE}/{listing['id']}/approve", headers=member.headers)
-    assert response.status_code == 403
-
-
 async def test_staff_without_the_permission_gets_403(
     client: AsyncClient, sessionmaker: Session
 ) -> None:
+    """A member is refused on every staff route (test_access_matrix.py); so is staff without
+    `moderation.review`."""
     support = await _moderator(sessionmaker, "staff_support")
     assert (await client.get(QUEUE, headers=support.headers)).status_code == 403
 
@@ -190,8 +185,6 @@ async def test_staff_cannot_review_own_listing(client: AsyncClient, sessionmaker
 async def test_concurrent_decisions_single_transition(
     client: AsyncClient, sessionmaker: Session
 ) -> None:
-    import asyncio
-
     _, listing = await _in_review(client, sessionmaker)
     one, two = await _moderator(sessionmaker), await _moderator(sessionmaker)
     answers = await asyncio.gather(
