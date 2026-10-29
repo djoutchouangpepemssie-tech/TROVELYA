@@ -22,7 +22,6 @@ from trovelya.core.middleware import RequestIdMiddleware
 from trovelya.core.observability import configure_observability, trace_engine
 from trovelya.core.ratelimit import AnonymousRateLimitMiddleware
 from trovelya.modules.catalog.api import router as catalog_router
-from trovelya.modules.catalog.api.testing import router as catalog_testing_router
 from trovelya.modules.catalog.service.moderation import Moderation
 from trovelya.modules.identity.adapters.geocoder import (
     FakeGeocoder,
@@ -160,5 +159,4 @@ def create_app(
     if settings.env in {"local", "test"}:
         app.include_router(testing_routes.router)
         app.include_router(identity_testing_router)
-        app.include_router(catalog_testing_router)
     return app
