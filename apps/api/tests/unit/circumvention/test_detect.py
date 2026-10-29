@@ -43,9 +43,9 @@ MASKED = [
     ("jean.dupont@gmail.com", "email"),
     ("jean arobase gmail.com", "email"),
     ("jean arobase gmail", "email"),
+    ("écris-moi sur gmail", "email"),
     ("jean @ gmail . com", "email"),
     ("jean at gmail dot com", "email"),
-    ("écris-moi sur gmail", "email"),
     ("FR76 3000 6000 0112 3456 7890 189", "iban"),
     ("FR76-3000-6000-0112-3456-7890-189", "iban"),
     ("FR 76 3000 6000 0112 3456 7890 189", "iban"),
@@ -113,8 +113,8 @@ QUEUED = [
     ("Vendu à l'unité @15€ la pièce", "email"),  # a lone « @ » of the base rule of 8.16
     ("Réf. produit : 4006381333931", "obfuscated_number"),  # a reference with a word between
     ("Livre 9782070368228", "obfuscated_number"),  # an ISBN-13 by its check digit
-    ("Vin Bordeaux 2015 2016 2018 75 cl", "obfuscated_number"),  # a measure
     ("Un compte PayPal", "payment_app"),
+    ("Mug Gmail logo", "email"),  # a provider named, no address asked
     ("Paire de bottes Lydia", "payment_app"),
     ("Robe Lydia 25 €", "payment_app"),
     ("snap : vendeur92", "social_handle"),
@@ -151,6 +151,7 @@ def test_doubtful_queued_not_masked(text: str, signal: str) -> None:
         "Collection Pokémon 151/165, 25/102, 4/102",
         "Ordinateur Dell XPS 13 9310, i7-1165G7",
         "Vinyles 1965 1972 1978 1981",
+        "Vin Bordeaux 2015 2016 2018 75 cl",
         "Ancien télégramme de 1916",
     ],
 )
@@ -203,24 +204,44 @@ def test_combining_mark_after_a_passage_masked_with_it() -> None:
     assert mask(text, detect(text)) == f"{MASK} merci"
 
 
+def _seconds(text: str) -> float:
+    """The best of three runs: the least disturbed by the rest of the machine."""
+    runs: list[float] = []
+    for _ in range(3):
+        start = time.perf_counter()
+        detect(text)
+        runs.append(time.perf_counter() - start)
+    return min(runs)
+
+
 @pytest.mark.parametrize(
-    "text",
+    "unit",
     [
-        "a-" * 2500,
-        "-a" * 2500,
-        "a." * 2500,
-        "a" * 5000,
-        "1 " * 2500,
-        " " * 10000,
-        "\n" * 10000,
-        "fb " * 3333,
-        "@ab " * 2500,
-        "rib " * 2500,
-        "\ufdfa" * 10000,
+        "a-",
+        "-a",
+        "a.",
+        "a",
+        "1 ",
+        "06 ",
+        "01 ",
+        "0 ",
+        "08:30 ",
+        "1/2 ",
+        "fr76 ",
+        "jean.dupont gmail ",
+        " ",
+        "\n",
+        "fb ",
+        "@ab ",
+        "rib ",
+        "\ufdfa",
     ],
 )
-def test_long_hostile_text_stays_fast(text: str) -> None:
-    """A description of 5000 characters is analysed in a few milliseconds, never in seconds."""
-    start = time.perf_counter()
-    detect(text)
-    assert time.perf_counter() - start < 0.2
+def test_long_hostile_text_stays_fast(unit: str) -> None:
+    """Never quadratic: twice the text, about twice the time (four times would be quadratic).
+    10 000 characters take a few tens of milliseconds (50 ms aimed at); the bound of one
+    second leaves room for a CI runner measuring coverage, which slows Python eightfold."""
+    half = unit * (5000 // len(unit))
+    small, big = _seconds(half), _seconds(half * 2)
+    assert big < 3 * small + 0.02, (small, big)
+    assert big < 1.0
