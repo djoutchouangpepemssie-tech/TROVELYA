@@ -153,7 +153,8 @@ async def _put_online(sessionmaker: Session, seller_id: UUID, *, ago: timedelta,
                 text(
                     "INSERT INTO listing_status_history (id, listing_id, from_status, to_status,"
                     " event, actor_id, actor_kind, created_at)"
-                    " VALUES (:id, :l, 'draft', 'active', :e, :s, 'user', now() - CAST(:ago AS interval))"
+                    " VALUES (:id, :l, 'draft', 'active', :e, :s, 'user',"
+                    " now() - CAST(:ago AS interval))"
                 ),
                 {"id": new_id(), "l": listing_id, "e": events[i % 4], "s": seller_id}
                 | {"ago": ago},
