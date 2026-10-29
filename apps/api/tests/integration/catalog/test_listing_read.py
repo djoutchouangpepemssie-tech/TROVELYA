@@ -20,6 +20,7 @@ from tests.integration.catalog.test_drafts import (
 )
 from tests.integration.identity.test_member_location import make_zone
 from tests.integration.identity.test_profile import Account, make_account
+from trovelya.modules.catalog.models import ListingStatus
 
 
 async def _listing(
@@ -66,10 +67,12 @@ async def test_active_listing_read_by_anybody(client: AsyncClient, sessionmaker:
     assert page["place_name"] == "Lyon 7e"
     assert page["distance"] is None  # nobody signed in (Q17)
     # Attributes named for display: the key, its label, the value and the value's label.
-    assert {a["key"]: (a["name"], a["value"], a["value_name"]) for a in page["attributes"]} == {
-        "clothing_size": ("Taille", "m", "M"),
-        "color": ("Couleur", "bleu", "Bleu"),
-    }
+    # In the category's order (colour of « Mode » before the size of « Femme »), with labels.
+    assert [(a["key"], a["name"], a["value"], a["value_name"]) for a in page["attributes"]] == [
+        ("color", "Couleur", "bleu", "Bleu"),
+        ("clothing_size", "Taille", "m", "M"),
+    ]
+    assert response.headers["cache-control"] == "private, no-store"
     assert page["seller"]["username"].startswith("membre_")
     assert set(page["seller"]) == {"id", "username", "display_name", "avatar", "member_since"}
     assert len(page["photos"]) == 1 and page["photos"][0][0]["format"] == "webp"
@@ -86,38 +89,62 @@ async def test_no_coordinates_anywhere(client: AsyncClient, sessionmaker: Sessio
         assert decimals == [], decimals
 
 
-async def test_distance_on_the_public_position_rounded(
-    client: AsyncClient,
-    sessionmaker: Session,
-) -> None:
-    """The visitor stands on the seller's real position: the distance shown is that of the
-    public one (200 to 500 m away), so « moins de 1 km », never 0 (E13)."""
+async def test_distance_uses_public_position(client: AsyncClient, sessionmaker: Session) -> None:
+    """E13: the distance is that of the public position. Moved 50 km north of the real one,
+    a visitor standing on the real position reads « 50 km », never « moins de 1 km »."""
     _, listing = await _listing(client, sessionmaker)
+    async with sessionmaker() as db:
+        await db.execute(
+            text(
+                "UPDATE listings SET location_public = ST_Project(location, 50000, 0)::geography"
+                " WHERE id = :l"
+            ),
+            {"l": listing["id"]},
+        )
+        await db.commit()
     visitor = await make_account(sessionmaker, completed=True)
     await make_zone(sessionmaker, visitor.id, at=(45.74, 4.84), default=True)
-    assert (await _read(client, listing["id"], visitor)).json()["distance"] == "moins de 1 km"
+    assert (await _read(client, listing["id"], visitor)).json()["distance"] == "50 km"
+
+
+async def test_distance_rounded(client: AsyncClient, sessionmaker: Session) -> None:
+    _, listing = await _listing(client, sessionmaker)
+    near = await make_account(sessionmaker, completed=True)
+    await make_zone(sessionmaker, near.id, at=(45.74, 4.84), default=True)
+    assert (await _read(client, listing["id"], near)).json()["distance"] == "moins de 1 km"
     far = await make_account(sessionmaker, completed=True)
-    await make_zone(sessionmaker, far.id, at=(48.8566, 2.3522), default=True)  # Paris, about 390 km
+    await make_zone(sessionmaker, far.id, at=(48.8566, 2.3522), default=True)  # Paris
     assert (await _read(client, listing["id"], far)).json()["distance"] == "390 km"
 
 
 async def test_no_distance_without_viewer_zone(client: AsyncClient, sessionmaker: Session) -> None:
     _, listing = await _listing(client, sessionmaker)
-    visitor = await make_account(sessionmaker, completed=True)
-    await make_zone(sessionmaker, visitor.id, at=(45.9, 5.1))  # not the default one
+    visitor = await make_account(sessionmaker, completed=True)  # signed in, no zone at all
     assert (await _read(client, listing["id"], visitor)).json()["distance"] is None
 
 
 async def test_public_position_stable_over_reads(
     client: AsyncClient, sessionmaker: Session
 ) -> None:
+    """Reading never draws a new offset: 100 reads (under the 120 requests a minute an address
+    may send, section 11.4) leave the stored public position as it is and every answer the
+    same."""
     _, listing = await _listing(client, sessionmaker)
     visitor = await make_account(sessionmaker, completed=True)
     await make_zone(sessionmaker, visitor.id, at=(45.9, 5.1), default=True)
-    distances = {
-        (await _read(client, listing["id"], visitor)).json()["distance"] for _ in range(50)
-    }
-    assert len(distances) == 1
+
+    async def stored() -> object:
+        async with sessionmaker() as db:
+            return await db.scalar(
+                text("SELECT ST_AsText(location_public) FROM listings WHERE id = :l"),
+                {"l": listing["id"]},
+            )
+
+    before = await stored()
+    responses = [await _read(client, listing["id"], visitor) for _ in range(100)]
+    assert {r.status_code for r in responses} == {200}
+    assert len({r.text for r in responses}) == 1
+    assert await stored() == before
 
 
 async def test_listing_not_active_is_the_sellers_only(
@@ -126,7 +153,7 @@ async def test_listing_not_active_is_the_sellers_only(
 ) -> None:
     account, listing = await _listing(client, sessionmaker, active=False)
     intruder = await make_account(sessionmaker, completed=True)
-    for status in ("draft", "pending_review", "removed", "withdrawn", "expired", "sold"):
+    for status in [s.value for s in ListingStatus if s is not ListingStatus.ACTIVE]:
         await _status(sessionmaker, listing["id"], status)
         for visitor in (None, intruder):
             response = await _read(client, listing["id"], visitor)

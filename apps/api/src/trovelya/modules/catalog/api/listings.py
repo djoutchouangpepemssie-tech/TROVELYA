@@ -3,7 +3,7 @@
 from typing import Annotated
 from uuid import UUID
 
-from fastapi import APIRouter, Depends, Request, status
+from fastapi import APIRouter, Depends, Request, Response, status
 
 from trovelya.core.db import Uow
 from trovelya.core.idempotency import require_idempotency_key
@@ -89,8 +89,12 @@ async def patch_listing(
     operation_id="listing_get",
     responses={404: {"description": "Unknown, deleted, or not active and not the caller's"}},
 )
-async def get_listing(listing_id: UUID, request: Request, db: Uow, me: MaybeMember) -> ListingPage:
-    """The listing page: anybody for an active listing, its seller only otherwise."""
+async def get_listing(
+    listing_id: UUID, request: Request, response: Response, db: Uow, me: MaybeMember
+) -> ListingPage:
+    """The listing page: anybody for an active listing, its seller only otherwise. Never kept
+    by a shared cache: the answer depends on who asks (a draft, a distance)."""
+    response.headers["Cache-Control"] = "private, no-store"
     return await reading.listing_page(
         db,
         listing_id=listing_id,

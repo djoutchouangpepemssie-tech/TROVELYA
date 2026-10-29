@@ -500,7 +500,8 @@ export interface paths {
         };
         /**
          * Get Listing
-         * @description The listing page: anybody for an active listing, its seller only otherwise.
+         * @description The listing page: anybody for an active listing, its seller only otherwise. Never kept
+         *     by a shared cache: the answer depends on who asks (a draft, a distance).
          */
         get: operations["listing_get"];
         put?: never;

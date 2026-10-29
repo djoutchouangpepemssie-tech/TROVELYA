@@ -4256,7 +4256,7 @@
     },
     "/v1/listings/{listing_id}": {
       "get": {
-        "description": "The listing page: anybody for an active listing, its seller only otherwise.",
+        "description": "The listing page: anybody for an active listing, its seller only otherwise. Never kept\nby a shared cache: the answer depends on who asks (a draft, a distance).",
         "operationId": "listing_get",
         "parameters": [
           {
