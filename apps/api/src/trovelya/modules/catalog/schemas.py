@@ -275,3 +275,27 @@ class ListingPage(BaseModel):
     seller: SellerOut
     published_at: datetime | None
     updated_at: datetime
+
+
+class ListingSummary(BaseModel):
+    """A line of the seller's listings (W10): no coordinate, the first photo only."""
+
+    id: UUID
+    short_id: str
+    status: ListingStatus
+    title: str
+    price: Money
+    cover: list[PhotoVariant] | None
+    version: int
+    created_at: datetime
+    updated_at: datetime
+    published_at: datetime | None
+    expires_at: datetime | None
+
+
+class ListingSummaryPage(BaseModel):
+    """Section 11.3: a page and the cursor of the next one."""
+
+    data: list[ListingSummary]
+    next_cursor: str | None
+    has_more: bool

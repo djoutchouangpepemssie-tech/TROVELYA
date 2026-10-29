@@ -611,3 +611,37 @@ async def listing_page(
     }
     row = (await db.execute(_LISTING_PAGE, params)).mappings().one_or_none()
     return dict(row) if row is not None else None
+
+
+# --- The seller's listings (P2-T03b3b) --------------------------------------------------------
+
+# Newest first; the cursor is the (created_at, id) of the last listing served.
+_MY_LISTINGS = text(
+    "SELECT l.id, l.short_id, l.status::text AS status, l.title, l.price_minor, l.currency,"
+    " l.version, l.created_at, l.updated_at, l.published_at, l.expires_at,"
+    " (SELECT m.media_id FROM listing_media m WHERE m.listing_id = l.id"
+    " ORDER BY m.position LIMIT 1) AS cover_id"
+    " FROM listings l WHERE l.seller_id = :seller_id AND l.deleted_at IS NULL"
+    " AND (CAST(:status AS listing_status) IS NULL OR l.status = CAST(:status AS listing_status))"
+    " AND (CAST(:after_at AS timestamptz) IS NULL"
+    " OR (l.created_at, l.id) < (CAST(:after_at AS timestamptz), CAST(:after_id AS uuid)))"
+    " ORDER BY l.created_at DESC, l.id DESC LIMIT :limit"
+)
+
+
+async def seller_listings(
+    db: AsyncSession,
+    *,
+    seller_id: UUID,
+    status: str | None,
+    after: tuple[datetime, UUID] | None,
+    limit: int,
+) -> list[dict[str, Any]]:
+    params = {
+        "seller_id": seller_id,
+        "status": status,
+        "after_at": after[0] if after else None,
+        "after_id": after[1] if after else None,
+        "limit": limit,
+    }
+    return [dict(row) for row in (await db.execute(_MY_LISTINGS, params)).mappings()]

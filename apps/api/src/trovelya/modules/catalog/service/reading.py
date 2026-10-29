@@ -12,8 +12,9 @@ from uuid import UUID
 from sqlalchemy.ext.asyncio import AsyncSession
 
 from trovelya.core.errors import AppError, ErrorCode
+from trovelya.core.pagination import decode_cursor, encode_cursor
 from trovelya.modules.catalog import repository
-from trovelya.modules.catalog.schemas import ListingPage
+from trovelya.modules.catalog.schemas import ListingPage, ListingSummary, ListingSummaryPage
 from trovelya.modules.catalog.service.categories import LOCALE
 from trovelya.modules.catalog.service.positions import round_distance
 from trovelya.modules.identity.service import default_zone_center, public_seller
@@ -79,4 +80,37 @@ async def listing_page(
             ),
             "seller": seller,
         }
+    )
+
+
+async def seller_listings(
+    db: AsyncSession,
+    *,
+    seller_id: UUID,
+    status: str | None,
+    cursor: str | None,
+    limit: int,
+    media_public_url: str | None,
+) -> ListingSummaryPage:
+    """The seller's listings, newest first, any status but deleted ones (W10)."""
+    rows = await repository.seller_listings(
+        db, seller_id=seller_id, status=status, after=decode_cursor(cursor), limit=limit + 1
+    )
+    page, has_more = rows[:limit], len(rows) > limit
+    covers = await listing_photos.photo_variants_by_id(
+        db, [row["cover_id"] for row in page if row["cover_id"]], public_url=media_public_url
+    )
+    return ListingSummaryPage(
+        data=[
+            ListingSummary.model_validate(
+                row
+                | {
+                    "price": {"amount_minor": row["price_minor"], "currency": row["currency"]},
+                    "cover": covers.get(row["cover_id"]),
+                }
+            )
+            for row in page
+        ],
+        next_cursor=encode_cursor(page[-1]["created_at"], page[-1]["id"]) if has_more else None,
+        has_more=has_more,
     )
