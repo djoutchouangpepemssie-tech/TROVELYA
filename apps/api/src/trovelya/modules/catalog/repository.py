@@ -1084,9 +1084,9 @@ _PRICE_CHANGES = text(
     "SELECT changed_at, price_minor FROM listing_price_history WHERE listing_id = :id"
     " ORDER BY changed_at, id"
 )
-_FIRST_ONLINE = text(
-    "SELECT min(created_at) FROM listing_status_history"
-    " WHERE listing_id = :id AND to_status = 'active'"
+_TRANSITIONS = text(
+    "SELECT created_at, from_status::text AS from_status, to_status::text AS to_status"
+    " FROM listing_status_history WHERE listing_id = :id ORDER BY created_at, id"
 )
 
 
@@ -1095,10 +1095,11 @@ async def listing_state(db: AsyncSession, listing_id: UUID) -> Row[Any] | None:
     return (await db.execute(_LISTING_STATE, {"id": listing_id})).one_or_none()
 
 
-async def price_changes(
+async def price_facts(
     db: AsyncSession, listing_id: UUID
-) -> tuple[list[tuple[datetime, int]], datetime | None]:
-    """Every recorded price of the listing, and when it first went online (None: never)."""
+) -> tuple[list[tuple[datetime, int]], list[tuple[datetime, str | None, str]]]:
+    """Every recorded price of the listing and every transition, each in the order recorded."""
     rows = await db.execute(_PRICE_CHANGES, {"id": listing_id})
     changes = [(row.changed_at, row.price_minor) for row in rows]
-    return changes, await db.scalar(_FIRST_ONLINE, {"id": listing_id})
+    rows = await db.execute(_TRANSITIONS, {"id": listing_id})
+    return changes, [(row.created_at, row.from_status, row.to_status) for row in rows]
