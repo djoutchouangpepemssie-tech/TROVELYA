@@ -126,3 +126,42 @@ async def publish_listing(
     return await publishing.publish(
         db, seller_id=me.id, listing_id=listing_id, gate=gate, clock=clock
     )
+
+
+@router.post(
+    "/{listing_id}/withdraw",
+    operation_id="listing_withdraw",
+    responses={
+        404: {"description": "Not the caller's listing"},
+        409: {"description": "Not active"},
+    },
+)
+async def withdraw_listing(
+    listing_id: UUID,
+    db: Uow,
+    me: Member,
+    clock: Annotated[Clock, Depends(get_clock)],
+) -> ListingOut:
+    """Take an active listing out of the shop window."""
+    return await publishing.withdraw(db, seller_id=me.id, listing_id=listing_id, clock=clock)
+
+
+@router.post(
+    "/{listing_id}/renew",
+    operation_id="listing_renew",
+    responses={
+        403: {"description": "Profile incomplete, under 18, or erasure in progress (Q1)"},
+        404: {"description": "Not the caller's listing"},
+        409: {"description": "Neither expired nor withdrawn"},
+        422: {"description": "No ready photo"},
+        429: {"description": "50 listings put online over 24 hours; see Retry-After"},
+    },
+)
+async def renew_listing(
+    listing_id: UUID,
+    db: Uow,
+    me: Member,
+    clock: Annotated[Clock, Depends(get_clock)],
+) -> ListingOut:
+    """Back online for 120 days: an expired listing is renewed, a withdrawn one republished."""
+    return await publishing.renew(db, seller_id=me.id, listing_id=listing_id, clock=clock)
