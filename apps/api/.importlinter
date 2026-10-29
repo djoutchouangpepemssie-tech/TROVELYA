@@ -27,6 +27,7 @@ source_modules =
     trovelya.modules.orders
     trovelya.modules.identity
     trovelya.modules.media
+    trovelya.modules.circumvention
 forbidden_modules =
     trovelya.modules.ledger.repository
     trovelya.modules.ledger.models
@@ -40,6 +41,7 @@ source_modules =
     trovelya.modules.orders
     trovelya.modules.identity
     trovelya.modules.media
+    trovelya.modules.circumvention
 forbidden_modules =
     trovelya.modules.catalog.repository
     trovelya.modules.catalog.models
@@ -53,6 +55,7 @@ source_modules =
     trovelya.modules.catalog
     trovelya.modules.identity
     trovelya.modules.media
+    trovelya.modules.circumvention
 forbidden_modules =
     trovelya.modules.orders.repository
     trovelya.modules.orders.models
@@ -69,6 +72,7 @@ source_modules =
     trovelya.modules.catalog
     trovelya.modules.orders
     trovelya.modules.media
+    trovelya.modules.circumvention
 forbidden_modules =
     trovelya.modules.identity.repository
     trovelya.modules.identity.models
@@ -86,6 +90,7 @@ source_modules =
     trovelya.modules.catalog
     trovelya.modules.orders
     trovelya.modules.identity
+    trovelya.modules.circumvention
 forbidden_modules =
     trovelya.modules.media.repository
     trovelya.modules.media.models
@@ -102,7 +107,21 @@ forbidden_modules =
     trovelya.shared
     trovelya.modules.catalog.service
     trovelya.modules.catalog.models
+    trovelya.modules.circumvention
     trovelya.modules.identity
     trovelya.modules.ledger
     trovelya.modules.orders
     trovelya.modules.media
+
+[importlinter:contract:module-circumvention]
+name = Other modules use circumvention only through circumvention.service
+type = forbidden
+source_modules =
+    trovelya.modules.ledger
+    trovelya.modules.catalog
+    trovelya.modules.orders
+    trovelya.modules.identity
+    trovelya.modules.media
+forbidden_modules =
+    trovelya.modules.circumvention.models
+    trovelya.modules.circumvention.normalize
