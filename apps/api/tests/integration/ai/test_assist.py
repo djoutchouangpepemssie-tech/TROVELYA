@@ -20,6 +20,7 @@ from tests.integration.catalog.test_categories_api import seeded  # noqa: F401  
 from tests.integration.catalog.test_draft_rules import photo
 from tests.integration.catalog.test_drafts import Session
 from tests.integration.catalog.test_review_queue import _listing  # pyright: ignore[reportPrivateUsage]
+from tests.integration.catalog.test_withdraw_renew import _call  # pyright: ignore[reportPrivateUsage]
 from tests.integration.identity.test_profile import Account, make_account
 from trovelya.core.flags import FlagService
 from trovelya.main import create_app
@@ -52,6 +53,11 @@ class _Saying(FakeAIProvider):
         self.images, self.leaves = images, leaves
         answer = await super().suggest_listing(images, leaves)
         return ProviderAnswer(output=answer.output | self.changes, cost_microeur=self.cost)
+
+
+class _Failing(FakeEmbedder):
+    async def embed(self, text: str) -> list[float]:
+        raise TimeoutError
 
 
 class _Down(FakeAIProvider):
@@ -306,10 +312,25 @@ async def test_photo_in_quarantine_refused_before_any_call(ai: Ai, sessionmaker:
 
 async def test_assist_no_price_without_comparables(ai: Ai, sessionmaker: Session) -> None:
     """Q44: 4 comparables online (same leaf and condition, current model): no range; a 5th:
-    the 25th to 75th percentile, in euros. The member's own listings never count."""
+    the 25th to 75th percentile, in euros. At 900 €, never counted: another condition,
+    another leaf, a seller not shown, a listing withdrawn, a vector of another model."""
     model = f"fake-{new_id()}"  # this test's listings only (the database is shared)
     ai.app.state.embedder = FakeEmbedder(model)
     member, media = await _member(sessionmaker)
+    dear = {"amount_minor": 90_000, "currency": "EUR"}
+    for case in ("condition", "leaf", "hidden", "withdrawn", "model"):
+        changes = {"condition": "good"} if case == "condition" else {}
+        changes |= {"category": "mode.femme.hauts"} if case == "leaf" else {}
+        seller, listing = await _listing(ai.client, sessionmaker, price=dear, **changes)
+        embedder = FakeEmbedder("fake-other" if case == "model" else model)
+        assert await embed_listing(sessionmaker, embedder, UUID(listing["id"]))
+        if case == "withdrawn":
+            assert (await _call(ai.client, seller, listing["id"], "withdraw")).status_code == 200
+        if case == "hidden":
+            async with sessionmaker() as db:
+                suspend = "UPDATE users SET status = 'suspended' WHERE id = :u"
+                await db.execute(text(suspend), {"u": seller.id})
+                await db.commit()
     for euros in (10, 20, 30, 40, 50):
         price = {"amount_minor": euros * 100, "currency": "EUR"}
         _, listing = await _listing(ai.client, sessionmaker, price=price)
@@ -320,3 +341,6 @@ async def test_assist_no_price_without_comparables(ai: Ai, sessionmaker: Session
     assert (found["low"]["amount_minor"], found["high"]["amount_minor"]) == (2000, 4000)
     ai.app.state.embedder = None  # no embedder: no range
     assert (await _assist(ai, member, media)).json()["price_range"] is None
+    ai.app.state.embedder = _Failing(model)  # down: the suggestion stays, without a range
+    answer = (await _assist(ai, member, media)).json()
+    assert (answer["title"], answer["price_range"]) == ("Robe en lin bleue", None)

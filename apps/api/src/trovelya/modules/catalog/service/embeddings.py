@@ -2,10 +2,12 @@
 `reindex` and `drop_embedding`, which are jobs or event handlers.
 
 A listing online, whose seller is shown, is embedded by the worker from its text: title,
-description, attributes with their labels, brand (the main photo's caption joins with T06a).
-Nothing else ever leaves for the provider. The vector is stored only if the listing is still
-online with the same text; it is dropped when the listing leaves the shop window. A failure
-never touches the listing: the job is tried again, then the daily reindexing catches it."""
+description, attributes with their labels, brand (the main photo's caption joins with T06a3b).
+Besides, the AI help's suggestion is embedded during the request to find comparable prices
+(P2-T06a3a, ADR-0020 point 9); nothing else ever leaves for the provider. The vector is stored
+only if the listing is still online with the same text; it is dropped when the listing leaves
+the shop window. A failure never touches the listing: the job is tried again, then the daily
+reindexing catches it."""
 
 from typing import Any
 from uuid import UUID

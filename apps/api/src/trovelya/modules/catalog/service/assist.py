@@ -7,6 +7,7 @@ catalogue allows: a category that is not an active leaf goes, with its attribute
 the category refuses goes; a condition or a brand the category does not take goes. The member
 decides from there (W09). A price range comes from the comparable listings online (Q44)."""
 
+import asyncio
 from typing import Any
 from uuid import UUID
 
@@ -20,7 +21,14 @@ from trovelya.modules.ai import service as ai
 from trovelya.modules.catalog import repository
 from trovelya.modules.catalog.adapters.embedder import Embedder, checked_vector
 from trovelya.modules.catalog.models import ItemCondition
-from trovelya.modules.catalog.schemas import AssistOut, BrandName, Caption, PriceRange, Title
+from trovelya.modules.catalog.schemas import (
+    AssistOut,
+    BrandName,
+    Caption,
+    Money,
+    PriceRange,
+    Title,
+)
 from trovelya.modules.catalog.service.categories import LOCALE
 from trovelya.modules.catalog.service.draft_rules import brand_slug, valid_attributes
 from trovelya.modules.catalog.service.embeddings import compose_text
@@ -34,6 +42,7 @@ Session = async_sessionmaker[AsyncSession]
 _TITLE: TypeAdapter[str] = TypeAdapter(Title)
 _BRAND: TypeAdapter[str] = TypeAdapter(BrandName)
 _CAPTION: TypeAdapter[str] = TypeAdapter(Caption)
+EMBED_TIMEOUT_S = 5  # the range is a help: never long to wait for
 CONFIDENT_OF = ("title", "category", "brand", "condition", "attributes", "caption")
 
 
@@ -83,47 +92,48 @@ async def _kept(
     return AssistOut.model_validate(kept)
 
 
-async def _price_range(
-    sessionmaker: Session,
-    embedder: Embedder | None,
-    *,
-    member_id: UUID,
-    kept: AssistOut,
-    leaf: Row[Any] | None,
-) -> dict[str, Any] | None:
-    """Q44: from the 20 listings online nearest to the suggestion, of its leaf and condition;
-    none without an embedder, a title, a leaf or a condition, or when the embedder fails (the
-    suggestion is still shown). The embedder is called outside any transaction."""
-    if embedder is None or leaf is None or kept.title is None or kept.condition is None:
-        return None
+async def _comparables(
+    sessionmaker: Session, embedder: Embedder, kept: AssistOut, leaf: Row[Any], condition: str
+) -> list[int]:
     async with sessionmaker() as db:
         text = await compose_text(
             db,
-            texts=[kept.title],
+            texts=[kept.title or ""],
             category_id=leaf.id,
             attributes=kept.attributes,
             brand=kept.brand,
         )
-    try:
+    async with asyncio.timeout(EMBED_TIMEOUT_S):  # outside any transaction
         vector = checked_vector(await embedder.embed(text))
-    except Exception:
-        logger.exception("catalog.assist_embedding_failed", suggestion_id=str(kept.suggestion_id))
-        return None
     async with sessionmaker() as db:
-        prices = await repository.comparable_prices(
+        return await repository.comparable_prices(
             db,
             category_id=leaf.id,
-            condition=kept.condition,
-            member_id=member_id,
+            condition=condition,
             vector=vector,
             model=embedder.model,
             limit=COMPARABLES,
         )
+
+
+async def _price_range(
+    sessionmaker: Session, embedder: Embedder | None, kept: AssistOut, leaf: Row[Any] | None
+) -> PriceRange | None:
+    """Q44: from the 20 listings online nearest to the suggestion, of its leaf and condition;
+    none without an embedder, a title, a leaf or a condition. The range is a help: when the
+    embedder or the database fails, the suggestion is still shown, without it."""
+    if embedder is None or leaf is None or kept.title is None or kept.condition is None:
+        return None
+    try:
+        prices = await _comparables(sessionmaker, embedder, kept, leaf, kept.condition)
+    except Exception:
+        logger.exception("catalog.assist_price_range_failed", suggestion_id=str(kept.suggestion_id))
+        return None
     found = price_range(prices)
     if found is None:
         return None
     low, high = found
-    return {"low": {"amount_minor": low}, "high": {"amount_minor": high}}
+    return PriceRange(low=Money(amount_minor=low), high=Money(amount_minor=high))
 
 
 async def assist(
@@ -158,5 +168,5 @@ async def assist(
     async with sessionmaker() as db:
         kept = await _kept(db, call_id, suggestion, leaves, clock)
     leaf = leaves.get(kept.category.key) if kept.category else None
-    found = await _price_range(sessionmaker, embedder, member_id=member_id, kept=kept, leaf=leaf)
-    return kept.model_copy(update={"price_range": found and PriceRange.model_validate(found)})
+    found = await _price_range(sessionmaker, embedder, kept, leaf)
+    return kept.model_copy(update={"price_range": found})
