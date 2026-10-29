@@ -478,6 +478,125 @@
         "title": "ApprovalOutcomeOut",
         "type": "object"
       },
+      "AssistIn": {
+        "additionalProperties": false,
+        "description": "From 1 to 4 of the member's photos, sent for a listing and processed (P2-T06a).",
+        "properties": {
+          "media_ids": {
+            "items": {
+              "format": "uuid",
+              "type": "string"
+            },
+            "maxItems": 4,
+            "minItems": 1,
+            "title": "Media Ids",
+            "type": "array"
+          }
+        },
+        "required": [
+          "media_ids"
+        ],
+        "title": "AssistIn",
+        "type": "object"
+      },
+      "AssistOut": {
+        "description": "What the AI proposes, once the catalogue kept what it allows; each field may be none.\n`suggestion_id` names the suggestion when the draft is created from it.",
+        "properties": {
+          "attributes": {
+            "additionalProperties": true,
+            "title": "Attributes",
+            "type": "object"
+          },
+          "brand": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Brand"
+          },
+          "caption": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Caption"
+          },
+          "category": {
+            "anyOf": [
+              {
+                "$ref": "#/components/schemas/CategoryRef"
+              },
+              {
+                "type": "null"
+              }
+            ]
+          },
+          "condition": {
+            "anyOf": [
+              {
+                "$ref": "#/components/schemas/ItemCondition"
+              },
+              {
+                "type": "null"
+              }
+            ]
+          },
+          "confidence": {
+            "additionalProperties": {
+              "type": "number"
+            },
+            "title": "Confidence",
+            "type": "object"
+          },
+          "price_range": {
+            "anyOf": [
+              {
+                "$ref": "#/components/schemas/PriceRange"
+              },
+              {
+                "type": "null"
+              }
+            ]
+          },
+          "suggestion_id": {
+            "format": "uuid",
+            "title": "Suggestion Id",
+            "type": "string"
+          },
+          "title": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Title"
+          }
+        },
+        "required": [
+          "suggestion_id",
+          "title",
+          "category",
+          "brand",
+          "condition",
+          "attributes",
+          "caption",
+          "confidence",
+          "price_range"
+        ],
+        "title": "AssistOut",
+        "type": "object"
+      },
       "AttributeOut": {
         "properties": {
           "key": {
@@ -2845,6 +2964,23 @@
         "title": "PricePoint",
         "type": "object"
       },
+      "PriceRange": {
+        "description": "The 25th to 75th percentile of comparable listings online, in whole euros (Q44).",
+        "properties": {
+          "high": {
+            "$ref": "#/components/schemas/Money"
+          },
+          "low": {
+            "$ref": "#/components/schemas/Money"
+          }
+        },
+        "required": [
+          "low",
+          "high"
+        ],
+        "title": "PriceRange",
+        "type": "object"
+      },
       "PriceWatch": {
         "properties": {
           "target_minor": {
@@ -5178,6 +5314,53 @@
           }
         },
         "summary": "Post Listing",
+        "tags": [
+          "catalog"
+        ]
+      }
+    },
+    "/v1/listings/assist": {
+      "post": {
+        "description": "What the AI proposes from the photos, for the member to check (P2-T06a). Every call\ncounts in a cap of `ai.assist_per_day` over 24 hours (Q45).",
+        "operationId": "listing_assist",
+        "requestBody": {
+          "content": {
+            "application/json": {
+              "schema": {
+                "$ref": "#/components/schemas/AssistIn"
+              }
+            }
+          },
+          "required": true
+        },
+        "responses": {
+          "200": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/AssistOut"
+                }
+              }
+            },
+            "description": "Successful Response"
+          },
+          "404": {
+            "description": "A photo that is not the caller's"
+          },
+          "409": {
+            "description": "A photo still being processed"
+          },
+          "422": {
+            "description": "Not 1 to 4 photos, or a photo not sent for a listing"
+          },
+          "429": {
+            "description": "`ai_limit`: the daily cap (Retry-After) or a suggestion too dear"
+          },
+          "503": {
+            "description": "`ai_unavailable`: AI help off or failing; list without it"
+          }
+        },
+        "summary": "Assist Listing",
         "tags": [
           "catalog"
         ]

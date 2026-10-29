@@ -19,7 +19,11 @@ from sqlalchemy.ext.asyncio import AsyncSession
 from trovelya.core.errors import AppError, ErrorCode, FieldError
 from trovelya.modules.catalog import repository
 from trovelya.modules.catalog.models import ItemCondition
-from trovelya.modules.catalog.service.attributes import AttributeRule, validate_attributes
+from trovelya.modules.catalog.service.attributes import (
+    AttributeIssue,
+    AttributeRule,
+    validate_attributes,
+)
 from trovelya.modules.catalog.service.brand_seed import slugify
 from trovelya.shared.clock import Clock
 
@@ -44,9 +48,9 @@ def _invalid(code: ErrorCode) -> AppError:
     return AppError(code, 422)
 
 
-async def checked_attributes(
+async def _validated(
     db: AsyncSession, category_id: UUID, values: dict[str, Any], clock: Clock
-) -> dict[str, Any]:
+) -> tuple[dict[str, Any], list[AttributeIssue]]:
     rules = [
         AttributeRule(
             key=row.key,
@@ -58,7 +62,20 @@ async def checked_attributes(
         for row in await repository.attribute_rules(db, category_id)
     ]
     year = clock.now().astimezone(LOCAL_ZONE).year
-    accepted, issues = validate_attributes(values, rules, current_year=year)
+    return validate_attributes(values, rules, current_year=year)
+
+
+async def valid_attributes(
+    db: AsyncSession, category_id: UUID, values: dict[str, Any], clock: Clock
+) -> dict[str, Any]:
+    """Only the values the category accepts, the others left out (the AI help, P2-T06a)."""
+    return (await _validated(db, category_id, values, clock))[0]
+
+
+async def checked_attributes(
+    db: AsyncSession, category_id: UUID, values: dict[str, Any], clock: Clock
+) -> dict[str, Any]:
+    accepted, issues = await _validated(db, category_id, values, clock)
     if issues:
         raise AppError(
             ErrorCode.INVALID_ATTRIBUTES,

@@ -104,3 +104,18 @@ async def photo_moderation(db: AsyncSession, media_ids: Sequence[UUID]) -> list[
             {"scores": valid_scores(scores), "duplicate_of": moderation.get("duplicate_of")}
         )
     return photos
+
+
+async def assist_variants(
+    db: AsyncSession, media_ids: Sequence[UUID], *, max_width: int = 1080
+) -> list[dict[str, Any]]:
+    """For the AI help (P2-T06a), the variant of each photo still ready that an AI reads: the
+    widest up to `max_width` (variants are never enlarged), in the order given."""
+    found = await repository.ready_variants_of(db, media_ids)
+    chosen: list[dict[str, Any]] = []
+    for media_id in media_ids:
+        fitting = [v for v in found.get(media_id) or [] if v["width"] <= max_width]
+        if fitting:
+            best = max(fitting, key=lambda v: v["width"])
+            chosen.append({"key": best["key"], "format": best["format"], "width": best["width"]})
+    return chosen
