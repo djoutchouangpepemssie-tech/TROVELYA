@@ -87,14 +87,14 @@ async def _decide(
     online_until = None
     actor = Actor("staff", staff_id)
     if event is ListingEvent.APPROVE and locked.status == ListingStatus.PENDING_REVIEW.value:
-        if not await repository.has_ready_photo(db, listing_id):
-            raise AppError(ErrorCode.PHOTO_REQUIRED, 409)  # the reviewer rejects it instead
         refusal = await policies.publish_refusal(db, locked.seller_id, clock=now)
         if refusal is not None:
-            # Q41: the seller may no longer publish; the platform withdraws the listing, no
-            # moderation removal: resubmitted once the account is in order.
+            # Q41: the seller may no longer publish; the platform withdraws the listing (photo
+            # or not), no moderation removal: resubmitted once the account is in order.
             event, actor = ListingEvent.WITHDRAW, SYSTEM
-            reason_code, reason_text = refusal, "Le vendeur ne peut plus publier"
+            reason_code, reason_text = refusal, policies.REFUSALS[refusal]
+        elif not await repository.has_ready_photo(db, listing_id):
+            raise AppError(ErrorCode.PHOTO_REQUIRED, 409)  # the reviewer rejects it instead
         else:
             days = await repository.setting_int(db, "listings.expiry_days")
             online_until = now.now() + timedelta(days=days)
