@@ -107,6 +107,7 @@ forbidden_modules =
     trovelya.shared
     trovelya.modules.catalog.service
     trovelya.modules.catalog.models
+    trovelya.modules.circumvention
     trovelya.modules.identity
     trovelya.modules.ledger
     trovelya.modules.orders
@@ -125,5 +126,6 @@ forbidden_modules =
     trovelya.modules.circumvention.repository
     trovelya.modules.circumvention.models
     trovelya.modules.circumvention.migrations
+    trovelya.modules.circumvention.tasks
     trovelya.modules.circumvention.normalize
     trovelya.modules.circumvention.rules

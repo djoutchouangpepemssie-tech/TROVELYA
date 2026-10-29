@@ -1,12 +1,13 @@
-"""What other modules use of anti-circumvention (section 8.16, plan Q12).
+"""What other modules use of anti-circumvention (section 8.16, plan Q12, Q35).
 
 `screen` runs on a member's text before it is shown: the passages found are masked (or only
-queued for review below `MASK_AT`), the detection is recorded with the original sealed, and
-the text to show is returned. Never commits.
+queued for review below `MASK_AT`), the detections are recorded with the original sealed, and
+the text to show is returned. One row for what was masked (confirmed automatically) and one
+for what goes to review, so a doubtful passage is never confirmed with a sure one. Never
+commits.
 """
 
-from collections.abc import Mapping
-from datetime import UTC, datetime
+from collections.abc import Mapping, Sequence
 from typing import Any, Literal
 from uuid import UUID
 
@@ -17,10 +18,20 @@ from trovelya.core.gdpr import register_eraser, register_exporter
 from trovelya.modules.circumvention import repository
 from trovelya.modules.circumvention.models import Detection
 from trovelya.modules.circumvention.rules import MASK, MASK_AT, detect, mask
+from trovelya.shared.audit import record_audit
+from trovelya.shared.clock import Clock
 from trovelya.shared.crypto import derive_key, open_sealed, seal
 from trovelya.shared.ids import new_id
 
-__all__ = ["MASK", "MASK_AT", "Detection", "detect", "mask", "open_original", "screen"]
+__all__ = [
+    "MASK",
+    "MASK_AT",
+    "Detection",
+    "detect",
+    "mask",
+    "open_original",
+    "screen",
+]
 
 SourceType = Literal["message", "listing", "image", "live_chat", "live_audio", "profile"]
 _PURPOSE = "circumvention-original"
@@ -30,9 +41,40 @@ def _key(settings: Settings) -> bytes:
     return derive_key(settings.field_encryption_key.get_secret_value(), purpose=_PURPOSE)
 
 
-def _aad(detection_id: UUID) -> bytes:
-    """Binds a sealed original to its row: copied onto another one, it no longer opens."""
-    return f"circumvention_detections:{detection_id}".encode()
+def _aad(row: Mapping[str, Any]) -> bytes:
+    """Binds a sealed original to its row, its member and its source: copied onto another
+    row, or the row moved to another member or source, it no longer opens."""
+    return (
+        f"circumvention_detections:{row['id']}:{row['user_id']}"
+        f":{row['source_type']}:{row['source_id']}"
+    ).encode()
+
+
+async def _record(
+    db: AsyncSession,
+    found: Sequence[Detection],
+    *,
+    masked: bool,
+    base: Mapping[str, Any],
+    text: str,
+    settings: Settings,
+) -> None:
+    row = {**base, "id": new_id()}
+    await repository.insert_detection(
+        db,
+        {
+            **row,
+            "signals": list(dict.fromkeys(d.signal for d in found)),
+            "spans": [
+                {"signal": d.signal, "start": d.start, "end": d.end, "confidence": d.confidence}
+                for d in found
+            ],
+            "confidence": max(d.confidence for d in found),
+            "action_taken": "masked" if masked else "queued",
+            "review_status": "auto_confirmed" if masked else "pending",
+            "original_sealed": seal(text.encode(), key=_key(settings), aad=_aad(row)),
+        },
+    )
 
 
 async def screen(
@@ -43,45 +85,51 @@ async def screen(
     source_id: UUID,
     text: str,
     settings: Settings,
-    now: datetime | None = None,
+    clock: Clock,
 ) -> str:
-    """`text` as it may be shown, with the detection recorded when something was found."""
+    """`text` as it may be shown, with the detections recorded when something was found."""
     found = detect(text)
-    if not found:
-        return text
-    detection_id = new_id()
-    confidence = max(d.confidence for d in found)
-    masked = confidence >= MASK_AT
-    await repository.insert_detection(
-        db,
-        {
-            "id": detection_id,
-            "user_id": user_id,
-            "source_type": source_type,
-            "source_id": source_id,
-            "signals": sorted({d.signal for d in found}, key=[d.signal for d in found].index),
-            "spans": [
-                {"signal": d.signal, "start": d.start, "end": d.end, "confidence": d.confidence}
-                for d in found
-            ],
-            "confidence": confidence,
-            "action_taken": "masked" if masked else "queued",
-            "review_status": "auto_confirmed" if masked else "pending",
-            "original_sealed": seal(text.encode(), key=_key(settings), aad=_aad(detection_id)),
-            "created_at": now or datetime.now(UTC),
-        },
-    )
+    base = {
+        "user_id": user_id,
+        "source_type": source_type,
+        "source_id": source_id,
+        "created_at": clock.now(),
+    }
+    for masked in (True, False):
+        part = [d for d in found if (d.confidence >= MASK_AT) is masked]
+        if part:
+            await _record(db, part, masked=masked, base=base, text=text, settings=settings)
     return mask(text, found)
 
 
-def open_original(row: Mapping[str, Any], *, settings: Settings) -> str:
-    """The member's original text of a detection, for the review (staff only, audited)."""
-    sealed = bytes(row["original_sealed"])
-    return open_sealed(sealed, key=_key(settings), aad=_aad(row["id"])).decode()
+async def open_original(
+    db: AsyncSession, row: Mapping[str, Any], *, staff_id: UUID, settings: Settings
+) -> str:
+    """The member's original text of a detection, for the review: the reading is written in
+    the audit log in the caller's transaction (who read which detection)."""
+    original = open_sealed(
+        bytes(row["original_sealed"]), key=_key(settings), aad=_aad(row)
+    ).decode()
+    await record_audit(
+        db,
+        actor_type="staff",
+        actor_id=staff_id,
+        action="circumvention.original_read",
+        target_type="circumvention_detection",
+        target_id=str(row["id"]),
+    )
+    return original
 
 
-async def _export(db: AsyncSession, user_id: UUID) -> dict[str, Any]:
-    return {"circumvention_detections": await repository.export_detections(db, user_id)}
+async def _export(db: AsyncSession, user_id: UUID, settings: Settings) -> dict[str, Any]:
+    """Q35: the member's detections with the original text they wrote (right of access)."""
+    rows = await repository.export_detections(db, user_id)
+    for row in rows:
+        sealed = row.pop("original_sealed")
+        row["original_text"] = open_sealed(
+            bytes(sealed), key=_key(settings), aad=_aad({**row, "user_id": user_id})
+        ).decode()
+    return {"circumvention_detections": rows}
 
 
 register_exporter("circumvention", _export)

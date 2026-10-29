@@ -27,6 +27,7 @@ from trovelya.core.observability import (
 )
 from trovelya.core.redis import make_redis
 from trovelya.modules.catalog.tasks import expire_listings_job, purge_ended_listings_job
+from trovelya.modules.circumvention.tasks import purge_old_detections_job
 from trovelya.modules.identity.service import (
     EXPORT_JOB,
     build_data_export,
@@ -177,6 +178,8 @@ class WorkerSettings:
         # Daily (Q19): ended listings past their retention are erased, done before the
         # erasures of 4:00 (they lock the same listings).
         cron(purge_ended_listings_job, hour=2, minute=30, unique=True, timeout=3600),
+        # Daily (Q36): reviewed anti-circumvention detections past 180 days are erased.
+        cron(purge_old_detections_job, hour=5, minute=15, unique=True, timeout=600),
     ]
     on_startup = startup
     on_shutdown = shutdown

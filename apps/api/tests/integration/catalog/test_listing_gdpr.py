@@ -10,6 +10,7 @@ import pytest
 from sqlalchemy import text
 from sqlalchemy.ext.asyncio import AsyncSession, async_sessionmaker
 
+from tests.conftest import make_settings
 from tests.integration.identity.test_profile import make_account
 from trovelya.core.gdpr import registered_erasers, registered_exporters
 from trovelya.shared.ids import new_id
@@ -122,7 +123,7 @@ async def test_catalog_exported(sessionmaker: Session, category: UUID) -> None:
             l=others,
         )
     async with sessionmaker() as db:
-        export = await registered_exporters()["catalog"](db, member.id)
+        export = await registered_exporters()["catalog"](db, member.id, make_settings())
 
     [listing] = export["listings"]
     assert (listing["id"], listing["title"], listing["place_name"]) == (
