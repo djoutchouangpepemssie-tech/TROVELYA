@@ -16,6 +16,7 @@ GeocoderProvider = Literal["geoplateforme", "fake"]
 StorageProvider = Literal["s3", "memory"]
 # P2-T05b2, Q38, Q39: no classifier until an EU provider is chosen; the fake one for tests.
 ImageClassifierProvider = Literal["none", "fake"]
+EmbedderProvider = Literal["none", "fake"]  # ADR-0020: Bedrock when opened (Q18)
 
 
 def asyncpg_url(url: str) -> str:
@@ -66,6 +67,7 @@ class Settings(BaseSettings):
     # locally and in tests; memory for unit tests and environments without storage yet.
     storage_provider: StorageProvider = "memory"
     image_classifier: ImageClassifierProvider = "none"
+    embedder: EmbedderProvider = "none"
     storage_endpoint: str | None = None
     storage_region: str = "auto"  # R2 takes "auto"; Garage "garage"
     storage_access_key_id: SecretStr | None = None
@@ -115,6 +117,9 @@ class Settings(BaseSettings):
         """Q38: deployed, the fake classifier (all 0) would put every listing online unchecked."""
         if self.image_classifier == "fake" and self.env not in ("local", "test"):
             raise ValueError("IMAGE_CLASSIFIER=fake is for local development and tests only")
+        # ADR-0020: the fake embedder's "similar" listings share words, nothing more.
+        if self.embedder == "fake" and self.env not in ("local", "test"):
+            raise ValueError("EMBEDDER=fake is for local development and tests only")
         return self
 
     @model_validator(mode="after")

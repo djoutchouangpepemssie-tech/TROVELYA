@@ -1103,3 +1103,55 @@ async def price_facts(
     changes = [(row.changed_at, row.price_minor) for row in rows]
     rows = await db.execute(_TRANSITIONS, {"id": listing_id})
     return changes, [(row.created_at, row.from_status, row.to_status) for row in rows]
+
+
+# --- Embeddings (P2-T11, ADR-0020) -------------------------------------------------------------
+
+_EMBEDDING_SOURCE = text(
+    "SELECT l.seller_id, l.title, l.description, l.category_id, l.attributes,"
+    " b.name::text AS brand"
+    " FROM listings l LEFT JOIN brands b ON b.id = l.brand_id"
+    " WHERE l.id = :id AND l.status = 'active' AND l.deleted_at IS NULL"
+)
+_SET_EMBEDDING = text(
+    "UPDATE listings SET embedding = CAST(:vector AS vector), embedding_model = :model"
+    " WHERE id = :id AND status = 'active' AND deleted_at IS NULL"
+)
+# A similarity query uses `listings_embedding_hnsw_idx` only when it repeats its predicate as
+# literals (`status = 'active' AND embedding IS NOT NULL`), and compares vectors of the current
+# `embedding_model` only (two models may coexist while reindexing).
+_STALE_EMBEDDINGS = text(
+    "SELECT id FROM listings WHERE status = 'active' AND deleted_at IS NULL"
+    " AND embedding_model IS DISTINCT FROM :model"
+    " AND (CAST(:after AS uuid) IS NULL OR id > :after) ORDER BY id LIMIT :limit"
+)
+
+
+async def embedding_source(db: AsyncSession, listing_id: UUID) -> Row[Any] | None:
+    """What a listing's embedding is made of, and its seller; None unless online."""
+    return (await db.execute(_EMBEDDING_SOURCE, {"id": listing_id})).one_or_none()
+
+
+async def set_embedding(
+    db: AsyncSession, listing_id: UUID, *, vector: list[float], model: str
+) -> bool:
+    params = {"id": listing_id, "vector": str(vector), "model": model}
+    result = await db.execute(_SET_EMBEDDING, params)
+    return int(result.rowcount) == 1  # pyright: ignore[reportAttributeAccessIssue, reportUnknownArgumentType, reportUnknownMemberType]
+
+
+async def drop_embedding(db: AsyncSession, listing_id: UUID) -> None:
+    """Out of the shop window, a listing keeps no vector (recomputed when back online)."""
+    await db.execute(
+        text("UPDATE listings SET embedding = NULL, embedding_model = NULL WHERE id = :id"),
+        {"id": listing_id},
+    )
+
+
+async def stale_embeddings(
+    db: AsyncSession, *, model: str, after: UUID | None, limit: int
+) -> list[UUID]:
+    """Active listings without an embedding of `model` (never embedded, or by another one),
+    by id after `after`: one failing again and again holds back no other."""
+    params = {"model": model, "after": after, "limit": limit}
+    return list(await db.scalars(_STALE_EMBEDDINGS, params))
