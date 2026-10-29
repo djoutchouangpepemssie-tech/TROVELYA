@@ -9,7 +9,8 @@ from trovelya.core.pagination import DEFAULT_LIMIT, Cursor, Limit
 from trovelya.modules.catalog.models import ListingStatus
 from trovelya.modules.catalog.schemas import ListingSummaryPage
 from trovelya.modules.catalog.service import reading
-from trovelya.modules.identity.service import CurrentUser, current_user
+from trovelya.modules.identity.service import CurrentUser
+from trovelya.modules.identity.service.auth import completed_user
 
 router = APIRouter(prefix="/v1/me", tags=["catalog"])
 
@@ -18,7 +19,7 @@ router = APIRouter(prefix="/v1/me", tags=["catalog"])
 async def get_my_listings(
     request: Request,
     db: Uow,
-    me: Annotated[CurrentUser, Depends(current_user)],
+    me: Annotated[CurrentUser, Depends(completed_user)],
     status: ListingStatus | None = None,
     cursor: Cursor = None,
     limit: Limit = DEFAULT_LIMIT,

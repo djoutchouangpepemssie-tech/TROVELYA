@@ -104,8 +104,8 @@ async def seller_listings(
         db, seller_id=seller_id, status=status, after=decode_cursor(cursor), limit=limit + 1
     )
     page, has_more = rows[:limit], len(rows) > limit
-    covers = await listing_photos.photo_variants_by_id(
-        db, [row["cover_id"] for row in page if row["cover_id"]], public_url=media_public_url
+    shown = await listing_photos.photo_variants_by_id(
+        db, [media_id for row in page for media_id in row["media_ids"]], public_url=media_public_url
     )
     return ListingSummaryPage(
         data=[
@@ -113,7 +113,8 @@ async def seller_listings(
                 row
                 | {
                     "price": {"amount_minor": row["price_minor"], "currency": row["currency"]},
-                    "cover": covers.get(row["cover_id"]),
+                    # The first photo still shown (one removed by moderation is skipped).
+                    "cover": next((shown[m] for m in row["media_ids"] if m in shown), None),
                 }
             )
             for row in page

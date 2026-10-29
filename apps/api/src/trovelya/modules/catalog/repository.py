@@ -2,7 +2,7 @@
 
 import json
 from collections.abc import Mapping, Sequence
-from datetime import datetime
+from datetime import UTC, datetime
 from typing import Any
 from uuid import UUID
 
@@ -615,18 +615,30 @@ async def listing_page(
 
 # --- The seller's listings (P2-T03b3b) --------------------------------------------------------
 
-# Newest first; the cursor is the (created_at, id) of the last listing served.
+# Newest first; the cursor is the (created_at, id) of the last listing served, and the first
+# page starts after the latest possible one, so the condition always narrows the index scan
+# (listings_seller_recent_idx without a status, listings_seller_idx with one). The photos come
+# in display order: the cover is the first one still shown.
 _MY_LISTINGS = text(
     "SELECT l.id, l.short_id, l.status::text AS status, l.title, l.price_minor, l.currency,"
     " l.version, l.created_at, l.updated_at, l.published_at, l.expires_at,"
-    " (SELECT m.media_id FROM listing_media m WHERE m.listing_id = l.id"
-    " ORDER BY m.position LIMIT 1) AS cover_id"
+    " (SELECT coalesce(array_agg(m.media_id ORDER BY m.position), '{}')"
+    " FROM listing_media m WHERE m.listing_id = l.id) AS media_ids"
     " FROM listings l WHERE l.seller_id = :seller_id AND l.deleted_at IS NULL"
-    " AND (CAST(:status AS listing_status) IS NULL OR l.status = CAST(:status AS listing_status))"
-    " AND (CAST(:after_at AS timestamptz) IS NULL"
-    " OR (l.created_at, l.id) < (CAST(:after_at AS timestamptz), CAST(:after_id AS uuid)))"
+    " AND (l.created_at, l.id) < (:after_at, :after_id)"
     " ORDER BY l.created_at DESC, l.id DESC LIMIT :limit"
 )
+_MY_LISTINGS_WITH_STATUS = text(
+    "SELECT l.id, l.short_id, l.status::text AS status, l.title, l.price_minor, l.currency,"
+    " l.version, l.created_at, l.updated_at, l.published_at, l.expires_at,"
+    " (SELECT coalesce(array_agg(m.media_id ORDER BY m.position), '{}')"
+    " FROM listing_media m WHERE m.listing_id = l.id) AS media_ids"
+    " FROM listings l WHERE l.seller_id = :seller_id AND l.deleted_at IS NULL"
+    " AND l.status = CAST(:status AS listing_status)"
+    " AND (l.created_at, l.id) < (:after_at, :after_id)"
+    " ORDER BY l.created_at DESC, l.id DESC LIMIT :limit"
+)
+_BEFORE_EVERYTHING = (datetime(2100, 1, 1, tzinfo=UTC), UUID(int=(1 << 128) - 1))
 
 
 async def seller_listings(
@@ -637,11 +649,13 @@ async def seller_listings(
     after: tuple[datetime, UUID] | None,
     limit: int,
 ) -> list[dict[str, Any]]:
+    after_at, after_id = after or _BEFORE_EVERYTHING
     params = {
         "seller_id": seller_id,
         "status": status,
-        "after_at": after[0] if after else None,
-        "after_id": after[1] if after else None,
+        "after_at": after_at,
+        "after_id": after_id,
         "limit": limit,
     }
-    return [dict(row) for row in (await db.execute(_MY_LISTINGS, params)).mappings()]
+    query = _MY_LISTINGS if status is None else _MY_LISTINGS_WITH_STATUS
+    return [dict(row) for row in (await db.execute(query, params)).mappings()]
