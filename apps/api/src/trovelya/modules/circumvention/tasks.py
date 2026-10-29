@@ -13,8 +13,9 @@ from trovelya.shared.clock import Clock
 async def purge_old_detections(
     sessionmaker: async_sessionmaker[AsyncSession], *, clock: Clock
 ) -> int:
-    """Q36: detections older than `retention.circumvention_detection_days` (180, the window
-    of the graded sanctions of 8.16) are deleted, those still awaiting review kept. A job:
+    """Q36: detections reviewed (or confirmed when found) more than
+    `retention.circumvention_detection_days` ago (180, the window of the graded sanctions of
+    8.16) are deleted, those still awaiting review kept. A job:
     it commits."""
     async with sessionmaker() as db:
         days = await repository.setting_int(db, "retention.circumvention_detection_days")

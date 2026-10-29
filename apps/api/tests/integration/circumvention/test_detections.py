@@ -121,15 +121,8 @@ async def test_reading_the_original_is_audited(sessionmaker: Session) -> None:
     async with sessionmaker() as db:
         await open_original(db, row, staff_id=staff_id, settings=SETTINGS)
         await db.commit()
-        audit = (
-            await db.execute(
-                text(
-                    "SELECT actor_type, actor_id, action FROM audit_log"
-                    " WHERE target_type = 'circumvention_detection' AND target_id = :t"
-                ),
-                {"t": str(row["id"])},
-            )
-        ).one()
+        sql = "SELECT actor_type, actor_id, action FROM audit_log WHERE target_id = :t"
+        audit = (await db.execute(text(sql), {"t": str(row["id"])})).one()
     assert tuple(audit) == ("staff", staff_id, "circumvention.original_read")
 
 
@@ -140,21 +133,15 @@ async def test_sealed_original_bound_to_its_row(sessionmaker: Session) -> None:
     second, _ = await _screen(sessionmaker, member.id, "Paiement par Lydia possible")
     [row] = await _rows(sessionmaker, first)
     [other] = await _rows(sessionmaker, second)
+    stranger = make_settings(field_encryption_key="b" * 64)
     async with sessionmaker() as db:
-        with pytest.raises(SealError):
-            await open_original(
-                db,
-                {**other, "original_sealed": row["original_sealed"]},
-                staff_id=new_id(),
-                settings=SETTINGS,
-            )
-        with pytest.raises(SealError):
-            await open_original(
-                db, {**row, "user_id": new_id()}, staff_id=new_id(), settings=SETTINGS
-            )
-        stranger = make_settings(field_encryption_key="b" * 64)
-        with pytest.raises(SealError):
-            await open_original(db, row, staff_id=new_id(), settings=stranger)
+        for tampered, settings in (
+            ({**other, "original_sealed": row["original_sealed"]}, SETTINGS),
+            ({**row, "user_id": new_id()}, SETTINGS),
+            (row, stranger),
+        ):
+            with pytest.raises(SealError):
+                await open_original(db, tampered, staff_id=new_id(), settings=settings)
 
 
 @pytest.mark.parametrize(
@@ -189,6 +176,7 @@ async def test_exported_with_the_original_and_erased(sessionmaker: Session) -> N
     [detection] = exported["circumvention_detections"]
     assert detection["signals"] == ["payment_app"]
     assert detection["original_text"] == "Écrivez sur WhatsApp"
+    assert detection["original_unavailable"] is False
     assert "original_sealed" not in detection
     assert detection["matched_spans"] == [
         {"signal": "payment_app", "start": 12, "end": 20, "confidence": 0.9}
@@ -214,3 +202,39 @@ async def test_reviewed_detections_purged_after_180_days(sessionmaker: Session) 
     assert await _rows(sessionmaker, confirmed) == []
     assert len(await _rows(sessionmaker, pending)) == 1
     assert len(await _rows(sessionmaker, young)) == 1
+
+
+async def test_late_review_kept_180_days_after_it(sessionmaker: Session) -> None:
+    """A detection reviewed long after it was found keeps its evidence 180 days from the
+    review (the window of the sanctions, the time to contest)."""
+    member = await make_account(sessionmaker, completed=True)
+    source_id, _ = await _screen(
+        sessionmaker, member.id, "Tailles 36 38 40 42", now=NOW - timedelta(days=250)
+    )
+    async with sessionmaker() as db:
+        await db.execute(
+            text(
+                "UPDATE circumvention_detections SET review_status = 'confirmed',"
+                " reviewed_by = :staff, reviewed_at = :at WHERE source_id = :s"
+            ),
+            {"staff": new_id(), "at": NOW - timedelta(days=10), "s": source_id},
+        )
+        await db.commit()
+    await purge_old_detections(sessionmaker, clock=FixedClock(NOW))
+    assert len(await _rows(sessionmaker, source_id)) == 1
+
+
+async def test_unreadable_original_never_stops_the_export(sessionmaker: Session) -> None:
+    """A damaged sealed text is said unavailable; the rest of the export is built."""
+    member = await make_account(sessionmaker, completed=True)
+    source_id, _ = await _screen(sessionmaker, member.id, "Écrivez sur WhatsApp")
+    async with sessionmaker() as db:
+        await db.execute(
+            text("UPDATE circumvention_detections SET original_sealed = :b WHERE source_id = :s"),
+            {"b": b"\x00" * 40, "s": source_id},
+        )
+        await db.commit()
+        exported = await registered_exporters()["circumvention"](db, member.id, SETTINGS)
+    [detection] = exported["circumvention_detections"]
+    assert (detection["original_text"], detection["original_unavailable"]) == (None, True)
+    assert detection["signals"] == ["payment_app"]

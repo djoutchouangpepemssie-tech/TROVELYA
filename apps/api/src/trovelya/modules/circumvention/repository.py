@@ -20,10 +20,11 @@ _EXPORT = text(
     " review_status, created_at, original_sealed FROM circumvention_detections"
     " WHERE user_id = :u ORDER BY created_at, id"
 )
-# Q36: what was reviewed or confirmed goes after the retention; a detection awaiting its
-# review stays until it is reviewed.
+# Q36: what was reviewed or confirmed goes after the retention, counted from the review (a
+# late review keeps its evidence 180 days); a detection awaiting its review stays.
 _DELETE_OLD = text(
-    "DELETE FROM circumvention_detections WHERE created_at < :before AND review_status <> 'pending'"
+    "DELETE FROM circumvention_detections WHERE COALESCE(reviewed_at, created_at) < :before"
+    " AND review_status <> 'pending'"
 )
 
 
