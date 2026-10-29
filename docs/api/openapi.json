@@ -1971,6 +1971,13 @@
             "title": "Short Id",
             "type": "string"
           },
+          "similar": {
+            "items": {
+              "$ref": "#/components/schemas/SimilarListing"
+            },
+            "title": "Similar",
+            "type": "array"
+          },
           "status": {
             "$ref": "#/components/schemas/ListingStatus"
           },
@@ -2016,7 +2023,8 @@
           "photos",
           "seller",
           "published_at",
-          "updated_at"
+          "updated_at",
+          "similar"
         ],
         "title": "ListingPage",
         "type": "object"
@@ -3615,6 +3623,50 @@
         "title": "SignInResult",
         "type": "object"
       },
+      "SimilarListing": {
+        "description": "A similar listing on the listing page (P2-T11b): the first photo still shown only.",
+        "properties": {
+          "cover": {
+            "anyOf": [
+              {
+                "items": {
+                  "$ref": "#/components/schemas/PhotoVariant"
+                },
+                "type": "array"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Cover"
+          },
+          "id": {
+            "format": "uuid",
+            "title": "Id",
+            "type": "string"
+          },
+          "price": {
+            "$ref": "#/components/schemas/Money"
+          },
+          "short_id": {
+            "title": "Short Id",
+            "type": "string"
+          },
+          "title": {
+            "title": "Title",
+            "type": "string"
+          }
+        },
+        "required": [
+          "id",
+          "short_id",
+          "title",
+          "price",
+          "cover"
+        ],
+        "title": "SimilarListing",
+        "type": "object"
+      },
       "StaffDecisionIn": {
         "description": "A rejection or a removal: a reason from the closed list, explained for `other`.",
         "properties": {
@@ -5133,7 +5185,7 @@
     },
     "/v1/listings/{listing_id}": {
       "get": {
-        "description": "The listing page: anybody for an active listing, its seller only otherwise. Never kept\nby a shared cache: the answer depends on who asks (a draft, a distance).",
+        "description": "The listing page, with its similar listings: anybody for an active listing, its seller\nonly otherwise. Never kept by a shared cache: the answer depends on who asks (a draft, a\ndistance, the sellers blocked).",
         "operationId": "listing_get",
         "parameters": [
           {

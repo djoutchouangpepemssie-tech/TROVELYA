@@ -290,6 +290,16 @@ class SellerOut(BaseModel):
     member_since: date
 
 
+class SimilarListing(BaseModel):
+    """A similar listing on the listing page (P2-T11b): the first photo still shown only."""
+
+    id: UUID
+    short_id: str
+    title: str
+    price: Money
+    cover: list[PhotoVariant] | None
+
+
 class ListingPage(BaseModel):
     """The listing page (section 11.5). Never a coordinate (8.11): the place name and, for a
     signed-in visitor with a zone, the distance to the public position, rounded (Q17)."""
@@ -315,6 +325,7 @@ class ListingPage(BaseModel):
     seller: SellerOut
     published_at: datetime | None
     updated_at: datetime
+    similar: list[SimilarListing]  # none for a listing not online (its seller's draft)
 
 
 class ListingSummary(BaseModel):

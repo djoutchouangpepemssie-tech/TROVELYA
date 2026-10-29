@@ -8,6 +8,7 @@ from fastapi import APIRouter, Depends, Request, Response, status
 from trovelya.core.db import Uow
 from trovelya.core.idempotency import require_idempotency_key
 from trovelya.core.preconditions import if_match_version
+from trovelya.modules.catalog.adapters.embedder import current_model
 from trovelya.modules.catalog.schemas import (
     ListingDraftIn,
     ListingDraftPatch,
@@ -93,14 +94,16 @@ async def patch_listing(
 async def get_listing(
     listing_id: UUID, request: Request, response: Response, db: Uow, me: MaybeMember
 ) -> ListingPage:
-    """The listing page: anybody for an active listing, its seller only otherwise. Never kept
-    by a shared cache: the answer depends on who asks (a draft, a distance)."""
+    """The listing page, with its similar listings: anybody for an active listing, its seller
+    only otherwise. Never kept by a shared cache: the answer depends on who asks (a draft, a
+    distance, the sellers blocked)."""
     response.headers["Cache-Control"] = "private, no-store"
     return await reading.listing_page(
         db,
         listing_id=listing_id,
         viewer_id=me.id if me else None,
         media_public_url=request.app.state.settings.media_public_url,
+        embedding_model=current_model(request.app.state.settings),
     )
 
 

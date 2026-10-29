@@ -730,6 +730,7 @@ Recalculé à chaque création ou modification. La réponse au propriétaire don
 - `embedding_model` est enregistré avec le vecteur.
 - `reindex_embeddings_job` (lots de 100, annonces actives dont `embedding_model` ≠ modèle courant).
 - `similar_listings(listing, viewer, limit=8)` : `status = 'active'`, même univers (premier niveau du `path`), hors vendeur de l'annonce, hors vendeurs bloqués par le visiteur, hors comptes en effacement ; distance cosinus.
+  - Fait en T11b : les similaires sont rendus dans la réponse de `GET /v1/listings/{id}` (champ `similar`, section 11.5), sans route à part ; parcours itératif de l'index HNSW (`hnsw.iterative_scan = strict_order`) pour que les filtres ne privent pas la fiche de résultats (ADR-0020, point 8).
 
 - [ ] Tests d'abord :
   - `test_embedding_dimension_matches_model` ;

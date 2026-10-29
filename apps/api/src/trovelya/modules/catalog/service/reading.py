@@ -17,6 +17,7 @@ from trovelya.modules.catalog import repository
 from trovelya.modules.catalog.schemas import ListingPage, ListingSummary, ListingSummaryPage
 from trovelya.modules.catalog.service.categories import LOCALE
 from trovelya.modules.catalog.service.positions import round_distance
+from trovelya.modules.catalog.service.similar import similar_listings
 from trovelya.modules.identity.service import default_zone_center, public_seller
 from trovelya.modules.media.service import listing_photos
 
@@ -59,6 +60,7 @@ async def listing_page(
     listing_id: UUID,
     viewer_id: UUID | None,
     media_public_url: str | None,
+    embedding_model: str | None,
 ) -> ListingPage:
     viewer = await default_zone_center(db, viewer_id) if viewer_id else None
     row = await repository.listing_page(db, listing_id, viewer)
@@ -86,6 +88,13 @@ async def listing_page(
                 db, row["media_ids"], public_url=media_public_url
             ),
             "seller": seller,
+            "similar": await similar_listings(
+                db,
+                listing_id=listing_id,
+                viewer_id=viewer_id,
+                model=embedding_model,
+                media_public_url=media_public_url,
+            ),
         }
     )
 
