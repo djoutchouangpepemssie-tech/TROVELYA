@@ -659,3 +659,33 @@ async def seller_listings(
     }
     query = _MY_LISTINGS if status is None else _MY_LISTINGS_WITH_STATUS
     return [dict(row) for row in (await db.execute(query, params)).mappings()]
+
+
+# --- State machine (P2-T04a) ------------------------------------------------------------------
+
+_LOCK_LISTING_STATUS = text(
+    "SELECT status::text FROM listings WHERE id = :id AND deleted_at IS NULL FOR UPDATE"
+)
+_SET_LISTING_STATUS = text(
+    "UPDATE listings SET status = CAST(:status AS listing_status) WHERE id = :id"
+)
+_RECORD_TRANSITION = text(
+    "INSERT INTO listing_status_history (id, listing_id, from_status, to_status, event,"
+    " actor_id, actor_kind, reason_code, reason_text, created_at)"
+    " VALUES (:id, :listing_id, CAST(:from_status AS listing_status),"
+    " CAST(:to_status AS listing_status), :event, :actor_id, :actor_kind, :reason_code,"
+    " :reason_text, :created_at)"
+)
+
+
+async def lock_listing_status(db: AsyncSession, listing_id: UUID) -> str | None:
+    """The status of a listing not deleted, locked until the transaction ends."""
+    return await db.scalar(_LOCK_LISTING_STATUS, {"id": listing_id})
+
+
+async def set_listing_status(db: AsyncSession, listing_id: UUID, status: str) -> None:
+    await db.execute(_SET_LISTING_STATUS, {"id": listing_id, "status": status})
+
+
+async def record_transition(db: AsyncSession, values: Mapping[str, Any]) -> None:
+    await db.execute(_RECORD_TRANSITION, values)

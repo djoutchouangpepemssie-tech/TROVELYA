@@ -511,6 +511,8 @@ tout ── T12 (parcours 2, démo, porte)
 
 ### P2-T04 — Machine à états, publication, retrait, renouvellement, expiration
 
+*Livrée en cinq PR (600 lignes au plus) : T04a, table des transitions (`modules/catalog/state_machine.py`, nom de la section 9 ; publier a deux événements, `publish` vers `active` et `submit_for_review` vers `pending_review`) et application d'une transition (`service/states.py` : verrou de l'annonce, historique avec acteur et motif, événement `listing.*` par l'outbox, 409 `invalid_transition`) ; T04b, publication ; T04c, retrait, republication et renouvellement ; T04d, job d'expiration ; T04e, purge Q19. La modification d'une annonce publiée (qui repousse l'expiration, `test_modification_pushes_expiry`) attend T05, qui dit comment elle repasse en modération.*
+
 **Branche :** `feat/P2-T04-etats`.
 
 **Fichiers :** `service/{states,publishing}.py`, `policies.py` (`can_publish_listing`), `events.py`, `tasks.py` (`expire_listings_job`), `workers/main.py`, migration `0010` (graine des [PARAM] de publication), `tests/unit/catalog/test_states.py`, `tests/integration/catalog/test_publishing.py`.
