@@ -24,7 +24,8 @@ async def _active(sessionmaker: Session, category_id: UUID, *, published: timede
     async with sessionmaker() as db:
         await db.execute(
             text(
-                "UPDATE listings SET status = 'active', published_at = now() - CAST(:ago AS interval),"
+                "UPDATE listings SET status = 'active',"
+                " published_at = now() - CAST(:ago AS interval),"
                 " expires_at = now() - CAST(:ago AS interval) + interval '120 days' WHERE id = :l"
             ),
             {"ago": published, "l": listing_id},
