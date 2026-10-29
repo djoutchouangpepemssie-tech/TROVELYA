@@ -97,6 +97,7 @@ async def test_queue_oldest_first_with_reasons(client: AsyncClient, sessionmaker
     item = items[ids.index(first["id"])]
     assert item["reasons"] == [{"code": "weapons", "label": "Armes et munitions"}]
     assert item["title"] == "Robe en lin bleue"
+    assert (item["category"], item["category_name"]) == ("mode.femme.robes", "Robes")
     assert len(item["photos"]) == 1
     assert {"submitted_at", "seller_id", "detections"} <= set(item)
     reasons = response.json()["reject_reasons"]

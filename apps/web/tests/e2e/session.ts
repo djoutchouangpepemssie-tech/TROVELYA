@@ -52,7 +52,10 @@ export function sitePath(link: string): string {
  * Sign the browser in as a new staff superadmin, as the creation script and the enrolment page
  * do: a real WebAuthn ceremony on Chromium's virtual authenticator.
  */
-export async function signInAsStaff(page: Page, createLabel: string): Promise<void> {
+export async function signInAsStaff(
+  page: Page,
+  text: { create: string; done: string },
+): Promise<void> {
   const cdp = await page.context().newCDPSession(page);
   await cdp.send("WebAuthn.enable");
   await cdp.send("WebAuthn.addVirtualAuthenticator", {
@@ -68,8 +71,8 @@ export async function signInAsStaff(page: Page, createLabel: string): Promise<vo
   if (!created.ok()) throw new Error(`staff enrolment failed: ${String(created.status())}`);
   const { link } = (await created.json()) as { link: string };
   await page.goto(sitePath(link));
-  await page.getByRole("button", { name: createLabel }).click();
-  await page.getByRole("status").waitFor();
+  await page.getByRole("button", { name: text.create }).click();
+  await page.getByRole("status").filter({ hasText: text.done }).waitFor();
 }
 
 /** A listing awaiting moderation (reason `weapons`), from the test-only catalog route. */

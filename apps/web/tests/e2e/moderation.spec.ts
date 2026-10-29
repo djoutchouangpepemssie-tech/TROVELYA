@@ -6,28 +6,29 @@ import { listingInReview, signIn, signInAsStaff } from "./session";
 
 const t = messages.StaffModeration;
 
-/** The queue is shared with the other tests: each one acts on its own listing's card. */
-async function openQueue(page: Page, listingId: string) {
-  await signInAsStaff(page, messages.StaffEnrolment.create);
+/** The queue is shared with the other tests: each one acts on its own listing (unique title). */
+async function openQueue(page: Page, title: string) {
+  await signInAsStaff(page, messages.StaffEnrolment);
   await page.goto("/fr/staff/moderation");
   await expect(page.getByRole("heading", { level: 1, name: t.title })).toBeVisible();
-  const card = page.locator(".trv-card").filter({ has: page.locator(`#listing-${listingId}`) });
+  const card = page.getByRole("article", { name: title });
   await expect(card).toBeVisible();
   return card;
 }
 
 test("staff moderation: approving a listing puts it online", async ({ page }) => {
   const listing = await listingInReview(page);
-  const card = await openQueue(page, listing.id);
+  const card = await openQueue(page, listing.title);
   const results = await new AxeBuilder({ page }).analyze();
   expect(results.violations).toEqual([]);
 
   await expect(card.getByText("Armes et munitions")).toBeVisible();
+  await expect(card.getByText(/^Soumise le \d{2}\/\d{2}\/\d{4}/)).toBeVisible();
   await card.getByRole("button", { name: t.approve }).click();
   await expect(page.getByRole("main").getByRole("status")).toHaveText(
     t.done.active.replace("{title}", listing.title),
   );
-  await expect(page.locator(`#listing-${listing.id}`)).toHaveCount(0);
+  await expect(card).toHaveCount(0);
 
   const online = await page.request.get(`/api/v1/listings/${listing.id}`);
   expect(online.status()).toBe(200);
@@ -38,7 +39,7 @@ test("staff moderation: a rejection needs a reason, then takes the listing down"
   page,
 }) => {
   const listing = await listingInReview(page);
-  const card = await openQueue(page, listing.id);
+  const card = await openQueue(page, listing.title);
 
   await card.getByRole("button", { name: t.reject }).click();
   await card.getByRole("button", { name: t.confirmReject }).click();

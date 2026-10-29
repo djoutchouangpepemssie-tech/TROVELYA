@@ -548,11 +548,11 @@
     "emptyHint": "Les nouvelles annonces à revoir apparaîtront ici.",
     "reload": "Actualiser",
     "submitted": "Soumise le {date}",
-    "category": "Catégorie : {key}",
+    "category": "Catégorie : {name}",
     "why": "Pourquoi elle attend",
-    "photo": "Photo {n} de l'annonce",
+    "photo": "Photo {n} de l'annonce, ouvrir en grand",
     "noPhoto": "Aucune photo disponible",
-    "detection": "Coordonnées détectées dans {part, select, title {le titre} description {la description} other {l'annonce}} : {action, select, masked {masquées} other {à vérifier}}",
+    "detection": "{signals} dans {part, select, title {le titre} description {la description} other {l'annonce}} : {action, select, masked {masqués} other {à vérifier}}",
     "approve": "Approuver",
     "reject": "Refuser",
     "reason": "Motif du refus",
@@ -569,12 +569,27 @@
     "errors": {
       "unauthenticated": "Connectez-vous avec votre passkey staff pour accéder à la modération.",
       "forbidden": "Votre compte staff n'a pas accès à la modération des annonces.",
-      "invalid_transition": "Cette annonce a déjà été traitée. La file a été actualisée.",
+      "load": "La file n'a pas pu être chargée. Réessayez.",
+      "invalid_transition": "Cette annonce a déjà été traitée : la file a été actualisée.",
+      "not_found": "Cette annonce n'existe plus : la file a été actualisée.",
       "photo_required": "Cette annonce n'a plus de photo : refusez-la plutôt.",
+      "own_listing": "Vous ne pouvez pas décider sur votre propre annonce.",
       "reason_required": "Choisissez un motif.",
       "text_required": "Précisez le motif.",
-      "validation_error": "Motif refusé. Vérifiez le motif et les précisions.",
+      "validation_error": "Motif non valide. Vérifiez le motif et les précisions.",
+      "network": "Connexion impossible. Vérifiez le réseau et réessayez.",
       "unknown": "La décision n'a pas pu être enregistrée. Réessayez."
+    },
+    "photos": "Photos de l'annonce",
+    "signals": {
+      "phone": "téléphone",
+      "email": "e-mail",
+      "iban": "IBAN",
+      "payment_app": "application de paiement",
+      "external_link": "lien externe",
+      "social_handle": "réseau social",
+      "obfuscated_number": "numéro déguisé",
+      "meet_off_app": "rendez-vous hors de l'application"
     }
   }
 }

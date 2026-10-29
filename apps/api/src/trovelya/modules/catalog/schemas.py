@@ -339,6 +339,7 @@ class ReviewItem(BaseModel):
     title: str
     description: str
     category: str
+    category_name: str
     price: Money
     seller_id: UUID
     submitted_at: datetime

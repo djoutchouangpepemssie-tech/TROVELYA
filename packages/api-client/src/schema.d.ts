@@ -1120,7 +1120,7 @@ export interface paths {
         };
         /**
          * Get Review Queue
-         * @description The listings awaiting moderation, the longest waiting first.
+         * @description The listings awaiting moderation, the longest waiting first, but the reviewer's own.
          */
         get: operations["staff_review_queue"];
         put?: never;
@@ -2341,6 +2341,8 @@ export interface components {
         ReviewItem: {
             /** Category */
             category: string;
+            /** Category Name */
+            category_name: string;
             /** Description */
             description: string;
             /** Detections */

@@ -63,6 +63,8 @@ async def test_own_listing_refused(client: AsyncClient, sessionmaker: Session, a
     sql = "UPDATE listings SET seller_id = :s WHERE id = :l"
     await _execute(sessionmaker, sql, s=staff.id, l=listing["id"])
     assert (await _act(client, staff, listing, action)).status_code == 403
+    queue = (await client.get(QUEUE, headers=staff.headers, params={"limit": 100})).json()
+    assert listing["id"] not in [item["id"] for item in queue["items"]]  # not offered either
 
 
 @pytest.mark.parametrize("action", ACTIONS)

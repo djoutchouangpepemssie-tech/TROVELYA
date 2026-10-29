@@ -2,10 +2,13 @@
 
 `POST /v1/_test/listing-in-review` creates a seller and their listing awaiting moderation (a
 photo as the worker leaves it, the reason `weapons`), so the end-to-end tests of the staff's
-queue need neither the upload nor the worker. The catalog is seeded first when empty.
+queue need neither the upload nor the worker. The catalog is seeded first when empty. Its title
+ends with its short id, and its submission is dated as far before 2000 as now is after: each new
+one is the oldest of the queue (shown first), whatever the earlier runs left behind.
 Nothing here exists on staging or in production.
 """
 
+from datetime import UTC, datetime
 from typing import Annotated
 
 from fastapi import APIRouter, Depends
@@ -20,12 +23,13 @@ from trovelya.modules.catalog.service.seed_writer import apply_seed
 from trovelya.modules.catalog.service.states import Actor, apply_transition
 from trovelya.modules.catalog.state_machine import ListingEvent
 from trovelya.modules.identity.service import get_clock
-from trovelya.shared.clock import Clock
+from trovelya.shared.clock import Clock, FixedClock
 from trovelya.shared.ids import new_id
 
 router = APIRouter(prefix="/v1/_test", tags=["test"], include_in_schema=False)
 
 TITLE = "Pistolet ancien de collection"
+_Y2K = datetime(2000, 1, 1, tzinfo=UTC)
 _SELLER = text(
     "INSERT INTO users (id, email, username, display_name, birth_year, profile_completed_at)"
     " VALUES (:id, :email, :username, 'Vendeur', 1985, now())"
@@ -58,7 +62,8 @@ async def test_listing_in_review(
 ) -> ListingInReview:
     if await db.scalar(text("SELECT count(*) FROM categories")) == 0:
         await apply_seed(db, load_seed())
-    seller, media, listing = new_id(), new_id(), new_id()
+    seller, media, listing, short_id = new_id(), new_id(), new_id(), _short_id()
+    title = f"{TITLE} {short_id}"
     names = {"id": seller, "email": f"e2e-seller-{seller.hex}@example.org"}
     await db.execute(_SELLER, names | {"username": f"v_{seller.hex[-12:]}"})
     variants = f'[{{"format": "webp", "width": 640, "height": 480, "key": "{new_id().hex}"}}]'
@@ -76,9 +81,9 @@ async def test_listing_in_review(
         _LISTING,
         {
             "id": listing,
-            "short_id": _short_id(),
+            "short_id": short_id,
             "seller": seller,
-            "title": TITLE,
+            "title": title,
             "description": "Belle patine, mécanisme complet, vendu en l'état.",
             "zone": new_id(),
         },
@@ -92,8 +97,8 @@ async def test_listing_in_review(
         listing_id=listing,
         event=ListingEvent.SUBMIT_FOR_REVIEW,
         actor=Actor("user", seller),
-        clock=clock,
+        clock=FixedClock(_Y2K - (clock.now() - _Y2K)),
         reason_code="weapons",
         reason_text=label("weapons"),
     )
-    return ListingInReview(id=str(listing), seller_id=str(seller), title=TITLE)
+    return ListingInReview(id=str(listing), seller_id=str(seller), title=title)
