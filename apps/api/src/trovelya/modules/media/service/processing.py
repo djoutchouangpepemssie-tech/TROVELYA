@@ -142,7 +142,8 @@ async def _classify(
         async with asyncio.timeout(CLASSIFY_TIMEOUT_S):
             raw = await classifier.classify(largest.data, f"image/{largest.format}")
     except Exception as exc:  # noqa: BLE001 — any failure of the provider: reviewed by a human
-        logger.warning("media.classification_failed", media_id=str(row.id), error=repr(exc))
+        error = type(exc).__name__  # never the message: a provider's may carry a key
+        logger.warning("media.classification_failed", media_id=str(row.id), error=error)
         return {"classification": {"error": "failed"}}
     scores = valid_scores(raw)
     if scores is None:
