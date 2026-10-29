@@ -27,7 +27,11 @@ from trovelya.modules.identity.service.magic_links import (
     limit_requests as limit_magic_link_requests,
 )
 from trovelya.modules.identity.service.places import MemberPlace, PlaceSource, member_place
-from trovelya.modules.identity.service.profile import default_zone_center, public_seller
+from trovelya.modules.identity.service.profile import (
+    default_zone_center,
+    may_trade,
+    public_seller,
+)
 from trovelya.modules.identity.service.sessions import (
     CurrentUser,
     IssuedSession,
@@ -62,6 +66,7 @@ __all__ = [
     "limit_magic_link_requests",
     "list_sessions",
     "magic_link_ttl_min",
+    "may_trade",
     "member_place",
     "optional_user",
     "process_erasures",

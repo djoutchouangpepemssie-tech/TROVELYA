@@ -48,6 +48,7 @@ Stockage objet Cloudflare R2 en juridiction UE (MinIO en local et en CI), deux b
 | Q21 | Bornes des attributs entiers et années | `int` et `year` bornés à l'entier signé 32 bits ; `year` borné en plus à **l'année courante + 1** (millésimes vendus d'avance), calculée par l'horloge au moment de la validation ; le minimum reste celui de la graine. |
 | Q22 | Photo d'annonce retirée d'un brouillon | Purgée **24 h après son retrait** (`media.detached_at`) et non après l'envoi, pour pouvoir la remettre ou la déplacer vers un autre brouillon ; une photo jamais rattachée reste purgée 24 h après l'envoi (livrée en T03b3c, validée par Arcel le 29 octobre 2026). |
 | Q23 | Blocage et fiche d'annonce | **Fiche visible** par le membre bloqué, comme le profil public (Q14) : une annonce active est publique. La protection porte sur le contact : messages, offres et achat refusés en P4 et P6, sans jamais révéler le blocage (validée par Arcel le 29 octobre 2026). |
+| Q24 | Quota de publication (Q1) | **24 heures glissantes** : au plus 50 mises en ligne par le vendeur sur les 24 dernières heures (pas de remise à zéro à minuit), 429 `publication_limit` avec `Retry-After`. **Toute mise en ligne faite par le vendeur compte** : première publication (ou envoi en revue), republication d'une annonce retirée, renouvellement d'une annonce expirée ; une décision du staff ou du système ne compte pas (validée par Arcel le 29 octobre 2026). |
 
 ### 0.2 Écarts et précisions par rapport au cahier
 

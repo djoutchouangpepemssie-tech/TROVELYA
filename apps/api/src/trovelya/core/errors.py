@@ -70,6 +70,9 @@ class ErrorCode(StrEnum):
     LOCATION_UNAVAILABLE = "location_unavailable"
     LISTING_NOT_EDITABLE = "listing_not_editable"
     INVALID_TRANSITION = "invalid_transition"
+    PUBLISH_FORBIDDEN = "publish_forbidden"
+    PUBLICATION_LIMIT = "publication_limit"
+    PHOTO_REQUIRED = "photo_required"
 
 
 # French titles by default (section 2); translation by Accept-Language arrives with P1.
@@ -127,6 +130,9 @@ _TITLES: dict[ErrorCode, str] = {
     ErrorCode.LOCATION_UNAVAILABLE: "Adresse ou zone introuvable ou sans position",
     ErrorCode.LISTING_NOT_EDITABLE: "Seul un brouillon se modifie pour l'instant",
     ErrorCode.INVALID_TRANSITION: "Cette action n'est pas possible dans l'état de l'annonce",
+    ErrorCode.PUBLISH_FORBIDDEN: "Ton compte ne peut pas publier d'annonce pour l'instant",
+    ErrorCode.PUBLICATION_LIMIT: "Limite de mises en ligne sur 24 heures atteinte",
+    ErrorCode.PHOTO_REQUIRED: "Il faut au moins une photo prête pour publier",
 }
 
 _STATUS_CODES: dict[int, ErrorCode] = {

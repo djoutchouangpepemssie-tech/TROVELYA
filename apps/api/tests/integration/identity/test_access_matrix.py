@@ -87,6 +87,7 @@ OWNED_ROUTES = {
     "POST /v1/media/{media_id}/complete",
     "GET /v1/media/{media_id}",
     "PATCH /v1/listings/{listing_id}",
+    "POST /v1/listings/{listing_id}/publish",
 }
 STAFF_ROUTES = {
     "GET /v1/staff/approvals",

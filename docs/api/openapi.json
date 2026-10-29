@@ -1607,6 +1607,18 @@
             "title": "Description",
             "type": "string"
           },
+          "expires_at": {
+            "anyOf": [
+              {
+                "format": "date-time",
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Expires At"
+          },
           "handover_enabled": {
             "title": "Handover Enabled",
             "type": "boolean"
@@ -1651,6 +1663,18 @@
           },
           "price": {
             "$ref": "#/components/schemas/Money"
+          },
+          "published_at": {
+            "anyOf": [
+              {
+                "format": "date-time",
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Published At"
           },
           "shipping_enabled": {
             "title": "Shipping Enabled",
@@ -1710,7 +1734,9 @@
           "location",
           "media_ids",
           "created_at",
-          "updated_at"
+          "updated_at",
+          "published_at",
+          "expires_at"
         ],
         "title": "ListingOut",
         "type": "object"
@@ -4478,6 +4504,55 @@
           }
         },
         "summary": "Patch Listing",
+        "tags": [
+          "catalog"
+        ]
+      }
+    },
+    "/v1/listings/{listing_id}/publish": {
+      "post": {
+        "description": "A draft goes online for `listings.expiry_days` (120) days.",
+        "operationId": "listing_publish",
+        "parameters": [
+          {
+            "in": "path",
+            "name": "listing_id",
+            "required": true,
+            "schema": {
+              "format": "uuid",
+              "title": "Listing Id",
+              "type": "string"
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ListingOut"
+                }
+              }
+            },
+            "description": "Successful Response"
+          },
+          "403": {
+            "description": "Profile incomplete, under 18, or erasure in progress (Q1)"
+          },
+          "404": {
+            "description": "Not the caller's listing"
+          },
+          "409": {
+            "description": "Not a draft"
+          },
+          "422": {
+            "description": "No ready photo"
+          },
+          "429": {
+            "description": "50 listings put online over 24 hours; see Retry-After"
+          }
+        },
+        "summary": "Publish Listing",
         "tags": [
           "catalog"
         ]

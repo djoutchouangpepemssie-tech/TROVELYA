@@ -51,6 +51,17 @@ async def is_minor(db: AsyncSession, birth_year: int | None, *, clock: Clock) ->
     return age_in(current_year(clock), birth_year) < adult
 
 
+async def may_trade(db: AsyncSession, user_id: UUID, *, clock: Clock) -> bool:
+    """Plan P2 Q1: a completed profile, adult by rule E14, an account neither suspended nor
+    banned, and no erasure in progress."""
+    facts = await repository.trade_facts(db, user_id)
+    if facts is None or not facts.completed or facts.erasing:
+        return False
+    if facts.status not in ("active", "restricted"):
+        return False
+    return await is_minor(db, facts.birth_year, clock=clock) is False
+
+
 async def me(
     db: AsyncSession,
     *,
