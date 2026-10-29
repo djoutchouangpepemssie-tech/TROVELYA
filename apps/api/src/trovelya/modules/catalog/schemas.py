@@ -191,6 +191,24 @@ class ListingDraftPatch(BaseModel):
     media_ids: Annotated[MediaIds, Field(default=None)]
 
 
+class QualityTip(BaseModel):
+    """What would raise the score: `photos` (add `count`), `description` (write more), `brand`,
+    `attribute` (fill `attribute`, labelled `label`), worth `gain` points."""
+
+    code: Literal["photos", "description", "brand", "attribute"]
+    gain: int
+    count: int | None
+    attribute: str | None
+    label: str | None
+
+
+class Quality(BaseModel):
+    """The listing's quality, 0 to 100 (P2-T07), with its tips, the most rewarding first."""
+
+    score: int = Field(ge=0, le=100)
+    tips: list[QualityTip]
+
+
 class ListingOut(BaseModel):
     """The seller's own view of a listing. Never a coordinate: the place name only (8.11)."""
 
@@ -218,6 +236,7 @@ class ListingOut(BaseModel):
     updated_at: datetime
     published_at: datetime | None  # the last time it went online
     expires_at: datetime | None  # while online: when it expires (Q15)
+    quality: Quality
 
 
 class ModerationReason(BaseModel):

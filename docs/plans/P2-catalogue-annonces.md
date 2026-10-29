@@ -66,6 +66,7 @@ Stockage objet Cloudflare R2 en juridiction UE (MinIO en local et en CI), deux b
 | Q39 | Fournisseur de classification d'images | Choisi avant la mise en production (région UE, DPA, prix) ; P2 livre l'adaptateur, le classifieur factice et les seuils (validée par Arcel le 29 octobre 2026). |
 | Q40 | Photos d'une annonce retirée par la modération (précise Q6) | Les originaux n'existant plus après le traitement, supprimer les variantes détruirait la photo : au retrait (staff ou refus automatique), les variantes quittent le stockage public, mais une **copie privée** est gardée pendant la conservation des annonces retirées (180 jours, délai de recours, DSA art. 20). Recours accepté : photos remises (avec les recours, P6) ; sinon purgées avec l'annonce. Quarantaine livrée en T05c1b (validée par Arcel le 29 octobre 2026). |
 | Q41 | Approbation d'une annonce dont le vendeur ne peut plus publier (profil incomplet, effacement en cours, compte suspendu) | Ni mise en ligne, ni retrait par la modération : la plateforme retire l'annonce (`withdrawn`, acteur système, motif = raison du refus), sans quarantaine ni poids dans les sanctions ; le vendeur la resoumet une fois son compte en règle (Q32). L'approbation reste auditée au nom du modérateur. Le vendeur est vérifié avant la photo : son annonce est retirée ainsi même sans photo (la resoumission revérifie la photo). Vendeur en règle mais photo disparue : 409 `photo_required`, le modérateur refuse l'annonce. Validé par Arcel le 29 octobre 2026 (T05c1c). À reprendre : la page staff (T05c2) affiche le retrait renvoyé par l'approbation ; le vendeur voit le motif du retrait avec les notifications ; une statistique des approbations (P8) lit `after.status`. |
+| Q42 | Formule du score de qualité de fiche (T07) | Celle proposée par le plan : photos 40 (1 photo = 15, puis +5 par photo jusqu'à 6), description 30 (proportionnel de 20 à 300 caractères), attributs facultatifs remplis 20 (en proportion ; acquis si la catégorie n'en a pas), marque 10 quand la catégorie en prévoit une (sinon acquis). Points en [PARAM] `listings.quality_formula`, vérifiés à 100. Validé par Arcel le 29 octobre 2026. |
 
 ### 0.2 Écarts et précisions par rapport au cahier
 
@@ -671,13 +672,13 @@ Découpée en **T05c1** (API : file, décisions, permission, audit ; branche `fe
 
 **Fichiers :** `service/quality.py`, `schemas.py`, `messages/fr.json` (conseils), `tests/unit/catalog/test_quality.py`.
 
-**Contenu :** formule explicite et pure, de 0 à 100. **Choix de l'auteur du plan, à confirmer** (le cahier ne donne que les trois critères) :
+**Contenu :** formule explicite et pure, de 0 à 100, validée par Arcel (Q42) :
 - photos : 40 points (1 photo = 15, puis +5 par photo jusqu'à 6 photos) ;
 - description : 30 points (proportionnel de 20 à 300 caractères) ;
 - attributs facultatifs remplis : 20 points (proportion remplie) ;
 - marque renseignée quand la catégorie la prévoit : 10 points (sinon les 10 points sont acquis).
 
-Recalculé à chaque création ou modification. La réponse au propriétaire donne le score et les conseils, par exemple « Ajoute 2 photos (+10) » ou « Précise la matière (+4) ».
+Recalculé à chaque création ou modification. La réponse au propriétaire donne le score et les conseils, par exemple « Ajoute 2 photos (+10) » ou « Précise la matière (+4) ». Les conseils sortent de l'API en codes (`photos` avec le nombre, `description`, `brand`, `attribute` avec sa clé et son libellé) et leur gain ; leurs phrases (`messages/fr.json`) viennent avec le formulaire d'annonce du web (T06).
 
 - [ ] Tests d'abord :
   - `test_quality_bounds` (propriété hypothesis : toujours de 0 à 100) ;

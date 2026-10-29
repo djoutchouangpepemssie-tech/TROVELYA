@@ -2,11 +2,13 @@
 
 A draft follows its category's rules (`draft_rules`) before anything is written; its photos
 are the seller's own, processed listing photos; its position comes from one of the seller's
-addresses or zones. It gets a random short id (E10) and its first price in the history.
+addresses or zones. It gets a random short id (E10) and its first price in the history. Its
+quality score (P2-T07) is computed at each write; the seller reads it with its tips.
 """
 
 import secrets
 import string
+from dataclasses import asdict
 from typing import Any
 from uuid import UUID
 
@@ -20,6 +22,7 @@ from trovelya.modules.catalog import repository
 from trovelya.modules.catalog.schemas import ListingDraftIn, ListingDraftPatch, ListingOut
 from trovelya.modules.catalog.service import draft_rules
 from trovelya.modules.catalog.service.locations import listing_location
+from trovelya.modules.catalog.service.quality import Facts, Formula, Quality, quality
 from trovelya.modules.media.service import listing_photos
 from trovelya.shared.clock import Clock
 from trovelya.shared.ids import new_id
@@ -67,14 +70,25 @@ async def _checked_values(
     )
     attributes = await draft_rules.checked_attributes(db, category.id, body.attributes, clock)
     await listing_photos.check_listing_photos(db, owner_id=seller_id, media_ids=body.media_ids)
+    brand_id = await draft_rules.brand_for(
+        db, category.brand_policy, body.brand, member_id=seller_id
+    )
+    scored = await _quality(
+        db,
+        category_id=category.id,
+        brand_policy=category.brand_policy,
+        photos=len(body.media_ids),
+        description=body.description,
+        attributes=attributes,
+        has_brand=brand_id is not None,
+    )
     values: dict[str, Any] = {
         "seller_id": seller_id,
         "title": body.title,
         "description": body.description,
         "category_id": category.id,
-        "brand_id": await draft_rules.brand_for(
-            db, category.brand_policy, body.brand, member_id=seller_id
-        ),
+        "brand_id": brand_id,
+        "quality_score": scored.score,
         "condition": body.condition.value,
         "attributes": attributes,
         "price_minor": body.price.amount_minor,
@@ -110,6 +124,31 @@ async def _checked_values(
         "location_source": location.source,
         "location_source_id": location.source_id,
     }
+
+
+async def _quality(
+    db: AsyncSession,
+    *,
+    category_id: UUID,
+    brand_policy: str,
+    photos: int,
+    description: str,
+    attributes: dict[str, Any],
+    has_brand: bool,
+) -> Quality:
+    optional = [r for r in await repository.attribute_rules(db, category_id) if not r.is_required]
+    facts = Facts(
+        photos=photos,
+        description_length=len(description.strip()),
+        missing_attributes=tuple(
+            (r.key, r.label) for r in optional if attributes.get(r.key) in (None, "", [])
+        ),
+        optional_attributes=len(optional),
+        brand_expected=brand_policy != "none",
+        has_brand=has_brand,
+    )
+    formula = Formula.parse(await repository.setting_json(db, "listings.quality_formula"))
+    return quality(facts, formula)
 
 
 async def _attach(db: AsyncSession, listing_id: UUID, media_ids: list[UUID]) -> None:
@@ -207,9 +246,19 @@ async def own_listing(db: AsyncSession, *, seller_id: UUID, listing_id: UUID) ->
     row = await repository.own_listing(db, listing_id=listing_id, seller_id=seller_id)
     if row is None:
         raise AppError(ErrorCode.NOT_FOUND, 404)
+    scored = await _quality(
+        db,
+        category_id=row["category_id"],
+        brand_policy=row["brand_policy"],
+        photos=len(row["media_ids"]),
+        description=row["description"],
+        attributes=row["attributes"],
+        has_brand=row["brand"] is not None,
+    )
     return ListingOut.model_validate(
         row
         | {
+            "quality": {"score": scored.score, "tips": [asdict(t) for t in scored.tips]},
             "price": {"amount_minor": row["price_minor"], "currency": row["currency"]},
             "location": {"source": row["location_source"], "id": row["location_source_id"]},
         }
