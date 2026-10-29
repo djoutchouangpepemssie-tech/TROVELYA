@@ -578,3 +578,36 @@ async def drop_member_brand_if_unused(db: AsyncSession, *, brand_id: UUID, membe
         ),
         {"id": brand_id, "member": member_id},
     )
+
+
+# --- Reading a listing (P2-T03b3a) -----------------------------------------------------------
+
+# Never a coordinate out: the distance to the viewer is computed here on the public position.
+_LISTING_PAGE = text(
+    "SELECT l.id, l.short_id, l.seller_id, l.status::text AS status, l.title, l.description,"
+    " c.id AS category_id, c.key AS category_key, c.names->>'fr' AS category_name,"
+    " b.name::text AS brand, l.condition::text AS condition, l.attributes, l.price_minor,"
+    " l.currency, l.accepts_offers, l.handover_enabled, l.shipping_enabled, l.parcel_size,"
+    " l.weight_g,"
+    " l.place_name, l.published_at, l.updated_at,"
+    " (SELECT coalesce(array_agg(m.media_id ORDER BY m.position), '{}')"
+    " FROM listing_media m WHERE m.listing_id = l.id) AS media_ids,"
+    " CASE WHEN CAST(:viewer_lat AS double precision) IS NULL THEN NULL"
+    " ELSE ST_Distance(l.location_public,"
+    " ST_MakePoint(:viewer_lon, :viewer_lat)::geography) END AS distance_m"
+    " FROM listings l JOIN categories c ON c.id = l.category_id"
+    " LEFT JOIN brands b ON b.id = l.brand_id"
+    " WHERE l.id = :id AND l.deleted_at IS NULL"
+)
+
+
+async def listing_page(
+    db: AsyncSession, listing_id: UUID, viewer: tuple[float, float] | None
+) -> dict[str, Any] | None:
+    params = {
+        "id": listing_id,
+        "viewer_lat": viewer[0] if viewer else None,
+        "viewer_lon": viewer[1] if viewer else None,
+    }
+    row = (await db.execute(_LISTING_PAGE, params)).mappings().one_or_none()
+    return dict(row) if row is not None else None

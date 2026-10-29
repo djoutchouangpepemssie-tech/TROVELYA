@@ -580,6 +580,53 @@
         "title": "AttributeOut",
         "type": "object"
       },
+      "AttributeShown": {
+        "description": "An attribute as shown on the page: its label, its value and the value's label (enums).",
+        "properties": {
+          "key": {
+            "title": "Key",
+            "type": "string"
+          },
+          "name": {
+            "title": "Name",
+            "type": "string"
+          },
+          "unit": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Unit"
+          },
+          "value": {
+            "title": "Value"
+          },
+          "value_name": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Value Name"
+          }
+        },
+        "required": [
+          "key",
+          "name",
+          "value",
+          "value_name",
+          "unit"
+        ],
+        "title": "AttributeShown",
+        "type": "object"
+      },
       "AttributeValueOut": {
         "properties": {
           "key": {
@@ -885,6 +932,24 @@
           "attributes"
         ],
         "title": "CategoryOut",
+        "type": "object"
+      },
+      "CategoryRef": {
+        "properties": {
+          "key": {
+            "title": "Key",
+            "type": "string"
+          },
+          "name": {
+            "title": "Name",
+            "type": "string"
+          }
+        },
+        "required": [
+          "key",
+          "name"
+        ],
+        "title": "CategoryRef",
         "type": "object"
       },
       "CategoryTree": {
@@ -1650,6 +1715,169 @@
         "title": "ListingOut",
         "type": "object"
       },
+      "ListingPage": {
+        "description": "The listing page (section 11.5). Never a coordinate (8.11): the place name and, for a\nsigned-in visitor with a zone, the distance to the public position, rounded (Q17).",
+        "properties": {
+          "accepts_offers": {
+            "title": "Accepts Offers",
+            "type": "boolean"
+          },
+          "attributes": {
+            "items": {
+              "$ref": "#/components/schemas/AttributeShown"
+            },
+            "title": "Attributes",
+            "type": "array"
+          },
+          "brand": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Brand"
+          },
+          "category": {
+            "$ref": "#/components/schemas/CategoryRef"
+          },
+          "condition": {
+            "$ref": "#/components/schemas/ItemCondition"
+          },
+          "description": {
+            "title": "Description",
+            "type": "string"
+          },
+          "distance": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Distance"
+          },
+          "handover_enabled": {
+            "title": "Handover Enabled",
+            "type": "boolean"
+          },
+          "id": {
+            "format": "uuid",
+            "title": "Id",
+            "type": "string"
+          },
+          "parcel_size": {
+            "anyOf": [
+              {
+                "enum": [
+                  "xs",
+                  "s",
+                  "m",
+                  "l",
+                  "xl"
+                ],
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Parcel Size"
+          },
+          "photos": {
+            "items": {
+              "items": {
+                "$ref": "#/components/schemas/PhotoVariant"
+              },
+              "type": "array"
+            },
+            "title": "Photos",
+            "type": "array"
+          },
+          "place_name": {
+            "title": "Place Name",
+            "type": "string"
+          },
+          "price": {
+            "$ref": "#/components/schemas/Money"
+          },
+          "published_at": {
+            "anyOf": [
+              {
+                "format": "date-time",
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Published At"
+          },
+          "seller": {
+            "$ref": "#/components/schemas/SellerOut"
+          },
+          "shipping_enabled": {
+            "title": "Shipping Enabled",
+            "type": "boolean"
+          },
+          "short_id": {
+            "title": "Short Id",
+            "type": "string"
+          },
+          "status": {
+            "$ref": "#/components/schemas/ListingStatus"
+          },
+          "title": {
+            "title": "Title",
+            "type": "string"
+          },
+          "updated_at": {
+            "format": "date-time",
+            "title": "Updated At",
+            "type": "string"
+          },
+          "weight_g": {
+            "anyOf": [
+              {
+                "type": "integer"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Weight G"
+          }
+        },
+        "required": [
+          "id",
+          "short_id",
+          "status",
+          "title",
+          "description",
+          "category",
+          "brand",
+          "condition",
+          "attributes",
+          "price",
+          "accepts_offers",
+          "handover_enabled",
+          "shipping_enabled",
+          "parcel_size",
+          "weight_g",
+          "place_name",
+          "distance",
+          "photos",
+          "seller",
+          "published_at",
+          "updated_at"
+        ],
+        "title": "ListingPage",
+        "type": "object"
+      },
       "ListingStatus": {
         "enum": [
           "draft",
@@ -2066,6 +2294,34 @@
         "title": "PasskeyRename",
         "type": "object"
       },
+      "PhotoVariant": {
+        "properties": {
+          "format": {
+            "title": "Format",
+            "type": "string"
+          },
+          "height": {
+            "title": "Height",
+            "type": "integer"
+          },
+          "url": {
+            "title": "Url",
+            "type": "string"
+          },
+          "width": {
+            "title": "Width",
+            "type": "integer"
+          }
+        },
+        "required": [
+          "format",
+          "width",
+          "height",
+          "url"
+        ],
+        "title": "PhotoVariant",
+        "type": "object"
+      },
       "PlaceList": {
         "properties": {
           "data": {
@@ -2385,6 +2641,52 @@
           "blocking"
         ],
         "title": "Relationship",
+        "type": "object"
+      },
+      "SellerOut": {
+        "description": "What the page shows of the seller (level, badges and rank arrive with later phases).",
+        "properties": {
+          "avatar": {
+            "anyOf": [
+              {
+                "items": {
+                  "$ref": "#/components/schemas/PhotoVariant"
+                },
+                "type": "array"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Avatar"
+          },
+          "display_name": {
+            "title": "Display Name",
+            "type": "string"
+          },
+          "id": {
+            "format": "uuid",
+            "title": "Id",
+            "type": "string"
+          },
+          "member_since": {
+            "format": "date",
+            "title": "Member Since",
+            "type": "string"
+          },
+          "username": {
+            "title": "Username",
+            "type": "string"
+          }
+        },
+        "required": [
+          "id",
+          "username",
+          "display_name",
+          "avatar",
+          "member_since"
+        ],
+        "title": "SellerOut",
         "type": "object"
       },
       "SessionList": {
@@ -3953,6 +4255,51 @@
       }
     },
     "/v1/listings/{listing_id}": {
+      "get": {
+        "description": "The listing page: anybody for an active listing, its seller only otherwise.",
+        "operationId": "listing_get",
+        "parameters": [
+          {
+            "in": "path",
+            "name": "listing_id",
+            "required": true,
+            "schema": {
+              "format": "uuid",
+              "title": "Listing Id",
+              "type": "string"
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ListingPage"
+                }
+              }
+            },
+            "description": "Successful Response"
+          },
+          "404": {
+            "description": "Unknown, deleted, or not active and not the caller's"
+          },
+          "422": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/HTTPValidationError"
+                }
+              }
+            },
+            "description": "Validation Error"
+          }
+        },
+        "summary": "Get Listing",
+        "tags": [
+          "catalog"
+        ]
+      },
       "patch": {
         "description": "Change a draft. `If-Match: <version>` required.",
         "operationId": "listing_update",

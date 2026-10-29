@@ -1,7 +1,7 @@
 """Request and response bodies of the catalog module (section 11.5, « Catalogue »)."""
 
 import unicodedata
-from datetime import datetime
+from datetime import date, datetime
 from typing import Annotated, Any, Literal
 from uuid import UUID
 
@@ -215,4 +215,63 @@ class ListingOut(BaseModel):
     location: ListingLocationIn
     media_ids: list[UUID]
     created_at: datetime
+    updated_at: datetime
+
+
+class CategoryRef(BaseModel):
+    key: str
+    name: str
+
+
+class AttributeShown(BaseModel):
+    """An attribute as shown on the page: its label, its value and the value's label (enums)."""
+
+    key: str
+    name: str
+    value: Any
+    value_name: str | None
+    unit: str | None
+
+
+class PhotoVariant(BaseModel):
+    format: str
+    width: int
+    height: int
+    url: str
+
+
+class SellerOut(BaseModel):
+    """What the page shows of the seller (level, badges and rank arrive with later phases)."""
+
+    id: UUID
+    username: str
+    display_name: str
+    avatar: list[PhotoVariant] | None
+    member_since: date
+
+
+class ListingPage(BaseModel):
+    """The listing page (section 11.5). Never a coordinate (8.11): the place name and, for a
+    signed-in visitor with a zone, the distance to the public position, rounded (Q17)."""
+
+    id: UUID
+    short_id: str
+    status: ListingStatus
+    title: str
+    description: str
+    category: CategoryRef
+    brand: str | None
+    condition: ItemCondition
+    attributes: list[AttributeShown]
+    price: Money
+    accepts_offers: bool
+    handover_enabled: bool
+    shipping_enabled: bool
+    parcel_size: ParcelSize | None
+    weight_g: int | None
+    place_name: str
+    distance: str | None
+    photos: list[list[PhotoVariant]]
+    seller: SellerOut
+    published_at: datetime | None
     updated_at: datetime

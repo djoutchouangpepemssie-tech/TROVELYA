@@ -8,15 +8,21 @@ from fastapi import APIRouter, Depends, Request, status
 from trovelya.core.db import Uow
 from trovelya.core.idempotency import require_idempotency_key
 from trovelya.core.preconditions import if_match_version
-from trovelya.modules.catalog.schemas import ListingDraftIn, ListingDraftPatch, ListingOut
-from trovelya.modules.catalog.service import listings
+from trovelya.modules.catalog.schemas import (
+    ListingDraftIn,
+    ListingDraftPatch,
+    ListingOut,
+    ListingPage,
+)
+from trovelya.modules.catalog.service import listings, reading
 from trovelya.modules.identity.service import CurrentUser, get_clock
-from trovelya.modules.identity.service.auth import completed_user
+from trovelya.modules.identity.service.auth import completed_user, optional_user
 from trovelya.shared.clock import Clock
 
 router = APIRouter(prefix="/v1/listings", tags=["catalog"])
 
 Member = Annotated[CurrentUser, Depends(completed_user)]
+MaybeMember = Annotated[CurrentUser | None, Depends(optional_user)]
 
 
 @router.post(
@@ -75,4 +81,19 @@ async def patch_listing(
         patch=body,
         verticals=verticals,
         clock=clock,
+    )
+
+
+@router.get(
+    "/{listing_id}",
+    operation_id="listing_get",
+    responses={404: {"description": "Unknown, deleted, or not active and not the caller's"}},
+)
+async def get_listing(listing_id: UUID, request: Request, db: Uow, me: MaybeMember) -> ListingPage:
+    """The listing page: anybody for an active listing, its seller only otherwise."""
+    return await reading.listing_page(
+        db,
+        listing_id=listing_id,
+        viewer_id=me.id if me else None,
+        media_public_url=request.app.state.settings.media_public_url,
     )

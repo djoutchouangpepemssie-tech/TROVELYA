@@ -216,3 +216,27 @@ async def public_avatar(
     db: AsyncSession, media_id: UUID | None, *, media_public_url: str | None
 ) -> list[dict[str, Any]] | None:
     return await media_avatars.avatar_variants(db, media_id, public_url=media_public_url)
+
+
+async def public_seller(
+    db: AsyncSession, user_id: UUID, *, media_public_url: str | None, own: bool = False
+) -> dict[str, Any] | None:
+    """What a listing shows of its seller; None when the seller is not to be shown (erasure
+    requested, suspended, banned, deleted, profile not completed): their listings are hidden.
+    `own`: the sellers reads their own listing, shown whatever their state."""
+    row = await repository.public_seller(db, user_id, hidden_too=own)
+    if row is None:
+        return None
+    return {
+        "id": row.id,
+        "username": row.username,
+        "display_name": row.display_name,
+        "member_since": row.member_since,
+        "avatar": await public_avatar(db, row.avatar_media_id, media_public_url=media_public_url),
+    }
+
+
+async def default_zone_center(db: AsyncSession, user_id: UUID) -> tuple[float, float] | None:
+    """The centre of the member's default search zone, from which distances are shown (Q17)."""
+    row = await repository.default_zone_center(db, user_id)
+    return (row.lat, row.lon) if row else None

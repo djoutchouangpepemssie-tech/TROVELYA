@@ -544,6 +544,31 @@ _PUBLIC_PROFILE = text(
 )
 
 
+# A seller whose listings others may read: the same members as the public profile's.
+_PUBLIC_SELLER = text(
+    "SELECT u.id, u.username::text AS username, u.display_name, u.avatar_media_id,"
+    " (u.created_at AT TIME ZONE 'Europe/Paris')::date AS member_since"
+    " FROM users u WHERE u.id = :id AND (CAST(:hidden_too AS boolean)"
+    " OR (u.status IN ('active', 'restricted') AND u.erasure_requested_at IS NULL"
+    " AND u.profile_completed_at IS NOT NULL))"
+)
+_DEFAULT_ZONE_CENTER = text(
+    "SELECT ST_Y(center::geometry) AS lat, ST_X(center::geometry) AS lon FROM search_zones"
+    " WHERE user_id = :user_id AND is_default"
+)
+
+
+async def public_seller(
+    db: AsyncSession, user_id: UUID, *, hidden_too: bool = False
+) -> Row[Any] | None:
+    params = {"id": user_id, "hidden_too": hidden_too}
+    return (await db.execute(_PUBLIC_SELLER, params)).one_or_none()
+
+
+async def default_zone_center(db: AsyncSession, user_id: UUID) -> Row[Any] | None:
+    return (await db.execute(_DEFAULT_ZONE_CENTER, {"user_id": user_id})).one_or_none()
+
+
 async def update_profile(
     db: AsyncSession, *, user_id: UUID, version: int, changes: dict[str, Any]
 ) -> bool:
