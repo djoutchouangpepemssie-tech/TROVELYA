@@ -629,6 +629,8 @@ Découpée en deux PR de 600 lignes au plus : **T05b1** (texte, catégories, coo
 
 ### P2-T05c — File de revue staff minimale
 
+Découpée en **T05c1** (API : file, décisions, permission, audit ; branche `feat/P2-T05c1-file-de-revue`) puis **T05c2** (page `/fr/staff/moderation` et test de bout en bout). La file montre, pour chaque annonce, ce que l'anti-contournement a trouvé (partie, signaux, action) sans le texte d'origine ni les positions : le surlignage des passages vient avec la Tour de contrôle (P8). La suppression des photos (Q6) s'applique à tout retrait par la modération, refus automatique compris.
+
 **Branche :** `feat/P2-T05c-file-de-revue`.
 
 **Fichiers :**
