@@ -747,7 +747,7 @@ Recalculé à chaque création ou modification. La réponse au propriétaire don
 
 ### P2-T06a — Assistance IA « Vendre en 30 s » (adaptateur factice)
 
-**Branche :** `feat/P2-T06a-assistance-ia`. Découpée : T06a1a (module `ai` : fournisseur factice, journal, plafond de 24 heures et de coût ; migration 0029 au lieu de 0012 ; l'écart E20), T06a1b (route `POST /v1/listings/assist` et nettoyage de la catégorie, des attributs, de l'état et de la marque), T06a2 (export RGPD, effacement et purge du journal, Q46), T06a3 (fourchette de prix Q44, `accepted_fields` au brouillon, légende de la photo principale dans `media.moderation`).
+**Branche :** `feat/P2-T06a-assistance-ia`. Découpée : T06a1a (module `ai` : table `ai_listing_suggestions` avec l'écart E20, migration 0029 au lieu de 0012, adaptateur et fournisseur factice, schéma de la réponse, export RGPD et effacement), T06a1b (appels : réservation et plafond de 24 heures, coût, journal), T06a1c (route `POST /v1/listings/assist` et nettoyage de la catégorie, des attributs, de l'état et de la marque), T06a2 (purge du journal, Q46), T06a3 (fourchette de prix Q44, `accepted_fields` au brouillon, légende de la photo principale dans `media.moderation`).
 
 **Fichiers :** `modules/ai/{__init__,service,schemas,models,repository}.py`, `adapters/provider.py` (`AIProvider`, `FakeAIProvider`), migration `0012` (complétée : `ai_listing_suggestions`), `.importlinter`, `modules/catalog/api/listings.py` (`POST /v1/listings/assist`), `tests/integration/ai/test_assist.py`, `docs/data/PII.md`.
 
