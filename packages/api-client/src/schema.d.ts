@@ -527,7 +527,8 @@ export interface paths {
         put?: never;
         /**
          * Publish Listing
-         * @description A draft goes online for `listings.expiry_days` (120) days.
+         * @description A draft goes online for `listings.expiry_days` (120) days, to review or is refused, as
+         *     the moderation decides (the answer says which and why).
          */
         post: operations["listing_publish"];
         delete?: never;
@@ -547,7 +548,8 @@ export interface paths {
         put?: never;
         /**
          * Renew Listing
-         * @description Back online for 120 days: an expired listing is renewed, a withdrawn one republished.
+         * @description Back online for 120 days: an expired listing is renewed, a withdrawn one republished;
+         *     moderated as a first publication (Q32).
          */
         post: operations["listing_renew"];
         delete?: never;
@@ -567,7 +569,7 @@ export interface paths {
         put?: never;
         /**
          * Withdraw Listing
-         * @description Take an active listing out of the shop window.
+         * @description Take a listing out of the shop window, or back from the moderation (Q29).
          */
         post: operations["listing_withdraw"];
         delete?: never;
@@ -1968,6 +1970,28 @@ export interface components {
             width: number | null;
         };
         /**
+         * ModerationOut
+         * @description What the moderation decided when the listing was put online (P2-T05b).
+         */
+        ModerationOut: {
+            /** Notice */
+            notice: string | null;
+            /**
+             * Outcome
+             * @enum {string}
+             */
+            outcome: "online" | "review" | "refused";
+            /** Reasons */
+            reasons: components["schemas"]["ModerationReason"][];
+        };
+        /** ModerationReason */
+        ModerationReason: {
+            /** Code */
+            code: string;
+            /** Label */
+            label: string;
+        };
+        /**
          * Money
          * @description Section 11.1: an amount in minor units and its currency; euros only for now.
          */
@@ -2142,6 +2166,68 @@ export interface components {
             /** Username */
             username: string;
             viewer?: components["schemas"]["Relationship"] | null;
+        };
+        /**
+         * PublishedOut
+         * @description The listing after `publish` or `renew`, with the moderation's decision.
+         */
+        PublishedOut: {
+            /** Accepts Offers */
+            accepts_offers: boolean;
+            /** Attributes */
+            attributes: {
+                [key: string]: unknown;
+            };
+            /** Brand */
+            brand: string | null;
+            /** Category */
+            category: string;
+            condition: components["schemas"]["ItemCondition"];
+            /** Country Code */
+            country_code: string;
+            /**
+             * Created At
+             * Format: date-time
+             */
+            created_at: string;
+            /** Description */
+            description: string;
+            /** Expires At */
+            expires_at: string | null;
+            /** Handover Enabled */
+            handover_enabled: boolean;
+            /**
+             * Id
+             * Format: uuid
+             */
+            id: string;
+            location: components["schemas"]["ListingLocationIn"];
+            /** Media Ids */
+            media_ids: string[];
+            moderation: components["schemas"]["ModerationOut"];
+            /** Parcel Size */
+            parcel_size: ("xs" | "s" | "m" | "l" | "xl") | null;
+            /** Place Name */
+            place_name: string;
+            price: components["schemas"]["Money"];
+            /** Published At */
+            published_at: string | null;
+            /** Shipping Enabled */
+            shipping_enabled: boolean;
+            /** Short Id */
+            short_id: string;
+            status: components["schemas"]["ListingStatus"];
+            /** Title */
+            title: string;
+            /**
+             * Updated At
+             * Format: date-time
+             */
+            updated_at: string;
+            /** Version */
+            version: number;
+            /** Weight G */
+            weight_g: number | null;
         };
         /**
          * Relationship
@@ -3307,7 +3393,7 @@ export interface operations {
                     [name: string]: unknown;
                 };
                 content: {
-                    "application/json": components["schemas"]["ListingOut"];
+                    "application/json": components["schemas"]["PublishedOut"];
                 };
             };
             /** @description Profile incomplete, under 18, or erasure in progress (Q1) */
@@ -3364,7 +3450,7 @@ export interface operations {
                     [name: string]: unknown;
                 };
                 content: {
-                    "application/json": components["schemas"]["ListingOut"];
+                    "application/json": components["schemas"]["PublishedOut"];
                 };
             };
             /** @description Profile incomplete, under 18, or erasure in progress (Q1) */
@@ -3431,7 +3517,7 @@ export interface operations {
                 };
                 content?: never;
             };
-            /** @description Not active */
+            /** @description Neither active nor awaiting moderation */
             409: {
                 headers: {
                     [name: string]: unknown;

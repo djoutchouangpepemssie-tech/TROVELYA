@@ -22,7 +22,7 @@ from trovelya.core.middleware import RequestIdMiddleware
 from trovelya.core.observability import configure_observability, trace_engine
 from trovelya.core.ratelimit import AnonymousRateLimitMiddleware
 from trovelya.modules.catalog.api import router as catalog_router
-from trovelya.modules.catalog.service.publishing import PublishEverything
+from trovelya.modules.catalog.service.moderation import Moderation
 from trovelya.modules.identity.adapters.geocoder import (
     FakeGeocoder,
     Geocoder,
@@ -124,7 +124,7 @@ def create_app(
     )
     app.state.settings = settings
     app.state.clock = SystemClock()
-    app.state.moderation_gate = PublishEverything()  # P2-T05b: the real moderation
+    app.state.moderation_gate = Moderation(settings)
     app.state.oidc = _oidc_providers(settings)
     app.state.geocoder = _geocoder(settings)
     app.state.storage = storage_from_settings(settings)

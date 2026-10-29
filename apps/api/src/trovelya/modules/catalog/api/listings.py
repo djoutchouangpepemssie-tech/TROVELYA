@@ -13,6 +13,7 @@ from trovelya.modules.catalog.schemas import (
     ListingDraftPatch,
     ListingOut,
     ListingPage,
+    PublishedOut,
 )
 from trovelya.modules.catalog.service import listings, publishing, reading
 from trovelya.modules.identity.service import CurrentUser, get_clock
@@ -120,8 +121,9 @@ async def publish_listing(
     db: Uow,
     me: Member,
     clock: Annotated[Clock, Depends(get_clock)],
-) -> ListingOut:
-    """A draft goes online for `listings.expiry_days` (120) days."""
+) -> PublishedOut:
+    """A draft goes online for `listings.expiry_days` (120) days, to review or is refused, as
+    the moderation decides (the answer says which and why)."""
     gate: publishing.ModerationGate = request.app.state.moderation_gate
     return await publishing.publish(
         db, seller_id=me.id, listing_id=listing_id, gate=gate, clock=clock
@@ -133,7 +135,7 @@ async def publish_listing(
     operation_id="listing_withdraw",
     responses={
         404: {"description": "Not the caller's listing"},
-        409: {"description": "Not active"},
+        409: {"description": "Neither active nor awaiting moderation"},
     },
 )
 async def withdraw_listing(
@@ -142,7 +144,7 @@ async def withdraw_listing(
     me: Member,
     clock: Annotated[Clock, Depends(get_clock)],
 ) -> ListingOut:
-    """Take an active listing out of the shop window."""
+    """Take a listing out of the shop window, or back from the moderation (Q29)."""
     return await publishing.withdraw(db, seller_id=me.id, listing_id=listing_id, clock=clock)
 
 
@@ -159,9 +161,14 @@ async def withdraw_listing(
 )
 async def renew_listing(
     listing_id: UUID,
+    request: Request,
     db: Uow,
     me: Member,
     clock: Annotated[Clock, Depends(get_clock)],
-) -> ListingOut:
-    """Back online for 120 days: an expired listing is renewed, a withdrawn one republished."""
-    return await publishing.renew(db, seller_id=me.id, listing_id=listing_id, clock=clock)
+) -> PublishedOut:
+    """Back online for 120 days: an expired listing is renewed, a withdrawn one republished;
+    moderated as a first publication (Q32)."""
+    gate: publishing.ModerationGate = request.app.state.moderation_gate
+    return await publishing.renew(
+        db, seller_id=me.id, listing_id=listing_id, gate=gate, clock=clock
+    )

@@ -121,3 +121,12 @@ def test_honest_listing_never_refused(text: str) -> None:
 def test_prohibited_listing_never_online(text: str) -> None:
     """Misspelt, spaced out, in English or in slang: refused or reviewed, never online."""
     assert prohibited(text, "Très bon état.").outcome != "online"
+
+
+def test_masked_text_cut_before_a_mask() -> None:
+    from trovelya.modules.catalog.service.moderation import _fit  # pyright: ignore[reportPrivateUsage]
+    from trovelya.modules.circumvention.service import MASK
+
+    cut = _fit(f"Vélo {MASK} {MASK} {MASK}", 120)
+    assert len(cut) <= 120 and cut.endswith("…")
+    assert cut.replace(MASK, "").strip(" …") == "Vélo"

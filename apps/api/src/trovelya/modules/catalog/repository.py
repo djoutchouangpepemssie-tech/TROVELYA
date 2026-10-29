@@ -892,3 +892,24 @@ async def unused_places(db: AsyncSession, seller_id: UUID, *, reuse_m: float) ->
 async def delete_places(db: AsyncSession, place_ids: Sequence[UUID]) -> None:
     if place_ids:
         await db.execute(_DELETE_PLACES, {"ids": list(place_ids)})
+
+
+_MODERATION_SUBJECT = text(
+    "SELECT l.title, l.description, c.is_restricted FROM listings l"
+    " JOIN categories c ON c.id = l.category_id WHERE l.id = :id"
+)
+
+
+async def moderation_subject(db: AsyncSession, listing_id: UUID) -> Row[Any]:
+    """What the moderation reads: the text and whether its category is always checked."""
+    return (await db.execute(_MODERATION_SUBJECT, {"id": listing_id})).one()
+
+
+async def set_listing_text(
+    db: AsyncSession, listing_id: UUID, *, title: str, description: str
+) -> None:
+    """The text with its contact details masked (Q12); the version moves with the status."""
+    await db.execute(
+        text("UPDATE listings SET title = :title, description = :description WHERE id = :id"),
+        {"id": listing_id, "title": title, "description": description},
+    )

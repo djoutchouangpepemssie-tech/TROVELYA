@@ -238,3 +238,22 @@ async def test_unreadable_original_never_stops_the_export(sessionmaker: Session)
     [detection] = exported["circumvention_detections"]
     assert (detection["original_text"], detection["original_unavailable"]) == (None, True)
     assert detection["signals"] == ["payment_app"]
+
+
+async def test_same_passages_found_again_recorded_once(sessionmaker: Session) -> None:
+    """A listing put back online is screened again: the same passages are not a new case."""
+    member = await make_account(sessionmaker, completed=True)
+    source_id = new_id()
+    for _ in range(3):
+        async with sessionmaker() as db:
+            await screen(
+                db,
+                user_id=member.id,
+                source_type="listing",
+                source_id=source_id,
+                text="Paiement par virement uniquement.",
+                settings=SETTINGS,
+                clock=FixedClock(NOW),
+            )
+            await db.commit()
+    assert len(await _rows(sessionmaker, source_id)) == 1
