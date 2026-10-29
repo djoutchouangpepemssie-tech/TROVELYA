@@ -1,0 +1,367 @@
+# Interdits à la vente (cahier 8.17, plan P2 Q33, Q34), lus par la modération à la publication.
+#
+# - `refuse` : termes sans ambiguïté, l'annonce est refusée avec le motif (`label`).
+# - `review` : termes ambigus, l'annonce part en revue humaine sans être mise en ligne.
+# - `unless` : mots qui changent l'objet (« peluche chiot », « fusil jouet ») : un refus
+#   devient une mise en revue.
+# - `except` (en bas) : expressions innocentes retirées du texte avant la recherche
+#   (« pistolet à colle », « cave à vin »).
+#
+# Les termes s'écrivent en minuscules, sans accents ; une apostrophe ou un tiret vaut une
+# espace. Un terme correspond à des mots entiers ; `*` à la fin accepte toute fin de mot
+# (« munition* » : munition, munitions). Les chiffres sosies des lettres (« r0lex ») sont lus
+# comme des lettres. Modifier ce fichier passe par une PR (relue) ; l'édition par le staff
+# viendra avec le back-office.
+
+reasons:
+  weapons:
+    label: Armes et munitions
+    refuse:
+      - fusil de chasse
+      - arme a feu
+      - armes a feu
+      - revolver*
+      - munition*
+      - cartouches de chasse
+      - kalachnikov
+      - ak47
+      - ak 47
+      - glock
+      - poing americain
+      - taser
+      - bombe lacrymogene
+      - gaz lacrymogene
+      - matraque telescopique
+    review:
+      - fusil*
+      - pistolet*
+      - carabine*
+      - arme
+      - armes
+      - replique*
+      - airsoft
+      - couteau papillon
+      - balisong
+      - arbalete*
+      - baionnette*
+      - obus
+    unless: [jouet*, nerf, deguisement*, costume*, figurine*, playmobil, lego, decoratif*]
+
+  counterfeit:
+    label: Contrefaçons
+    refuse:
+      - contrefacon*
+      - contre facon*
+      - faux louis vuitton
+      - faux rolex
+      - faux chanel
+      - faux gucci
+      - faux dior
+      - faux hermes
+      - faux nike
+      - fake
+      - copie de marque
+    review:
+      - replica
+      - imitation
+
+  medicines:
+    label: Médicaments
+    refuse:
+      - medicament*
+      - antibiotique*
+      - viagra
+      - cialis
+      - ozempic
+      - xanax
+      - lexomil
+      - valium
+      - tramadol
+      - codeine
+      - morphine
+      - subutex
+      - methadone
+      - sur ordonnance
+    review:
+      - pilule*
+      - comprime*
+      - gelule*
+
+  drugs:
+    label: Stupéfiants
+    refuse:
+      - cocaine
+      - cannabis
+      - haschisch
+      - hashish
+      - marijuana
+      - mdma
+      - lsd
+      - champignons hallucinogenes
+    review:
+      - heroine
+      - ecstasy
+      - cbd
+      - weed
+
+  tobacco:
+    label: Produits du tabac et vapotage
+    refuse:
+      - cigarettes
+      - paquet de cigarettes
+      - cartouche de cigarettes
+      - tabac a rouler
+      - e liquide*
+      - eliquide*
+      - vapoteuse*
+      - cigarette electronique
+      - cigarettes electroniques
+    review:
+      - tabac
+      - cigare*
+      - chicha
+      - puff
+
+  alcohol:
+    label: Alcool
+    refuse:
+      - whisky
+      - whiskey
+      - vodka
+      - rhum
+      - tequila
+      - cognac
+      - armagnac
+      - calvados
+      - pastis
+      - absinthe
+      - liqueur*
+      - bouteille de vin
+      - bouteilles de vin
+      - bouteille de champagne
+      - bouteilles de champagne
+      - pack de bieres
+      - biere artisanale
+      - bieres artisanales
+      - grand cru classe
+    review:
+      - vin
+      - vins
+      - champagne
+      - biere
+      - bieres
+      - gin
+      - cidre
+      - alcool*
+
+  animals:
+    label: Animaux vivants
+    refuse:
+      - chiot*
+      - chaton*
+      - animal vivant
+      - animaux vivants
+    review:
+      - perroquet*
+      - perruche*
+      - hamster*
+      - furet*
+      - cochon d inde
+      - poussin*
+      - poule pondeuse*
+      - reptile*
+      - gecko*
+      - python royal
+      - mygale*
+    unless:
+      - peluche*
+      - figurine*
+      - jouet*
+      - doudou*
+      - livre*
+      - poster*
+      - tableau*
+      - deguisement*
+      - costume*
+      - coussin*
+      - statue*
+      - statuette*
+      - puzzle*
+      - playmobil
+      - lego
+      - pyjama*
+
+  protected_species:
+    label: Espèces protégées
+    refuse:
+      - ivoire d elephant
+      - ivoire veritable
+      - defense d elephant
+      - defenses d elephant
+      - corne de rhinoceros
+      - peau de tigre
+      - peau de leopard
+    review:
+      - ivoire
+      - ecaille de tortue
+      - corail
+      - taxidermie
+      - naturalise
+      - naturalisee
+      - empaille*
+
+  adult:
+    label: Contenus pour adultes
+    refuse:
+      - sextoy*
+      - sex toy*
+      - godemichet*
+      - gode
+      - vibromasseur*
+      - film x
+      - films x
+      - dvd x
+      - porno*
+      - pornographique*
+      - culotte portee
+      - culottes portees
+      - escort
+    review:
+      - erotique*
+      - coquin*
+      - fetish*
+
+  digital_accounts:
+    label: Données et comptes numériques
+    refuse:
+      - compte netflix
+      - compte spotify
+      - compte disney
+      - compte fortnite
+      - compte steam
+      - compte playstation
+      - compte psn
+      - compte xbox
+      - compte instagram
+      - compte tiktok
+      - compte facebook
+      - compte snapchat
+      - compte valorant
+      - abonnement netflix
+      - fichier clients
+      - fichier client
+      - base de donnees clients
+      - followers
+    review:
+      - cle d activation
+      - code d activation
+      - cle steam
+      - licence windows
+      - licence office
+
+  transport_tickets:
+    label: Titres de transport et billets nominatifs
+    refuse:
+      - billet nominatif
+      - billets nominatifs
+      - billet de train
+      - billets de train
+      - billet d avion
+      - billets d avion
+      - titre de transport
+      - titres de transport
+      - pass navigo
+      - carte navigo
+      - ticket de metro
+      - tickets de metro
+    review:
+      - billet
+      - billets
+      - place de concert
+      - places de concert
+      - e billet*
+
+  recalled:
+    label: Produits rappelés (sécurité des produits)
+    refuse:
+      - produit rappele
+      - produits rappeles
+      - rappele par le fabricant
+      - rappel conso
+    review: []
+
+  stolen:
+    label: Objets volés
+    refuse:
+      - objet vole
+      - objets voles
+      - telephone vole
+      - velo vole
+      - marchandise volee
+      - tombe du camion
+      - tombee du camion
+    review:
+      - sans facture
+      - provenance inconnue
+      - icloud bloque
+      - bloque icloud
+      - imei bloque
+      - blacklist*
+
+  identity_documents:
+    label: Documents d'identité
+    refuse:
+      - carte d identite
+      - cartes d identite
+      - passeport*
+      - permis de conduire
+      - carte vitale
+      - titre de sejour
+      - faux papiers
+      - carte grise vierge
+    review: []
+
+# Expressions innocentes retirées du texte avant la recherche.
+except:
+  - pistolet a colle
+  - pistolet a peinture
+  - pistolet a silicone
+  - pistolet a calfeutrer
+  - pistolet d arrosage
+  - pistolet arrosage
+  - pistolet a eau
+  - pistolet thermique
+  - pistolet de massage
+  - pistolet a clous
+  - pistolet a air chaud
+  - pistolet a mastic
+  - fusil a aiguiser
+  - cave a vin
+  - caves a vin
+  - verre a vin
+  - verres a vin
+  - verre a whisky
+  - verres a whisky
+  - carafe a whisky
+  - seau a champagne
+  - flute a champagne
+  - flutes a champagne
+  - verre a biere
+  - verres a biere
+  - tireuse a biere
+  - porte passeport
+  - protege passeport
+  - etui passeport
+  - etui a passeport
+  - pochette passeport
+  - porte carte d identite
+  - etui carte d identite
+  - porte permis
+  - code de la route
+  - preparation au permis de conduire
+  - billet de banque
+  - billets de banque
+  - ticket de caisse
+  - boite a cigares
+  - boites a cigares
+  - coupe cigare
