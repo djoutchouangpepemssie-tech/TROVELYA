@@ -43,6 +43,7 @@ MASKED = [
     ("jean.dupont@gmail.com", "email"),
     ("jean arobase gmail.com", "email"),
     ("jean arobase gmail", "email"),
+    ("écris-moi sur gmail", "email"),
     ("jean @ gmail . com", "email"),
     ("jean at gmail dot com", "email"),
     ("FR76 3000 6000 0112 3456 7890 189", "iban"),
@@ -112,8 +113,8 @@ QUEUED = [
     ("Vendu à l'unité @15€ la pièce", "email"),  # a lone « @ » of the base rule of 8.16
     ("Réf. produit : 4006381333931", "obfuscated_number"),  # a reference with a word between
     ("Livre 9782070368228", "obfuscated_number"),  # an ISBN-13 by its check digit
-    ("écris-moi sur gmail", "email"),  # a provider named, no address
     ("Un compte PayPal", "payment_app"),
+    ("Mug Gmail logo", "email"),  # a provider named, no address asked
     ("Paire de bottes Lydia", "payment_app"),
     ("Robe Lydia 25 €", "payment_app"),
     ("snap : vendeur92", "social_handle"),

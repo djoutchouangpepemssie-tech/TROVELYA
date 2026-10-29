@@ -101,10 +101,14 @@ _NUMBERS_RE = re.compile(rf"(?<![a-z])(?:{_NUMBER_WORD})(?:(?:{_NUMBER_WORD})|(?
 _ONE_NUMBER_RE = re.compile(_NUMBER_WORD)
 # A date stands alone: « 06.12.34.56.78 » is no date but a phone number.
 _DATE_RE = re.compile(
-    r"(?<!\d)(?<!\d[/.\-])\d{1,2}[/.\-]\d{1,2}[/.\-](?:\d{4}|\d{2})(?!\d)(?![/.\-]\d)"
+    r"(?<!\d)(?<!\d[/.\-])\d{1,2}[/.\-]\d{1,2}[/.\-](?:\d{4}|\d{2})"
+    r"(?!\d)(?![/.\-]\d)"
 )
 # A month of a year (« MEC 07/2016 ») stands alone too.
-_MONTH_YEAR_RE = re.compile(r"(?<![\d/.\-])(?:0?[1-9]|1[0-2])/(?:19|20)\d\d(?![\d/.\-])")
+# Not when digits follow: « 06/2012 34 56 78 » is a phone number.
+_MONTH_YEAR_RE = re.compile(
+    r"(?<![\d/.\-])(?:0?[1-9]|1[0-2])/(?:19|20)\d\d(?![\d/.\-])(?!\s{0,3}\d)"
+)
 # « O6 l2 »: a letter o or l right before a digit reads as one (never « i7 » or « 4l »).
 _DIGIT_LETTERS_RE = re.compile(r"(?<![a-z])[ol](?=\d)|(?<=\d)[ol](?=\d)")
 # « j e a n », « 0 6 1 2 »: single characters spaced out are put back together.
@@ -112,11 +116,12 @@ _SPACED_RE = re.compile(r"(?<![a-z0-9])[a-z0-9](?:[ .][a-z0-9]){3,}+(?![a-z0-9])
 _TLD = r"(?:com|fr|net|org|eu|be|de|it|es|lu|ch|io|info)\b"
 # Mail providers only: « chez Orange », « chez Free » is where a phone or a box was bought.
 _PROVIDERS = r"(?:gmail|hotmail|outlook|yahoo|icloud|protonmail)\b"
+_OPERATORS = rf"(?:orange|free|sfr|laposte|wanadoo)\s*(?:\.|dot\b|point\b)\s*{_TLD}"
 # Each starts where no white space precedes, so a long run of spaces is read once.
 _AT_RE = re.compile(
     r"(?<!\s)\s*(?:[\[(]\s*(?:at|a|@|arobase)\s*[\])]|(?<![a-z])arobase(?![a-z])"
     rf"|(?<![a-z])at(?=\s+[a-z0-9-]+\s*(?:\.|dot\b|point\b)\s*{_TLD})"
-    rf"|(?<![a-z])chez(?=\s+{_PROVIDERS}))\s*"
+    rf"|(?<![a-z])chez(?=\s+(?:{_PROVIDERS}|{_OPERATORS})))\s*"
 )
 # A plain « . » between spaces ends a sentence (« état. de plus »), but before a common
 # extension: then only it reads as the dot of a domain.

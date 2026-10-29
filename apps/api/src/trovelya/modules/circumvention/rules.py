@@ -31,15 +31,21 @@ MAIL_PROVIDERS = ("gmail", "hotmail", "outlook", "yahoo", "icloud", "protonmail"
 # Named alone, these are software or a service too (« compte iCloud », « Pack Office : Outlook »).
 PROVIDERS_NAMED_ALONE = ("gmail", "hotmail", "yahoo", "protonmail")
 # After an explicit « @ », operators' mail too.
-AT_PROVIDERS = (*MAIL_PROVIDERS, "laposte", "orange", "free", "sfr", "wanadoo")
+AT_PROVIDERS = (
+    *MAIL_PROVIDERS,
+    *("laposte", "orange", "free", "sfr", "wanadoo", "gmx", "aol", "live", "msn", "ymail"),
+    *("proton", "neuf", "bbox", "numericable", "aliceadsl", "club-internet"),
+)
 OWN_DOMAINS = ("trovelya.com", "trovelya.fr")
 # Digits after these words are a reference, a serial or an invoice: queued, never masked.
 REFERENCE_WORDS = (
-    r"(?:isbn|ean|ref|reference|sn|serie|modele|facture|commande|siret|siren|tva|lot|code"
-    r"|(?<!tel)(?<!tel )(?<!tel\. )(?<!phone )(?<!fixe )(?<!portable )(?:n°|no))"
+    r"(?:isbn|ean|ref|reference|sn|serie|modele|facture|commande|siret|siren|tva|lot|code)"
 )
 # A run followed by a unit is a measure (« 75 cl », « 3000 mah »): queued, never masked.
-UNITS = r"(?:mm|cm|m|km|cl|ml|l|g|kg|mah|w|v|go|to|mo|cm3|cc|ch|kw|kwh|€|eur|euros?)"
+UNITS = (
+    r"(?:mm|cm|m|km|kms|kilometres?|cl|ml|l|g|kg|mah|w|v|go|to|mo|cm3|cc|ch|kw|kwh|h|heures?"
+    r"|€|eur|euros?)"
+)
 # Lengths of the IBAN of the SEPA countries and of the Maghreb (ISO 13616 registry).
 IBAN_LENGTHS = {
     code: int(length)
@@ -56,8 +62,10 @@ IBAN_LENGTHS = {
 # by a space ends a list item instead (« 2015, 125 000 km »).
 _SEPARATOR = r"\s.\-_/:()\[\]+*|·~#•'\u2010-\u2015\u2212"
 _SEP = rf"(?:[{_SEPARATOR}]|[,;](?!\s)){{0,4}}+"
-_LIST_SEP = rf"[{_SEPARATOR},;]{{0,4}}+"
-_RUN_RE = re.compile(rf"(?:\+|(?<!\d)00)?\d(?:{_LIST_SEP}\d)" + "{7,}")
+# A phone number is looked for across any separator (« 06!12!34 », an emoji): only the
+# counting of the other digits stops at « € » or the multiplication sign.
+_ANY_SEP = r"[^a-z0-9@§]{0,4}+"
+_RUN_RE = re.compile(rf"(?:\+|(?<!\d)00)?\d(?:{_ANY_SEP}\d)" + "{7,}")
 _GROUP_RE = re.compile(r"\d+")
 _LIST_ITEM_SEP_RE = re.compile(r"[,;]\s")
 _TIME_RE = re.compile(r"(?<!\d)(?:[01]?\d|2[0-3]):[0-5]\d(?!\d)")
@@ -69,6 +77,8 @@ _MOBILE_RE = re.compile(r"0[67]\d{8}|(?:33|0033)0?[67]\d{8}")
 _REFERENCE_RE = re.compile(
     rf"(?<![a-z]){REFERENCE_WORDS}(?![a-z])\.?(?:[\s']+[a-z]{{1,12}}){{0,2}}[^a-z]{{0,8}}$"
 )
+# « n° » before digits that are no phone number: an invoice, a serial (« N° 123456789 »).
+_NUMBER_SIGN_RE = re.compile(r"(?<![a-z])(?:n°|no)\s*[^a-z]{0,4}$")
 _UNIT_RE = re.compile(rf"^\s*{UNITS}(?![a-z'\u2019])")
 _YEAR_RE = re.compile(r"(?:19|20)\d\d")
 _EMAIL_RE = re.compile(
@@ -91,6 +101,7 @@ _LINK_RE = re.compile(
     rf"|(?<![a-z0-9.-])(?:[a-z0-9-]{{1,63}}\.){{1,8}}(?:{_TLDS})/\S{{1,2000}}"
     rf"|(?<![a-z0-9.-])(?:[a-z0-9-]{{1,63}}\.){{1,8}}(?:{_BARE_TLDS})\b"
 )
+_QUEUED_LINK_RE = re.compile(r"(?<![a-z0-9.-])(?:[a-z0-9-]{1,63}\.){1,8}(?:de|eu)(?![a-z0-9./-])")
 _TRAILING = ".,;:!?)]»\"'"
 # « état.Me contacter » is two sentences; « MonSite.fr », « T.me/jean » are sites.
 _SENTENCE_TLDS = ("me", "info", "de", "eu")
@@ -120,11 +131,11 @@ _NETWORKS_RE = re.compile(
 # A mail provider after a word that reads as an address (« jean.dupont gmail », « jean75
 # hotmail »): masked. Named alone (« écris-moi sur gmail », « Mug Gmail »): queued.
 _PROVIDERS_RE = re.compile(
-    r"(?<![a-z0-9._%+-])(?=[a-z0-9._%+-]{0,63}[0-9._])[a-z0-9._%+-]{1,64}+\s+(?:"
-    + "|".join(MAIL_PROVIDERS)
-    + r")(?![a-z])"
+    r"(?<![a-z0-9._%+-])(?=[a-z0-9._%+-]{0,63}[0-9._])[a-z0-9._%+-]{1,64}+"
+    r"(?:\s*,\s*|\s+(?:sur\s+)?)(?:" + "|".join(MAIL_PROVIDERS) + r")(?![a-z])"
 )
 _PROVIDER_NAMED_RE = _words(PROVIDERS_NAMED_ALONE)
+_MAIL_WORD_RE = re.compile(r"(?<![a-z])(?:e-?mail|mail|adresse|ecri[rsv]\w*)(?![a-z])")
 
 
 def iban_valid(iban: str) -> bool:
@@ -154,6 +165,8 @@ def ean_valid(digits: str) -> bool:
 def _series(values: Sequence[str]) -> bool:
     """Three numbers or more by a small constant step: sizes, postcodes, issues (« 36 38 40
     42 », « 30 40 50 »), never « 01 23 45 67 89 »."""
+    if len(values) < 3 or any(len(v) > 6 for v in values):
+        return False  # « 1111…1 » of 5000 digits: no size, and no int to read
     numbers = [int(v) for v in values]
     steps = {b - a for a, b in pairwise(numbers)}
     return len(numbers) >= 3 and len(steps) == 1 and 0 < abs(next(iter(steps))) <= 10
@@ -162,6 +175,16 @@ def _series(values: Sequence[str]) -> bool:
 def _hours(passage: str) -> bool:
     """Only times of the day: « 08:30-12:00 / 14:00-18:30 »."""
     return bool(_TIME_RE.search(passage)) and not re.search(r"\d", _TIME_RE.sub("", passage))
+
+
+def _iban_confidence(passage: str) -> float:
+    compact = re.sub(r"[\s.\-/_]", "", passage)
+    bban = compact[4:]
+    if sum(c.isdigit() for c in bban) < 10 or sum(c.isalpha() for c in bban) > 6:
+        return 0
+    if iban_valid(compact):
+        return 0.99
+    return 0.9 if IBAN_LENGTHS.get(compact[:2]) == len(compact) else 0
 
 
 class _Finder:
@@ -212,8 +235,11 @@ class _Finder:
         start = run.start() if i == 0 else groups[i][0]
         if i == 0 and (run.group().startswith("+") or run.group().startswith("00")):
             digits = re.sub(r"\D", "", run.group())
+            before = text[max(0, start - 32) : start]
             if 9 <= len(digits) <= 15 and not _FR_PHONE_RE.match(digits):
-                return len(groups)  # « +32 470 12 34 56 »: abroad, the whole run
+                return (
+                    None if _REFERENCE_RE.search(before) else len(groups)
+                )  # « +32 470 12 34 56 »: abroad, the whole run
         digits = ""
         for j in range(i, len(groups)):
             digits += text[groups[j][0] : groups[j][1]]
@@ -224,22 +250,23 @@ class _Finder:
         return None
 
     def _phone_shape(self, start: int, groups: list[tuple[int, int]], run: re.Match[str]) -> bool:
-        """Not a list (« 06, 2019, 1 000 »), a series (« 07 08 09 10 »), a month and its
-        mileage (« 06 2023 8 900 km »), nor a fixed-line number after « réf. » (a mobile number
-        is always one: « réf. » before it is a trick)."""
+        """Not a list (« 06, 2019, 1 000 », but a mobile number « 061, 234, 5678 »), a series
+        (« 07 08 09 10 »), a month and its mileage (« 06 2023 8 900 km »), nor a fixed-line
+        number after « réf. » (a mobile number is always one: « réf. » before it is a trick)."""
         text = self.norm.text
         passage = text[start : groups[-1][1]]
         values = [text[a:b] for a, b in groups]
         digits = "".join(values)
-        if _LIST_ITEM_SEP_RE.search(passage) and any(len(v) > 2 for v in values):
-            return False
-        if _series(values):
-            return False
+        mobile = bool(_MOBILE_RE.fullmatch(digits))
         years = any(_LONE_YEAR_RE.fullmatch(v) for v in values[1:])
-        if years and _UNIT_RE.search(text[run.end() : run.end() + 8]):
+        unit = bool(_UNIT_RE.search(text[run.end() : run.end() + 12]))
+        listed = _LIST_ITEM_SEP_RE.search(passage) and any(len(v) > 2 for v in values)
+        if listed and (years or unit or not mobile):
+            return False
+        if _series(values) or (years and unit):
             return False
         before = text[max(0, start - 32) : start]
-        return bool(_MOBILE_RE.fullmatch(digits)) or not _REFERENCE_RE.search(before)
+        return mobile or not _REFERENCE_RE.search(before)
 
     def _items(self, start: int, end: int) -> list[Detection]:
         found: list[Detection] = []
@@ -264,6 +291,7 @@ class _Finder:
         written = self.text[slice(*self.norm.span(start, end))]  # « 1 2 3 4 » as written
         doubtful = (
             _REFERENCE_RE.search(before)
+            or _NUMBER_SIGN_RE.search(before)
             or _UNIT_RE.search(after)
             or ean_valid(digits)
             or isbn10_valid(digits)
@@ -277,14 +305,14 @@ class _Finder:
         else two letters and digits (« GT 86 2015 », « MT-07 2019 ») are no IBAN."""
         found: list[Detection] = []
         for m in _IBAN_RE.finditer(self.norm.text):
-            compact = re.sub(r"[\s.\-/_]", "", m.group())
-            bban = compact[4:]
-            if sum(c.isdigit() for c in bban) < 10 or sum(c.isalpha() for c in bban) > 6:
-                continue
-            if iban_valid(compact):
-                found.append(self.at("iban", m.start(), m.end(), 0.99))
-            elif IBAN_LENGTHS.get(compact[:2]) == len(compact):
-                found.append(self.at("iban", m.start(), m.end(), 0.9))
+            # The word after an IBAN may be read as its last group (« … 606 merci »): the
+            # groups are dropped from the right until the IBAN holds.
+            ends = [m.start() + g.end() for g in re.finditer(r"[a-z0-9]+", m.group())]
+            for end in reversed(ends[1:]):
+                confidence = _iban_confidence(self.norm.text[m.start() : end])
+                if confidence:
+                    found.append(self.at("iban", m.start(), end, confidence))
+                    break
         return found
 
     def addresses(self) -> list[Detection]:
@@ -300,6 +328,15 @@ class _Finder:
                 if name != name.rstrip() and name.strip() in SOCIAL_NETWORKS:
                     continue
                 found.append(self.at("email", m.start(), m.end(), confidence))
+        return found
+
+    def providers(self) -> list[Detection]:
+        """A provider named alone: masked after « écris-moi », « mon adresse »…, else queued
+        (« Mug Gmail »)."""
+        found: list[Detection] = []
+        for m in _PROVIDER_NAMED_RE.finditer(self.norm.text):
+            asked = _MAIL_WORD_RE.search(self.norm.text[max(0, m.start() - 30) : m.start()])
+            found.append(self.at("email", m.start(), m.end(), 0.9 if asked else 0.6))
         return found
 
     def links(self) -> list[Detection]:
@@ -353,10 +390,11 @@ def detect(text: str) -> list[Detection]:
             *f.ibans(),
             *f.addresses(),
             *f.all(_PROVIDERS_RE, "email", 0.9),
-            *f.all(_PROVIDER_NAMED_RE, "email", 0.6),
+            *f.providers(),
             *f.all(_AT_SIGN_RE, "email", 0.5),
             *f.all(_HANDLE_RE, "social_handle", 0.9),
             *f.links(),
+            *f.all(_QUEUED_LINK_RE, "external_link", 0.6),
             *f.all(_MESSAGING_RE, "payment_app", 0.9),
             *f.payment_apps(),
             *f.all(_PAYMENT_WORDS_RE, "payment_app", 0.6),

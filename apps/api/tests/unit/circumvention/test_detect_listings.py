@@ -147,3 +147,63 @@ def test_handle_after_a_network_is_a_handle(text: str) -> None:
 )
 def test_address_without_its_domain_masked(text: str) -> None:
     assert MASK in _shown(text), detect(text)
+
+
+@pytest.mark.parametrize(
+    "text",
+    [
+        # Any separator between the groups (fourth review, B1)
+        "06!12!34!56!78",
+        "06=12=34=56=78",
+        "06\u20ac12\u20ac34\u20ac56\u20ac78",
+        "06\u00d712\u00d734\u00d756\u00d778",
+        "06\U0001f64212\U0001f64234\U0001f64256\U0001f64278",
+        "06{12}34{56}78",
+        "1 200 \u20ac 06 12 34 56 78",
+        # A mobile number written as a list (B2)
+        "061, 234, 5678",
+        "0612; 3456; 78",
+        # « n° » before a fixed line (C1), an operator's address (C2, C4)
+        "mon n° 01 45 67 89 10",
+        "contact no 01 45 67 89 10",
+        "jean @ gmx",
+        "jean @ aol",
+        "jean.dupont chez orange.fr",
+        "jean.dupont sur gmail",
+        # A month written before the rest of the number (C6)
+        "06/2012 34 56 78",
+    ],
+)
+def test_phone_and_address_tricks_masked(text: str) -> None:
+    shown = _shown(text)
+    assert MASK in shown, detect(text)
+    assert not re.search(r"\d\d\W{0,4}\d\d\W{0,4}\d\d", shown), shown
+    for part in ("jean", "gmx", "aol", "orange", "gmail"):
+        assert part not in shown.lower(), shown
+
+
+@pytest.mark.parametrize(
+    "text",
+    [
+        "FR14 2004 1010 0505 0001 3M02 606 merci",
+        "FR76 3000 6000 0112 3456 7890 189 pour le paiement",
+    ],
+)
+def test_iban_followed_by_a_word_masked(text: str) -> None:
+    assert {d.signal for d in detect(text) if d.confidence >= MASK_AT} == {"iban"}, detect(text)
+    assert _shown(text).startswith(MASK + " "), _shown(text)
+
+
+@pytest.mark.parametrize("text", ["Tracteur 03 2018 1 200 heures", "MEC 04 2019 1 500 kilomètres"])
+def test_month_year_and_hours_never_masked(text: str) -> None:
+    assert _shown(text) == text, detect(text)
+
+
+@pytest.mark.parametrize("text", ["1" * 4301, "prix " + "9" * 5000], ids=["4301", "5000"])
+def test_very_long_number_does_not_crash(text: str) -> None:
+    assert MASK in _shown(text)
+
+
+def test_bare_de_or_eu_site_queued() -> None:
+    found = detect("visitez monsite.eu")
+    assert [(d.signal, d.confidence) for d in found] == [("external_link", 0.6)], found
