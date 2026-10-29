@@ -7,6 +7,7 @@ addresses or zones. It gets a random short id (E10) and its first price in the h
 
 import secrets
 import string
+from typing import Any
 from uuid import UUID
 
 from sqlalchemy.exc import IntegrityError
@@ -26,13 +27,34 @@ SHORT_ID_LENGTH = 10
 SHORT_ID_ATTEMPTS = 3
 
 
+_LOCATION_COLUMNS = (
+    "lat",
+    "lon",
+    "public_lat",
+    "public_lon",
+    "h3_r7",
+    "h3_r9",
+    "place_name",
+    "country_code",
+    "location_source",
+    "location_source_id",
+)
+
+
 def _short_id() -> str:
     return "".join(secrets.choice(SHORT_ID_ALPHABET) for _ in range(SHORT_ID_LENGTH))
 
 
-async def create_draft(
-    db: AsyncSession, *, seller_id: UUID, body: ListingDraftIn, verticals: bool, clock: Clock
-) -> ListingOut:
+async def _checked_values(
+    db: AsyncSession,
+    *,
+    seller_id: UUID,
+    body: ListingDraftIn,
+    verticals: bool,
+    clock: Clock,
+    locate: bool,
+) -> dict[str, Any]:
+    """The columns of the draft once every rule is met; its position only when `locate`."""
     category = await draft_rules.checked_category(
         db,
         key=body.category,
@@ -43,13 +65,7 @@ async def create_draft(
     )
     attributes = await draft_rules.checked_attributes(db, category.id, body.attributes, clock)
     await listing_photos.check_listing_photos(db, owner_id=seller_id, media_ids=body.media_ids)
-    now = clock.now()
-    location = await listing_location(
-        db, seller_id=seller_id, source=body.location.source, source_id=body.location.id, now=now
-    )
-    if location is None:
-        raise AppError(ErrorCode.LOCATION_UNAVAILABLE, 422)
-    values = {
+    values: dict[str, Any] = {
         "seller_id": seller_id,
         "title": body.title,
         "description": body.description,
@@ -66,6 +82,21 @@ async def create_draft(
         "shipping_enabled": body.shipping_enabled,
         "parcel_size": body.parcel_size,
         "weight_g": body.weight_g,
+        "now": clock.now(),
+        "locate": locate,
+    }
+    if not locate:  # the position stays (the update's CASE keeps the columns)
+        return values | dict.fromkeys(_LOCATION_COLUMNS)
+    location = await listing_location(
+        db,
+        seller_id=seller_id,
+        source=body.location.source,
+        source_id=body.location.id,
+        now=values["now"],
+    )
+    if location is None:
+        raise AppError(ErrorCode.LOCATION_UNAVAILABLE, 422)
+    return values | {
         "lat": location.lat,
         "lon": location.lon,
         "public_lat": location.public_lat,
@@ -76,8 +107,25 @@ async def create_draft(
         "country_code": location.country_code,
         "location_source": location.source,
         "location_source_id": location.source_id,
-        "now": now,
     }
+
+
+async def _attach(db: AsyncSession, listing_id: UUID, media_ids: list[UUID]) -> None:
+    try:
+        async with db.begin_nested():
+            await repository.attach_photos(db, listing_id, media_ids)
+    except IntegrityError as exc:
+        raise AppError(ErrorCode.MEDIA_IN_USE, 409) from exc
+
+
+async def create_draft(
+    db: AsyncSession, *, seller_id: UUID, body: ListingDraftIn, verticals: bool, clock: Clock
+) -> ListingOut:
+    await repository.lock_seller_listings(db, seller_id)
+    values = await _checked_values(
+        db, seller_id=seller_id, body=body, verticals=verticals, clock=clock, locate=True
+    )
+    now = values["now"]
     listing_id = new_id()
     for _ in range(SHORT_ID_ATTEMPTS):
         if await repository.insert_listing(
@@ -86,11 +134,7 @@ async def create_draft(
             break
     else:  # three collisions out of 62^10: the alphabet or the generator is broken
         raise RuntimeError("no free short id")
-    try:
-        async with db.begin_nested():
-            await repository.attach_photos(db, listing_id, body.media_ids)
-    except IntegrityError as exc:
-        raise AppError(ErrorCode.MEDIA_IN_USE, 409) from exc
+    await _attach(db, listing_id, body.media_ids)
     await repository.record_price(db, listing_id, body.price.amount_minor, now)
     return await own_listing(db, seller_id=seller_id, listing_id=listing_id)
 
