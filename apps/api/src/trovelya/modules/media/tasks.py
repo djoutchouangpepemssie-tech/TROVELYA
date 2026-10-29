@@ -39,7 +39,11 @@ async def process_media_job(ctx: dict[str, Any], media_id: str) -> str:
     try:
         async with asyncio.timeout(_ATTEMPT_BUDGET_S):
             return await process_media(
-                ctx["sessionmaker"], ctx["storage"], media, image_slot=ctx.get("image_slot")
+                ctx["sessionmaker"],
+                ctx["storage"],
+                media,
+                image_slot=ctx.get("image_slot"),
+                classifier=ctx.get("classifier"),
             )
     except Exception as exc:
         if attempt >= MAX_TRIES:

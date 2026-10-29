@@ -37,6 +37,7 @@ from trovelya.modules.identity.service import (
     purge_expired_exports,
     purge_expired_magic_links,
 )
+from trovelya.modules.media.adapters.classifier import classifier_from_settings
 from trovelya.modules.media.adapters.storage import storage_from_settings
 from trovelya.modules.media.tasks import MAX_TRIES as MEDIA_MAX_TRIES
 from trovelya.modules.media.tasks import (
@@ -77,6 +78,7 @@ async def startup(ctx: Context) -> None:
     # One image decoded at a time in this worker (memory); waiting happens outside the
     # 60 s given to each image.
     ctx["image_slot"] = asyncio.Semaphore(1)
+    ctx["classifier"] = classifier_from_settings(settings)
     ctx["http"] = httpx.AsyncClient()
     ctx["email_sender"] = make_email_sender(settings, ctx["http"])
     # Handlers enqueue their e-mails on arq's own pool (ctx["redis"]).

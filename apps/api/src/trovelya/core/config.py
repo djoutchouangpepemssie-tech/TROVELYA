@@ -14,6 +14,8 @@ MIN_FIELD_KEY_LENGTH = 32
 EmailProvider = Literal["smtp", "resend", "fake"]
 GeocoderProvider = Literal["geoplateforme", "fake"]
 StorageProvider = Literal["s3", "memory"]
+# P2-T05b2, Q38, Q39: no classifier until an EU provider is chosen; the fake one for tests.
+ImageClassifierProvider = Literal["none", "fake"]
 
 
 def asyncpg_url(url: str) -> str:
@@ -63,6 +65,7 @@ class Settings(BaseSettings):
     # Object storage (ADR-0019): s3 = Cloudflare R2 (EU jurisdiction) on Railway, Garage
     # locally and in tests; memory for unit tests and environments without storage yet.
     storage_provider: StorageProvider = "memory"
+    image_classifier: ImageClassifierProvider = "none"
     storage_endpoint: str | None = None
     storage_region: str = "auto"  # R2 takes "auto"; Garage "garage"
     storage_access_key_id: SecretStr | None = None
@@ -105,6 +108,13 @@ class Settings(BaseSettings):
             raise ValueError(
                 "OAUTH_APPLE_CLIENT_ID, _TEAM_ID, _KEY_ID and _PRIVATE_KEY go together"
             )
+        return self
+
+    @model_validator(mode="after")
+    def _no_fake_classifier_deployed(self) -> "Settings":
+        """Q38: deployed, the fake classifier (all 0) would put every listing online unchecked."""
+        if self.image_classifier == "fake" and self.env not in ("local", "test"):
+            raise ValueError("IMAGE_CLASSIFIER=fake is for local development and tests only")
         return self
 
     @model_validator(mode="after")

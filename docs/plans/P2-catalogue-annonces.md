@@ -61,6 +61,9 @@ Stockage objet Cloudflare R2 en juridiction UE (MinIO en local et en CI), deux b
 | Q34 | Interdits dans le texte | Deux niveaux : un terme sans ambiguïté (« fusil de chasse », « contrefaçon », « cocaïne ») est **refusé** avec motif ; un terme ambigu (« réplique », « tabac », « pistolet ») part **en revue** sans mise en ligne ; une liste d'exceptions écarte les faux positifs connus (« pistolet à colle », « fusil à aiguiser »). Un refus passe par `submit_for_review` puis `reject` (acteur système, `reason_code` du motif) : l'annonce est `removed`, avec recours (validée par Arcel le 29 octobre 2026). |
 | Q35 | Export RGPD des détections | L'export contient le texte d'origine que le membre a écrit, déchiffré (droit d'accès, art. 15) ; l'archive est elle-même chiffrée (ADR-0016) (validée par Arcel le 29 octobre 2026). |
 | Q36 | Conservation des détections | 180 jours après la détection (fenêtre des sanctions de 8.16), purge quotidienne ; une détection encore en revue est gardée jusqu'à sa revue (validée par Arcel le 29 octobre 2026). |
+| Q37 | Stupéfiants (8.17) | « Stupéfiants » est un motif d'interdiction à part entière, avec les motifs de 8.17 (validée par Arcel le 29 octobre 2026). |
+| Q38 | Images sans classifieur | Tant qu'aucun classifieur d'images n'est configuré en production, toute annonce avec photo part en revue humaine (classification absente, plan T05b2) : rien en ligne sans contrôle (validée par Arcel le 29 octobre 2026). |
+| Q39 | Fournisseur de classification d'images | Choisi avant la mise en production (région UE, DPA, prix) ; P2 livre l'adaptateur, le classifieur factice et les seuils (validée par Arcel le 29 octobre 2026). |
 
 ### 0.2 Écarts et précisions par rapport au cahier
 
@@ -614,12 +617,12 @@ Découpée en deux PR de 600 lignes au plus : **T05b1** (texte, catégories, coo
 
 **Branche :** `feat/P2-T05b2-moderation-images`.
 
-**Fichiers :** `modules/ai/adapters/classifier.py` (`ImageClassifier`, `FakeImageClassifier`), `modules/media/service/processing.py` (classification et légende à la fin du traitement), `modules/catalog/service/moderation.py`, migration (paramètre `moderation.thresholds`), `tests/integration/catalog/test_moderation_images.py`.
+**Fichiers :** `modules/media/adapters/classifier.py` (`ImageClassifier`, `FakeImageClassifier` ; l'adaptateur vit avec le traitement des images plutôt que dans un module `ai` encore inexistant), `modules/media/service/processing.py` (classification à la fin du traitement), `modules/catalog/service/moderation.py`, migration 0022 (paramètre `moderation.image_thresholds`, validé à la lecture : 0 < review ≤ refuse ≤ 1), `tests/integration/media/test_classification.py`, `tests/integration/catalog/test_moderation_images.py`. La **légende** de la photo principale (attendue par l'embedding de T11) est reportée à T06a, avec l'assistance IA. Au branchement du fournisseur (Q39), un job de rattrapage classera les photos restées non classées.
 
 **Contenu :**
 - 4. **images** : scores de classification calculés au traitement (nudité, violence, armes, drogue) ; score max ≥ 0,9 → refus ; 0,5 à 0,9 → `pending_review` ; classification absente ou en erreur → `pending_review` ;
 - 5. **doublon d'image** d'un autre vendeur (T02b) → `pending_review`.
-- Le classifieur ne reçoit que l'image, sans le texte du vendeur.
+- Le classifieur ne reçoit que l'image réencodée, sans le texte du vendeur ; en 20 s au plus ; des scores incomplets ou invalides (texte, NaN, hors de 0 à 1) laissent la photo non classée (revue). `IMAGE_CLASSIFIER=fake` est refusé hors développement et tests.
 
 - [ ] Tests d'abord : `test_image_thresholds` (0,95 → refus ; 0,7 → revue ; 0,3 → active), `test_classifier_outage_goes_to_review`, `test_duplicate_image_goes_to_review`, `test_moderation_reason_readable_fr`.
 - [ ] ÉCHEC → implémenter → vert. Commit `feat(catalogue): modération des images des annonces`.

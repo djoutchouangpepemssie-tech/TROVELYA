@@ -85,6 +85,7 @@ type = forbidden
 # media.service.avatars (P2-T02c). Any other path to these modules still is.
 ignore_imports =
     trovelya.modules.media.service.* -> trovelya.modules.media.repository
+    trovelya.modules.media.service.* -> trovelya.modules.media.adapters.classifier
 source_modules =
     trovelya.modules.ledger
     trovelya.modules.catalog

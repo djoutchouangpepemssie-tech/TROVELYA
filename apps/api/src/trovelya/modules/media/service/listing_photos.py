@@ -7,13 +7,14 @@ never deletes a photo being attached.
 
 from collections.abc import Sequence
 from datetime import datetime
-from typing import Any
+from typing import Any, cast
 from uuid import UUID
 
 from sqlalchemy.ext.asyncio import AsyncSession
 
 from trovelya.core.errors import AppError, ErrorCode
 from trovelya.modules.media import repository
+from trovelya.modules.media.adapters.classifier import valid_scores
 
 
 async def check_listing_photos(
@@ -75,3 +76,24 @@ async def photo_variants(
     longer ready (deleted, removed by moderation) is left out."""
     found = await photo_variants_by_id(db, media_ids, public_url=public_url)
     return [found[media_id] for media_id in media_ids if media_id in found]
+
+
+async def photo_moderation(db: AsyncSession, media_ids: Sequence[UUID]) -> list[dict[str, Any]]:
+    """What the moderation of a listing reads of its photos (P2-T05b2), in the order given:
+    `scores` (the four categories, valid) or None when unclassified, and `duplicate_of`
+    another member's photo."""
+    found = await repository.ready_moderation_of(db, media_ids)
+    photos: list[dict[str, Any]] = []
+    for media_id in media_ids:
+        if (moderation := found.get(media_id)) is None:
+            continue
+        classification: Any = moderation.get("classification")
+        scores: Any = (
+            cast(dict[str, Any], classification).get("scores")
+            if isinstance(classification, dict)
+            else None
+        )
+        photos.append(
+            {"scores": valid_scores(scores), "duplicate_of": moderation.get("duplicate_of")}
+        )
+    return photos
