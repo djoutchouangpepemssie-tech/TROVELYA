@@ -467,3 +467,13 @@ async def mark_quarantine_moved(db: AsyncSession, media_id: UUID, now: datetime)
         ),
         {"id": media_id, "now": now},
     )
+
+
+async def set_caption(db: AsyncSession, media_id: UUID, caption: str) -> None:
+    await db.execute(
+        text(
+            "UPDATE media SET moderation = moderation"
+            " || jsonb_build_object('caption', CAST(:c AS text)) WHERE id = :id"
+        ),
+        {"id": media_id, "c": caption},
+    )

@@ -72,7 +72,7 @@ async def finish(
 
 
 _EXPORT = text(
-    "SELECT id, media_ids, model, outcome, suggestion, accepted_fields, latency_ms,"
+    "SELECT id, media_ids, model, outcome, suggestion, shown, accepted_fields, latency_ms,"
     " cost_microeur, created_at FROM ai_listing_suggestions WHERE user_id = :u"
     " ORDER BY created_at, id"
 )
@@ -91,3 +91,31 @@ async def delete_calls_before(db: AsyncSession, before: datetime) -> int:
         text("DELETE FROM ai_listing_suggestions WHERE created_at < :before"), {"before": before}
     )
     return int(result.rowcount)  # pyright: ignore[reportAttributeAccessIssue, reportUnknownArgumentType, reportUnknownMemberType]
+
+
+# --- What the member did with a suggestion (P2-T06a3b) -----------------------------------------
+
+_RECORD_SHOWN = text(
+    "UPDATE ai_listing_suggestions SET shown = CAST(:shown AS jsonb)"
+    " WHERE id = :id AND outcome = 'ok' AND shown IS NULL"
+)
+# Locked: two drafts created at once from one suggestion never both record what was kept.
+_FOR_DRAFT = text(
+    "SELECT shown, media_ids FROM ai_listing_suggestions WHERE id = :id AND user_id = :u"
+    " AND outcome = 'ok' AND shown IS NOT NULL AND accepted_fields IS NULL FOR UPDATE"
+)
+_RECORD_ACCEPTED = text(
+    "UPDATE ai_listing_suggestions SET accepted_fields = :fields WHERE id = :id"
+)
+
+
+async def record_shown(db: AsyncSession, call_id: UUID, shown: dict[str, Any]) -> None:
+    await db.execute(_RECORD_SHOWN, {"id": call_id, "shown": json.dumps(shown, default=str)})
+
+
+async def suggestion_for_draft(db: AsyncSession, call_id: UUID, user_id: UUID) -> Any:
+    return (await db.execute(_FOR_DRAFT, {"id": call_id, "u": user_id})).one_or_none()
+
+
+async def record_accepted(db: AsyncSession, call_id: UUID, fields: list[str]) -> None:
+    await db.execute(_RECORD_ACCEPTED, {"id": call_id, "fields": fields})

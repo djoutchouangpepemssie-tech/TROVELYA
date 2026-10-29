@@ -171,6 +171,8 @@ class ListingDraftIn(BaseModel):
     weight_g: WeightG | None = None
     location: ListingLocationIn
     media_ids: MediaIds
+    # The AI suggestion the draft comes from (P2-T06a3b): what was kept is recorded.
+    suggestion_id: UUID | None = None
 
 
 class ListingDraftPatch(BaseModel):

@@ -1628,6 +1628,18 @@
             "title": "Shipping Enabled",
             "type": "boolean"
           },
+          "suggestion_id": {
+            "anyOf": [
+              {
+                "format": "uuid",
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Suggestion Id"
+          },
           "title": {
             "maxLength": 120,
             "minLength": 5,

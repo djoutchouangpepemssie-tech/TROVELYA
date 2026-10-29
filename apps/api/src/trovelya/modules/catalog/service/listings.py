@@ -21,6 +21,7 @@ from trovelya.core.errors import AppError, ErrorCode
 from trovelya.modules.catalog import repository
 from trovelya.modules.catalog.schemas import ListingDraftIn, ListingDraftPatch, ListingOut
 from trovelya.modules.catalog.service import draft_rules
+from trovelya.modules.catalog.service.assist import draft_from_suggestion
 from trovelya.modules.catalog.service.locations import listing_location
 from trovelya.modules.catalog.service.quality import Facts, Formula, Quality, quality
 from trovelya.modules.media.service import listing_photos
@@ -178,6 +179,7 @@ async def create_draft(
         raise RuntimeError("no free short id")
     await _attach(db, listing_id, body.media_ids)
     await repository.record_price(db, listing_id, body.price.amount_minor, now)
+    await draft_from_suggestion(db, seller_id=seller_id, body=body)
     return await own_listing(db, seller_id=seller_id, listing_id=listing_id)
 
 

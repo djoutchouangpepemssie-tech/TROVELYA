@@ -2,7 +2,8 @@
 `reindex` and `drop_embedding`, which are jobs or event handlers.
 
 A listing online, whose seller is shown, is embedded by the worker from its text: title,
-description, attributes with their labels, brand (the main photo's caption joins with T06a3b).
+description, the main photo's caption from the AI help (P2-T06a3b), attributes with their
+labels, brand.
 Besides, the AI help's suggestion is embedded during the request to find comparable prices
 (P2-T06a3a, ADR-0020 point 9); nothing else ever leaves for the provider. The vector is stored
 only if the listing is still online with the same text; it is dropped when the listing leaves
@@ -21,6 +22,7 @@ from trovelya.modules.catalog import repository
 from trovelya.modules.catalog.adapters.embedder import Embedder, checked_vector
 from trovelya.modules.catalog.service.reading import attributes_shown
 from trovelya.modules.identity.service import shown_sellers
+from trovelya.modules.media.service import listing_photos
 from trovelya.shared.events import OutboxEvent, Subscription
 
 logger = structlog.get_logger(__name__)
@@ -63,9 +65,11 @@ async def listing_text(db: AsyncSession, listing_id: UUID) -> str | None:
     row = await repository.embedding_source(db, listing_id)
     if row is None or not await shown_sellers(db, [row.seller_id]):
         return None
+    media_ids = await repository.listing_media_ids(db, listing_id)
+    caption = await listing_photos.photo_caption(db, media_ids[0]) if media_ids else None
     return await compose_text(
         db,
-        texts=[row.title, row.description],
+        texts=[row.title, row.description, *([caption] if caption else [])],
         category_id=row.category_id,
         attributes=row.attributes,
         brand=row.brand,

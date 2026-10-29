@@ -121,3 +121,15 @@ async def assist_variants(
             best = max(fitting, key=lambda v: v["width"])
             chosen.append({"key": best["key"], "format": best["format"], "width": best["width"]})
     return chosen
+
+
+async def set_caption(db: AsyncSession, media_id: UUID, caption: str) -> None:
+    """What the AI said the photo shows (P2-T06a3b), kept with the photo (plan E15)."""
+    await repository.set_caption(db, media_id, caption)
+
+
+async def photo_caption(db: AsyncSession, media_id: UUID) -> str | None:
+    """The caption of a photo still ready, if any (the main photo's joins the embedding)."""
+    moderation = (await repository.ready_moderation_of(db, [media_id])).get(media_id) or {}
+    caption = moderation.get("caption")
+    return caption if isinstance(caption, str) else None

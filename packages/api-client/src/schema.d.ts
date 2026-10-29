@@ -1932,6 +1932,8 @@ export interface components {
              * @default true
              */
             shipping_enabled: boolean;
+            /** Suggestion Id */
+            suggestion_id?: string | null;
             /** Title */
             title: string;
             /** Weight G */

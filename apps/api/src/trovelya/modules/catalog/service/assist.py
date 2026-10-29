@@ -25,6 +25,7 @@ from trovelya.modules.catalog.schemas import (
     AssistOut,
     BrandName,
     Caption,
+    ListingDraftIn,
     Money,
     PriceRange,
     Title,
@@ -169,4 +170,37 @@ async def assist(
         kept = await _kept(db, call_id, suggestion, leaves, clock)
     leaf = leaves.get(kept.category.key) if kept.category else None
     found = await _price_range(sessionmaker, embedder, kept, leaf)
-    return kept.model_copy(update={"price_range": found})
+    shown = kept.model_copy(update={"price_range": found})
+    await ai.record_shown(sessionmaker, call_id, shown.model_dump(mode="json"))
+    return shown
+
+
+def _kept_as_shown(shown: dict[str, Any], body: ListingDraftIn) -> list[str]:
+    """The fields of the draft equal to what was shown (none for a field not suggested)."""
+    category: dict[str, Any] = shown.get("category") or {}
+    candidates: dict[str, tuple[Any, Any]] = {
+        "title": (shown.get("title"), body.title),
+        "category": (category.get("key"), body.category),
+        "brand": (shown.get("brand"), body.brand),
+        "condition": (shown.get("condition"), body.condition.value),
+    }
+    kept = [name for name, (was, now) in candidates.items() if was is not None and was == now]
+    attributes: dict[str, Any] = shown.get("attributes") or {}
+    return kept + [f"attributes.{k}" for k, v in attributes.items() if body.attributes.get(k) == v]
+
+
+async def draft_from_suggestion(db: AsyncSession, *, seller_id: UUID, body: ListingDraftIn) -> None:
+    """A draft created from a suggestion: the fields kept as shown are recorded (section 7.5),
+    the caption goes with the main photo if it was among the photos shown to the AI. A
+    suggestion not the seller's, that went wrong or that already served a draft is ignored: the
+    draft never fails for it."""
+    found = None
+    if body.suggestion_id is not None:
+        found = await ai.suggestion_for_draft(db, call_id=body.suggestion_id, user_id=seller_id)
+    if body.suggestion_id is None or found is None:
+        return
+    shown, media_ids = found
+    await ai.record_accepted(db, body.suggestion_id, _kept_as_shown(shown, body))
+    caption = shown.get("caption")
+    if caption and body.media_ids[0] in media_ids:
+        await listing_photos.set_caption(db, body.media_ids[0], caption)

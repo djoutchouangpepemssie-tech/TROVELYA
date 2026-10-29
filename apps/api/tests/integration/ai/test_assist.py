@@ -18,7 +18,7 @@ from sqlalchemy import text
 from tests.conftest import TEST_PROXY_SECRET, make_settings
 from tests.integration.catalog.test_categories_api import seeded  # noqa: F401  # pyright: ignore[reportUnusedImport]
 from tests.integration.catalog.test_draft_rules import photo
-from tests.integration.catalog.test_drafts import Session
+from tests.integration.catalog.test_drafts import Session, create, draft, seller
 from tests.integration.catalog.test_review_queue import _listing  # pyright: ignore[reportPrivateUsage]
 from tests.integration.catalog.test_withdraw_renew import _call  # pyright: ignore[reportPrivateUsage]
 from tests.integration.identity.test_profile import Account, make_account
@@ -32,7 +32,7 @@ from trovelya.modules.ai.adapters.provider import (
     ProviderAnswer,
 )
 from trovelya.modules.catalog.adapters.embedder import FakeEmbedder
-from trovelya.modules.catalog.service.embeddings import embed_listing
+from trovelya.modules.catalog.service.embeddings import embed_listing, listing_text
 from trovelya.shared.ids import new_id
 
 ASSIST = "/v1/listings/assist"
@@ -344,3 +344,47 @@ async def test_assist_no_price_without_comparables(ai: Ai, sessionmaker: Session
     ai.app.state.embedder = _Failing(model)  # down: the suggestion stays, without a range
     answer = (await _assist(ai, member, media)).json()
     assert (answer["title"], answer["price_range"]) == ("Robe en lin bleue", None)
+
+
+async def _accepted(sessionmaker: Session, call_id: str) -> Any:
+    async with sessionmaker() as db:
+        sql = "SELECT accepted_fields FROM ai_listing_suggestions WHERE id = :c"
+        return await db.scalar(text(sql), {"c": call_id})
+
+
+async def test_accepted_fields_recorded_on_draft(ai: Ai, sessionmaker: Session) -> None:
+    """The draft created from a suggestion records the fields kept as shown; the caption goes
+    with the main photo, embedded with the listing (T11). A suggestion serves one draft, and
+    only its member's."""
+    account, zone, media = await seller(sessionmaker)
+    suggestion = (await _assist(ai, account, media)).json()
+    body = draft(
+        zone,
+        [media],
+        condition="good",  # changed
+        attributes={"clothing_size": "m", "color": "rouge"},  # the colour changed
+        suggestion_id=suggestion["suggestion_id"],
+    )
+    created = await create(ai.client, account, body)
+    assert created.status_code == 201, created.text
+    assert await _accepted(sessionmaker, suggestion["suggestion_id"]) == [
+        "title",
+        "category",
+        "attributes.clothing_size",
+    ]
+    async with sessionmaker() as db:
+        sql = "SELECT moderation->>'caption' FROM media WHERE id = :m"
+        assert await db.scalar(text(sql), {"m": media}) == suggestion["caption"]
+    published = await _call(ai.client, account, created.json()["id"], "publish")
+    assert published.status_code == 200, published.text
+    async with sessionmaker() as db:
+        embedded = await listing_text(db, UUID(created.json()["id"]))
+    assert embedded is not None and suggestion["caption"] in embedded
+    again = await create(
+        ai.client, account, body | {"media_ids": [str(await photo(sessionmaker, account.id))]}
+    )
+    assert again.status_code == 201  # used once: the second draft records nothing
+    assert len(await _accepted(sessionmaker, suggestion["suggestion_id"])) == 3
+    other, other_zone, other_media = await seller(sessionmaker)
+    foreign = draft(other_zone, [other_media], suggestion_id=suggestion["suggestion_id"])
+    assert (await create(ai.client, other, foreign)).status_code == 201  # ignored
