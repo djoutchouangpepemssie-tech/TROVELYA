@@ -1,9 +1,10 @@
 """Purge of media files and rows, every hour (P2-T02c2, ADR-0019, PII.md).
 
-1. Marked deleted: uploads never completed and avatar photos never chosen after 24 hours,
-   refusals after `retention.deleted_media_days` (30). Marked first and committed, so a worker
-   finishing late (`mark_ready` needs a media not deleted) cannot race with the deletion of
-   its files; a photo a member is choosing as their avatar is skipped (`mark_for_purge`).
+1. Marked deleted: uploads never completed, avatar photos never chosen and listing photos in
+   no listing after 24 hours, refusals after `retention.deleted_media_days` (30). Marked first
+   and committed, so a worker finishing late (`mark_ready` needs a media not deleted) cannot
+   race with the deletion of its files; a photo a member is choosing as their avatar or
+   attaching to a listing is skipped (`mark_for_purge`).
 2. Files of every deleted media: original and variants leave storage at the next run, an
    hour at most after the photo was withdrawn or the account erased (ADR-0019: a withdrawn
    photo's public URL must stop working). A failure is recorded on the row; the media is
@@ -11,9 +12,6 @@
    after the deletion are reported.
 3. Rows whose files are gone: after the retention, at once for an erased account or a media
    that never became a photo.
-
-Photos never attached to a listing are purged by P2-T03b (24 hours, with the same lock as the
-avatars: see the P2 plan).
 """
 
 from datetime import datetime, timedelta
