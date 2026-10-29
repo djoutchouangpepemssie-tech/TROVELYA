@@ -48,6 +48,7 @@ Stockage objet Cloudflare R2 en juridiction UE (MinIO en local et en CI), deux b
 | Q21 | Bornes des attributs entiers et années | `int` et `year` bornés à l'entier signé 32 bits ; `year` borné en plus à **l'année courante + 1** (millésimes vendus d'avance), calculée par l'horloge au moment de la validation ; le minimum reste celui de la graine. |
 | Q22 | Photo d'annonce retirée d'un brouillon | Purgée **24 h après son retrait** (`media.detached_at`) et non après l'envoi, pour pouvoir la remettre ou la déplacer vers un autre brouillon ; une photo jamais rattachée reste purgée 24 h après l'envoi (livrée en T03b3c, validée par Arcel le 29 octobre 2026). |
 | Q23 | Blocage et fiche d'annonce | **Fiche visible** par le membre bloqué, comme le profil public (Q14) : une annonce active est publique. La protection porte sur le contact : messages, offres et achat refusés en P4 et P6, sans jamais révéler le blocage (validée par Arcel le 29 octobre 2026). |
+| Q25 | Événements de l'annonce (section 5.6) | **Nommés par leur effet sur la vitrine** : toute entrée en ligne émet `listing.published` (publication, validation, republication, renouvellement, recours accepté, fin de réservation) ; toute sortie émet `listing.withdrawn` (retrait par le vendeur ou la modération, refus, expiration) ; `listing.sold`, `listing.submitted_for_review`, `listing.reserved` pour le reste. Le contenu garde le détail : transition, statuts avant et après, vendeur, type d'acteur, motif (validée par Arcel le 29 octobre 2026). |
 
 ### 0.2 Écarts et précisions par rapport au cahier
 
@@ -519,7 +520,7 @@ tout ── T12 (parcours 2, démo, porte)
 
 **Contenu :**
 - Table de transitions de 9.1 en donnée (`TRANSITIONS: Mapping[tuple[ListingStatus, ListingEvent], ListingStatus]`) :
-  - `draft` + `publish` → `active` ou `pending_review` (décision de la modération, T05b ; en T04, toujours `active` derrière une interface `ModerationGate` factice) ;
+  - `draft` + `publish` → `active`, `draft` + `submit_for_review` → `pending_review` (la modération choisit l'événement en T05b ; en T04, toujours `publish` derrière une interface `ModerationGate` factice) ;
   - `pending_review` + `approve` → `active` ; `pending_review` + `reject` → `removed` ;
   - `active` + `withdraw` → `withdrawn` ; `withdrawn` + `republish` → `active` ;
   - `active` + `remove` → `removed` ; `removed` + `appeal_accepted` → `active` ;
@@ -527,7 +528,7 @@ tout ── T12 (parcours 2, démo, porte)
   - `active` ↔ `reserved` et `reserved` → `sold` : présents dans la table, **sans route** (P4).
 - Publication : politique Q1, au moins 1 photo `ready`, quota de 50 par jour compté sur `listing_status_history` (verrou `FOR UPDATE` sur l'annonce), `published_at`, `expires_at` (E12).
 - Retrait, republication et renouvellement par le propriétaire.
-- Job d'expiration quotidien idempotent (`UPDATE … WHERE status = 'active' AND expires_at <= now() … RETURNING`, transitions une par une).
+- Job d'expiration quotidien idempotent : identifiants des annonces `active` dont `expires_at <= now()` (`FOR UPDATE SKIP LOCKED`, par lots), puis `apply_transition` pour chacune (historique et événement), jamais un `UPDATE` du statut en masse.
 - Purge quotidienne des annonces terminées selon Q19 (durées en [PARAM], seuils comptés depuis `deleted_at`, le statut final ou `sold_at` ; photos, historiques, favoris et alertes partent avec l'annonce) ; tests aux bornes avec horloge fixe, une annonce vendue liée à une commande garde sa fiche minimale (P4).
 
 **Routes :**
