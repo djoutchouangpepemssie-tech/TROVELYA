@@ -1,5 +1,6 @@
 """SQL of the identity module. Only this module's service reads or writes these tables."""
 
+from collections.abc import Sequence
 from datetime import datetime, timedelta
 from typing import Any
 from uuid import UUID
@@ -1337,3 +1338,32 @@ _TRADE_FACTS = text(
 
 async def trade_facts(db: AsyncSession, user_id: UUID) -> Row[Any] | None:
     return (await db.execute(_TRADE_FACTS, {"id": user_id})).one_or_none()
+
+
+# --- Places of a member near a point (P2-T04f, plan P2 Q28) ---------------------------------
+
+# Which of the points (by their index) an address (not deleted) or a zone of the member lies
+# within `radius_m` of: one query for all the points of a member.
+_PLACES_NEAR = text(
+    "SELECT p.i FROM unnest(CAST(:lats AS float8[]), CAST(:lons AS float8[]))"
+    " WITH ORDINALITY AS p(lat, lon, i)"
+    " WHERE EXISTS (SELECT 1 FROM addresses a WHERE a.user_id = :u AND a.deleted_at IS NULL"
+    " AND ST_DWithin(a.location, ST_MakePoint(p.lon, p.lat)::geography, :radius_m))"
+    " OR EXISTS (SELECT 1 FROM search_zones z WHERE z.user_id = :u"
+    " AND ST_DWithin(z.center, ST_MakePoint(p.lon, p.lat)::geography, :radius_m))"
+)
+
+
+async def places_near(
+    db: AsyncSession, user_id: UUID, points: Sequence[tuple[float, float]], *, radius_m: float
+) -> set[int]:
+    """The indexes (from 0) of the `(lat, lon)` points the member still has a place near."""
+    if not points:
+        return set()
+    params = {
+        "u": user_id,
+        "lats": [lat for lat, _ in points],
+        "lons": [lon for _, lon in points],
+        "radius_m": radius_m,
+    }
+    return {int(i) - 1 for i in await db.scalars(_PLACES_NEAR, params)}

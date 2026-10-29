@@ -130,3 +130,44 @@ async def publish(
         event_for=route,
         clock=clock,
     )
+
+
+# Putting back online (`renew`): the event depends on how the listing left the shop window.
+_BACK_ONLINE = {
+    ListingStatus.EXPIRED: ListingEvent.RENEW,
+    ListingStatus.WITHDRAWN: ListingEvent.REPUBLISH,
+}
+
+
+async def renew(db: AsyncSession, *, seller_id: UUID, listing_id: UUID, clock: Clock) -> ListingOut:
+    """An expired listing renewed, a withdrawn one republished: back online for
+    `listings.expiry_days` under the publication's rules; 409 from any other status."""
+
+    async def back_online(status: ListingStatus) -> ListingEvent:
+        return _BACK_ONLINE[status]
+
+    return await _put_online(
+        db,
+        seller_id=seller_id,
+        listing_id=listing_id,
+        allowed=_BACK_ONLINE.keys(),
+        event_for=back_online,
+        clock=clock,
+    )
+
+
+async def withdraw(
+    db: AsyncSession, *, seller_id: UUID, listing_id: UUID, clock: Clock
+) -> ListingOut:
+    """The seller takes an active listing down, whatever the state of their account."""
+    await repository.lock_seller_listings(db, seller_id)
+    if await repository.lock_own_listing(db, listing_id=listing_id, seller_id=seller_id) is None:
+        raise AppError(ErrorCode.NOT_FOUND, 404)
+    await apply_transition(
+        db,
+        listing_id=listing_id,
+        event=ListingEvent.WITHDRAW,
+        actor=Actor("user", seller_id),
+        clock=clock,
+    )
+    return await own_listing(db, seller_id=seller_id, listing_id=listing_id)

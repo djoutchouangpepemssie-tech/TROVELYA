@@ -25,6 +25,7 @@ from trovelya.core.observability import (
     trace_engine,
 )
 from trovelya.core.redis import make_redis
+from trovelya.modules.catalog.tasks import expire_listings_job, purge_ended_listings_job
 from trovelya.modules.identity.service import (
     EXPORT_JOB,
     build_data_export,
@@ -170,6 +171,11 @@ class WorkerSettings:
         # Every hour (ADR-0019: a withdrawn photo leaves storage at once), so at 4:20 right
         # after the erasures of 4:00.
         cron(purge_media_job, minute=20, unique=True, timeout=1800),
+        # Daily (Q15): listings whose 120 days are up leave the shop window.
+        cron(expire_listings_job, hour=3, minute=15, unique=True, timeout=1800),
+        # Daily (Q19): ended listings past their retention are erased, done before the
+        # erasures of 4:00 (they lock the same listings).
+        cron(purge_ended_listings_job, hour=2, minute=30, unique=True, timeout=3600),
     ]
     on_startup = startup
     on_shutdown = shutdown
