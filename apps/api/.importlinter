@@ -125,3 +125,4 @@ source_modules =
 forbidden_modules =
     trovelya.modules.circumvention.models
     trovelya.modules.circumvention.normalize
+    trovelya.modules.circumvention.rules
