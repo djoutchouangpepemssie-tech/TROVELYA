@@ -61,3 +61,18 @@ async def setting_int(db: AsyncSession, key: str) -> int:
     if value is None:
         raise LookupError(f"platform setting {key} is missing")
     return int(value)
+
+
+async def detections_of(
+    db: AsyncSession, source_type: str, source_id: UUID
+) -> list[dict[str, Any]]:
+    """What was found in a source, never the original: signals, action, part, review."""
+    rows = await db.execute(
+        text(
+            "SELECT signals, action_taken, review_status, matched_spans -> 0 ->> 'part' AS part"
+            " FROM circumvention_detections WHERE source_type = :t AND source_id = :s"
+            " ORDER BY created_at, id"
+        ),
+        {"t": source_type, "s": source_id},
+    )
+    return [dict(row) for row in rows.mappings()]

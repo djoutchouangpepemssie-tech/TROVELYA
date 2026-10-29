@@ -49,6 +49,13 @@ MATRIX: dict[str, dict[str, Grant]] = {
         "staff_admin": OK,
         "staff_superadmin": OK,
     },
+    # P2-T05c1, plan E9: the same roles review the listings awaiting moderation.
+    "moderation.review": {
+        "staff_moderator": OK,
+        "staff_trust": OK,
+        "staff_admin": OK,
+        "staff_superadmin": OK,
+    },
     "conversation.read_private": {
         "staff_moderator": OK,
         "staff_support": OK,

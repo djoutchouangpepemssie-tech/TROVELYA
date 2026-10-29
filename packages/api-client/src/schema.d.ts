@@ -1091,6 +1091,86 @@ export interface paths {
         patch?: never;
         trace?: never;
     };
+    "/v1/staff/listings/{listing_id}/remove": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        get?: never;
+        put?: never;
+        /**
+         * Remove Listing
+         * @description An active listing is taken down with its reason; its photos leave storage (Q6).
+         */
+        post: operations["staff_listing_remove"];
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/v1/staff/moderation/listings": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        /**
+         * Get Review Queue
+         * @description The listings awaiting moderation, the longest waiting first.
+         */
+        get: operations["staff_review_queue"];
+        put?: never;
+        post?: never;
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/v1/staff/moderation/listings/{listing_id}/approve": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        get?: never;
+        put?: never;
+        /**
+         * Approve Listing
+         * @description The listing goes online for `listings.expiry_days` days.
+         */
+        post: operations["staff_review_approve"];
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/v1/staff/moderation/listings/{listing_id}/reject": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        get?: never;
+        put?: never;
+        /**
+         * Reject Listing
+         * @description The listing is removed with its reason; its photos leave storage (Q6).
+         */
+        post: operations["staff_review_reject"];
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
     "/v1/staff/roles/requests": {
         parameters: {
             query?: never;
@@ -2240,6 +2320,65 @@ export interface components {
             following: boolean;
         };
         /**
+         * ReviewDetection
+         * @description What the anti-circumvention found in a listing (never the original text).
+         */
+        ReviewDetection: {
+            /** Action Taken */
+            action_taken: string;
+            /** Part */
+            part: string | null;
+            /** Review Status */
+            review_status: string;
+            /** Signals */
+            signals: string[];
+        };
+        /**
+         * ReviewItem
+         * @description A listing awaiting moderation in the staff's queue (P2-T05c1).
+         */
+        ReviewItem: {
+            /** Category */
+            category: string;
+            /** Description */
+            description: string;
+            /** Detections */
+            detections: components["schemas"]["ReviewDetection"][];
+            /**
+             * Id
+             * Format: uuid
+             */
+            id: string;
+            /** Photos */
+            photos: {
+                [key: string]: unknown;
+            }[][];
+            price: components["schemas"]["Money"];
+            /** Reason Text */
+            reason_text: string | null;
+            /** Reasons */
+            reasons: components["schemas"]["ModerationReason"][];
+            /**
+             * Seller Id
+             * Format: uuid
+             */
+            seller_id: string;
+            /** Short Id */
+            short_id: string;
+            /**
+             * Submitted At
+             * Format: date-time
+             */
+            submitted_at: string;
+            /** Title */
+            title: string;
+        };
+        /** ReviewQueue */
+        ReviewQueue: {
+            /** Items */
+            items: components["schemas"]["ReviewItem"][];
+        };
+        /**
          * SellerOut
          * @description What the page shows of the seller (level, badges and rank arrive with later phases).
          */
@@ -2304,6 +2443,25 @@ export interface components {
              * Format: uuid
              */
             user_id: string;
+        };
+        /**
+         * StaffDecisionIn
+         * @description A rejection or a removal: a reason from the closed list, explained for `other`.
+         */
+        StaffDecisionIn: {
+            /** Reason Code */
+            reason_code: string;
+            /** Reason Text */
+            reason_text?: string | null;
+        };
+        /** StaffDecisionOut */
+        StaffDecisionOut: {
+            /**
+             * Id
+             * Format: uuid
+             */
+            id: string;
+            status: components["schemas"]["ListingStatus"];
         };
         /** StaffEnrolmentOptions */
         StaffEnrolmentOptions: {
@@ -4599,6 +4757,197 @@ export interface operations {
                 content: {
                     "application/json": components["schemas"]["HTTPValidationError"];
                 };
+            };
+        };
+    };
+    staff_listing_remove: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                listing_id: string;
+            };
+            cookie?: never;
+        };
+        requestBody: {
+            content: {
+                "application/json": components["schemas"]["StaffDecisionIn"];
+            };
+        };
+        responses: {
+            /** @description Successful Response */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["StaffDecisionOut"];
+                };
+            };
+            /** @description Not a staff session with the permission, or the reviewer's own */
+            403: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content?: never;
+            };
+            /** @description No such listing */
+            404: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content?: never;
+            };
+            /** @description Not in the status the decision applies to */
+            409: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content?: never;
+            };
+            /** @description Reason off the list, or unexplained */
+            422: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content?: never;
+            };
+        };
+    };
+    staff_review_queue: {
+        parameters: {
+            query?: {
+                limit?: number;
+            };
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description Successful Response */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ReviewQueue"];
+                };
+            };
+            /** @description Validation Error */
+            422: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["HTTPValidationError"];
+                };
+            };
+        };
+    };
+    staff_review_approve: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                listing_id: string;
+            };
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description Successful Response */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["StaffDecisionOut"];
+                };
+            };
+            /** @description Not a staff session with the permission, or the reviewer's own */
+            403: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content?: never;
+            };
+            /** @description No such listing */
+            404: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content?: never;
+            };
+            /** @description Not in the status the decision applies to */
+            409: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content?: never;
+            };
+            /** @description Validation Error */
+            422: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["HTTPValidationError"];
+                };
+            };
+        };
+    };
+    staff_review_reject: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                listing_id: string;
+            };
+            cookie?: never;
+        };
+        requestBody: {
+            content: {
+                "application/json": components["schemas"]["StaffDecisionIn"];
+            };
+        };
+        responses: {
+            /** @description Successful Response */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["StaffDecisionOut"];
+                };
+            };
+            /** @description Not a staff session with the permission, or the reviewer's own */
+            403: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content?: never;
+            };
+            /** @description No such listing */
+            404: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content?: never;
+            };
+            /** @description Not in the status the decision applies to */
+            409: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content?: never;
+            };
+            /** @description Reason off the list, or unexplained */
+            422: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content?: never;
             };
         };
     };

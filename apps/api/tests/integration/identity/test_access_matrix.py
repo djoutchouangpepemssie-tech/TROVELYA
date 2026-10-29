@@ -98,6 +98,10 @@ STAFF_ROUTES = {
     "POST /v1/staff/approvals/{approval_id}/approve",
     "POST /v1/staff/approvals/{approval_id}/reject",
     "POST /v1/staff/roles/requests",
+    "GET /v1/staff/moderation/listings",
+    "POST /v1/staff/moderation/listings/{listing_id}/approve",
+    "POST /v1/staff/moderation/listings/{listing_id}/reject",
+    "POST /v1/staff/listings/{listing_id}/remove",
 }
 PRIVATE_ROUTES = SELF_ROUTES | OWNED_ROUTES | STAFF_ROUTES
 OPTIONAL_ROUTES = {

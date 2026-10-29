@@ -29,6 +29,7 @@ __all__ = [
     "MASK_AT",
     "Detection",
     "detect",
+    "detections_of",
     "mask",
     "open_original",
     "screen",
@@ -148,6 +149,13 @@ async def _export(db: AsyncSession, user_id: UUID, settings: Settings) -> dict[s
             row["original_text"] = None
         row["original_unavailable"] = row["original_text"] is None
     return {"circumvention_detections": rows}
+
+
+async def detections_of(
+    db: AsyncSession, *, source_type: SourceType, source_id: UUID
+) -> list[dict[str, Any]]:
+    """For the review: the signals found in a source and what was done, without the text."""
+    return await repository.detections_of(db, source_type, source_id)
 
 
 register_exporter("circumvention", _export)
