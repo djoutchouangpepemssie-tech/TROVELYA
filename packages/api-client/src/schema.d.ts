@@ -491,6 +491,26 @@ export interface paths {
         patch?: never;
         trace?: never;
     };
+    "/v1/listings/{listing_id}": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        get?: never;
+        put?: never;
+        post?: never;
+        delete?: never;
+        options?: never;
+        head?: never;
+        /**
+         * Patch Listing
+         * @description Change a draft. `If-Match: <version>` required.
+         */
+        patch: operations["listing_update"];
+        trace?: never;
+    };
     "/v1/me": {
         parameters: {
             query?: never;
@@ -1542,6 +1562,40 @@ export interface components {
             shipping_enabled: boolean;
             /** Title */
             title: string;
+            /** Weight G */
+            weight_g?: number | null;
+        };
+        /**
+         * ListingDraftPatch
+         * @description The fields of a draft that change (`PATCH`); the others stay. `brand`, `parcel_size` and
+         *     `weight_g` are removed with null; `attributes` and `media_ids` are replaced whole.
+         */
+        ListingDraftPatch: {
+            /** Accepts Offers */
+            accepts_offers?: boolean;
+            /** Attributes */
+            attributes?: {
+                [key: string]: unknown;
+            };
+            /** Brand */
+            brand?: string | null;
+            /** Category */
+            category?: string;
+            condition?: components["schemas"]["ItemCondition"];
+            /** Description */
+            description?: string;
+            /** Handover Enabled */
+            handover_enabled?: boolean;
+            location?: components["schemas"]["ListingLocationIn"];
+            /** Media Ids */
+            media_ids?: string[];
+            /** Parcel Size */
+            parcel_size?: ("xs" | "s" | "m" | "l" | "xl") | null;
+            price?: components["schemas"]["Money"];
+            /** Shipping Enabled */
+            shipping_enabled?: boolean;
+            /** Title */
+            title?: string;
             /** Weight G */
             weight_g?: number | null;
         };
@@ -2888,6 +2942,67 @@ export interface operations {
             };
             /** @description Category, condition, brand, attributes, photos or place refused */
             422: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content?: never;
+            };
+        };
+    };
+    listing_update: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                listing_id: string;
+            };
+            cookie?: never;
+        };
+        requestBody: {
+            content: {
+                "application/json": components["schemas"]["ListingDraftPatch"];
+            };
+        };
+        responses: {
+            /** @description Successful Response */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ListingOut"];
+                };
+            };
+            /** @description Not the caller's listing */
+            404: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content?: never;
+            };
+            /** @description No longer a draft, or a photo in another listing or processing */
+            409: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content?: never;
+            };
+            /** @description If-Match is not the listing's version */
+            412: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content?: never;
+            };
+            /** @description The draft as it becomes breaks a rule of its category */
+            422: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content?: never;
+            };
+            /** @description If-Match missing */
+            428: {
                 headers: {
                     [name: string]: unknown;
                 };

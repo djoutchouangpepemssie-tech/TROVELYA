@@ -68,6 +68,7 @@ class ErrorCode(StrEnum):
     BRAND_INVALID = "brand_invalid"
     SHIPPING_NOT_ALLOWED = "shipping_not_allowed"
     LOCATION_UNAVAILABLE = "location_unavailable"
+    LISTING_NOT_EDITABLE = "listing_not_editable"
 
 
 # French titles by default (section 2); translation by Accept-Language arrives with P1.
@@ -123,6 +124,7 @@ _TITLES: dict[ErrorCode, str] = {
     ErrorCode.BRAND_INVALID: "Nom de marque invalide",
     ErrorCode.SHIPPING_NOT_ALLOWED: "Envoi impossible dans cette catégorie, main propre seulement",
     ErrorCode.LOCATION_UNAVAILABLE: "Adresse ou zone introuvable ou sans position",
+    ErrorCode.LISTING_NOT_EDITABLE: "Seul un brouillon se modifie pour l'instant",
 }
 
 _STATUS_CODES: dict[int, ErrorCode] = {

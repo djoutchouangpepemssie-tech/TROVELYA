@@ -167,6 +167,30 @@ class ListingDraftIn(BaseModel):
     media_ids: MediaIds
 
 
+class ListingDraftPatch(BaseModel):
+    """The fields of a draft that change (`PATCH`); the others stay. `brand`, `parcel_size` and
+    `weight_g` are removed with null; `attributes` and `media_ids` are replaced whole."""
+
+    model_config = ConfigDict(extra="forbid")
+
+    # Absent by default; null is refused by the field's type except for the three clearable
+    # fields, so the published schema says the truth.
+    title: Annotated[Title, Field(default=None)]
+    description: Annotated[Description, Field(default=None)]
+    category: Annotated[CategoryKey, Field(default=None)]
+    brand: BrandName | None = None
+    condition: Annotated[ItemCondition, Field(default=None)]
+    attributes: Annotated[Attributes, Field(default=None)]
+    price: Annotated[Money, Field(default=None)]
+    accepts_offers: Annotated[bool, Field(default=None)]
+    handover_enabled: Annotated[bool, Field(default=None)]
+    shipping_enabled: Annotated[bool, Field(default=None)]
+    parcel_size: ParcelSize | None = None
+    weight_g: WeightG | None = None
+    location: Annotated[ListingLocationIn, Field(default=None)]
+    media_ids: Annotated[MediaIds, Field(default=None)]
+
+
 class ListingOut(BaseModel):
     """The seller's own view of a listing. Never a coordinate: the place name only (8.11)."""
 

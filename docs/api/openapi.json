@@ -1363,6 +1363,118 @@
         "title": "ListingDraftIn",
         "type": "object"
       },
+      "ListingDraftPatch": {
+        "additionalProperties": false,
+        "description": "The fields of a draft that change (`PATCH`); the others stay. `brand`, `parcel_size` and\n`weight_g` are removed with null; `attributes` and `media_ids` are replaced whole.",
+        "properties": {
+          "accepts_offers": {
+            "title": "Accepts Offers",
+            "type": "boolean"
+          },
+          "attributes": {
+            "maxProperties": 100,
+            "patternProperties": {
+              "^[a-z][a-z0-9_]*$": {}
+            },
+            "propertyNames": {
+              "maxLength": 64
+            },
+            "title": "Attributes",
+            "type": "object"
+          },
+          "brand": {
+            "anyOf": [
+              {
+                "maxLength": 80,
+                "minLength": 1,
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Brand"
+          },
+          "category": {
+            "maxLength": 200,
+            "pattern": "^[a-z0-9_]+(\\.[a-z0-9_]+)*$",
+            "title": "Category",
+            "type": "string"
+          },
+          "condition": {
+            "$ref": "#/components/schemas/ItemCondition"
+          },
+          "description": {
+            "maxLength": 5000,
+            "minLength": 20,
+            "title": "Description",
+            "type": "string"
+          },
+          "handover_enabled": {
+            "title": "Handover Enabled",
+            "type": "boolean"
+          },
+          "location": {
+            "$ref": "#/components/schemas/ListingLocationIn"
+          },
+          "media_ids": {
+            "items": {
+              "format": "uuid",
+              "type": "string"
+            },
+            "maxItems": 50,
+            "minItems": 1,
+            "title": "Media Ids",
+            "type": "array"
+          },
+          "parcel_size": {
+            "anyOf": [
+              {
+                "enum": [
+                  "xs",
+                  "s",
+                  "m",
+                  "l",
+                  "xl"
+                ],
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Parcel Size"
+          },
+          "price": {
+            "$ref": "#/components/schemas/Money"
+          },
+          "shipping_enabled": {
+            "title": "Shipping Enabled",
+            "type": "boolean"
+          },
+          "title": {
+            "maxLength": 120,
+            "minLength": 5,
+            "title": "Title",
+            "type": "string"
+          },
+          "weight_g": {
+            "anyOf": [
+              {
+                "exclusiveMinimum": 0.0,
+                "maximum": 1000000.0,
+                "type": "integer"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Weight G"
+          }
+        },
+        "title": "ListingDraftPatch",
+        "type": "object"
+      },
       "ListingLocationIn": {
         "description": "One of the seller's addresses or search zones (section 8.11).",
         "properties": {
@@ -3835,6 +3947,65 @@
           }
         },
         "summary": "Post Listing",
+        "tags": [
+          "catalog"
+        ]
+      }
+    },
+    "/v1/listings/{listing_id}": {
+      "patch": {
+        "description": "Change a draft. `If-Match: <version>` required.",
+        "operationId": "listing_update",
+        "parameters": [
+          {
+            "in": "path",
+            "name": "listing_id",
+            "required": true,
+            "schema": {
+              "format": "uuid",
+              "title": "Listing Id",
+              "type": "string"
+            }
+          }
+        ],
+        "requestBody": {
+          "content": {
+            "application/json": {
+              "schema": {
+                "$ref": "#/components/schemas/ListingDraftPatch"
+              }
+            }
+          },
+          "required": true
+        },
+        "responses": {
+          "200": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ListingOut"
+                }
+              }
+            },
+            "description": "Successful Response"
+          },
+          "404": {
+            "description": "Not the caller's listing"
+          },
+          "409": {
+            "description": "No longer a draft, or a photo in another listing or processing"
+          },
+          "412": {
+            "description": "If-Match is not the listing's version"
+          },
+          "422": {
+            "description": "The draft as it becomes breaks a rule of its category"
+          },
+          "428": {
+            "description": "If-Match missing"
+          }
+        },
+        "summary": "Patch Listing",
         "tags": [
           "catalog"
         ]

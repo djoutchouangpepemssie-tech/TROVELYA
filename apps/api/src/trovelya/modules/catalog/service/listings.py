@@ -10,12 +10,14 @@ import string
 from typing import Any
 from uuid import UUID
 
+from fastapi.exceptions import RequestValidationError
+from pydantic import ValidationError
 from sqlalchemy.exc import IntegrityError
 from sqlalchemy.ext.asyncio import AsyncSession
 
 from trovelya.core.errors import AppError, ErrorCode
 from trovelya.modules.catalog import repository
-from trovelya.modules.catalog.schemas import ListingDraftIn, ListingOut
+from trovelya.modules.catalog.schemas import ListingDraftIn, ListingDraftPatch, ListingOut
 from trovelya.modules.catalog.service import draft_rules
 from trovelya.modules.catalog.service.locations import listing_location
 from trovelya.modules.media.service import listing_photos
@@ -136,6 +138,65 @@ async def create_draft(
         raise RuntimeError("no free short id")
     await _attach(db, listing_id, body.media_ids)
     await repository.record_price(db, listing_id, body.price.amount_minor, now)
+    return await own_listing(db, seller_id=seller_id, listing_id=listing_id)
+
+
+async def update_draft(
+    db: AsyncSession,
+    *,
+    seller_id: UUID,
+    listing_id: UUID,
+    version: int | None,
+    patch: ListingDraftPatch,
+    verticals: bool,
+    clock: Clock,
+) -> ListingOut:
+    """The draft with the fields sent changed, checked as a whole by the creation's rules.
+    404 for anyone else's; 409 once it is no longer a draft (P2-T04 and P2-T05 decide how a
+    published listing changes); 412 when `version` is stale (None: any version, `If-Match: *`).
+    Any change, photos alone included, moves the version."""
+    await repository.lock_seller_listings(db, seller_id)
+    locked = await repository.lock_own_listing(db, listing_id=listing_id, seller_id=seller_id)
+    if locked is None:
+        raise AppError(ErrorCode.NOT_FOUND, 404)
+    if locked.status != "draft":
+        raise AppError(ErrorCode.LISTING_NOT_EDITABLE, 409)
+    if version is not None and locked.version != version:
+        raise AppError(ErrorCode.PRECONDITION_FAILED, 412)
+    current = await own_listing(db, seller_id=seller_id, listing_id=listing_id)
+    changes = patch.model_dump(exclude_unset=True)
+    try:
+        body = ListingDraftIn.model_validate(
+            current.model_dump(include=set(ListingDraftIn.model_fields)) | changes
+        )
+    except ValidationError as exc:  # the draft as it becomes breaks a field's rule
+        errors = [{**e, "loc": ("body", *e["loc"])} for e in exc.errors()]
+        raise RequestValidationError(errors) from exc
+    photos_changed = body.media_ids != current.media_ids
+    # A new photo already in another listing is refused before any write.
+    if photos_changed and await repository.photos_in_other_listings(db, listing_id, body.media_ids):
+        raise AppError(ErrorCode.MEDIA_IN_USE, 409)
+    values = await _checked_values(
+        db,
+        seller_id=seller_id,
+        body=body,
+        verticals=verticals,
+        clock=clock,
+        # Sent again unchanged (an autosave of the whole form): the position stays as it is.
+        locate=body.location != current.location,
+    )
+    await repository.update_listing(db, listing_id, values)
+    if photos_changed:
+        await repository.detach_photos(db, listing_id)
+        await _attach(db, listing_id, body.media_ids)
+        # Photos are not content to the triggers: the version moves here, once.
+        await repository.bump_version_if(db, listing_id, unchanged_from=locked.version)
+    if "brand" in changes and locked.brand_id not in (None, values["brand_id"]):
+        await repository.drop_member_brand_if_unused(
+            db, brand_id=locked.brand_id, member_id=seller_id
+        )
+    if body.price.amount_minor != locked.price_minor:
+        await repository.record_price(db, listing_id, body.price.amount_minor, values["now"])
     return await own_listing(db, seller_id=seller_id, listing_id=listing_id)
 
 

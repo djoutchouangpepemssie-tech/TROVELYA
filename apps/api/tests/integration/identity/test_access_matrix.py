@@ -24,6 +24,8 @@ from sqlalchemy import text
 from sqlalchemy.ext.asyncio import AsyncSession, async_sessionmaker
 
 from tests.conftest import TEST_PROXY_SECRET, TEST_SECRET, make_settings
+from tests.integration.catalog.test_draft_rules import photo
+from tests.integration.catalog.test_listing_gdpr import _listing  # pyright: ignore[reportPrivateUsage]
 from tests.integration.identity.test_places import ADDRESS, ZONE
 from tests.integration.identity.test_profile import POLICY, T0, Account, make_account
 from tests.routes import api_routes
@@ -83,6 +85,7 @@ OWNED_ROUTES = {
     "DELETE /v1/me/zones/{zone_id}",
     "POST /v1/media/{media_id}/complete",
     "GET /v1/media/{media_id}",
+    "PATCH /v1/listings/{listing_id}",
 }
 STAFF_ROUTES = {
     "GET /v1/staff/approvals",
@@ -121,6 +124,10 @@ BODIES: dict[str, dict[str, Any]] = {
     "PATCH /v1/me/passkeys/{passkey_id}": {"name": "Pris"},
     "PATCH /v1/me/addresses/{address_id}": {"city": "Ailleurs"},
     "PATCH /v1/me/zones/{zone_id}": {"label": "Ailleurs"},
+    "PATCH /v1/listings/{listing_id}": {"title": "Lampe opaline bleue"},
+}
+HEADERS: dict[str, dict[str, str]] = {
+    "PATCH /v1/listings/{listing_id}": {"if-match": "1"},
 }
 
 
@@ -178,6 +185,7 @@ async def _call(
 ) -> int:
     method, url = _url(key, ids)
     body = BODIES.get(key, {}) if method in {"POST", "PUT", "PATCH"} else None
+    headers = headers | HEADERS.get(key, {})
     response = await client.request(method, url, headers=headers, json=body)
     return response.status_code
 
@@ -194,6 +202,7 @@ def _random_ids() -> dict[str, UUID]:
             "zone_id",
             "approval_id",
             "media_id",
+            "listing_id",
         )
     }
 
@@ -216,8 +225,47 @@ async def test_anonymous_gets_401_everywhere(client: AsyncClient) -> None:
     assert {key: status for key, status in answers.items() if status != 401} == {}
 
 
+@pytest.fixture
+async def category(sessionmaker: async_sessionmaker[AsyncSession]) -> AsyncIterator[UUID]:
+    """A category of its own, removed afterwards with its listings: the seed's tests count
+    the categories."""
+    category_id = new_id()
+    async with sessionmaker() as db:
+        await db.execute(
+            text(
+                "INSERT INTO categories (id, key, path, names) VALUES (:id, :key,"
+                ' text2ltree(:key), \'{"fr":"x"}\')'
+            ),
+            {"id": category_id, "key": f"t_matrix_{category_id.hex[:12]}"},
+        )
+        await db.commit()
+    yield category_id
+    async with sessionmaker() as db:
+        await db.execute(text("DELETE FROM listings WHERE category_id = :c"), {"c": category_id})
+        await db.execute(text("DELETE FROM categories WHERE id = :c"), {"c": category_id})
+        await db.commit()
+
+
+async def _draft_listing(
+    sessionmaker: async_sessionmaker[AsyncSession], owner: UUID, category: UUID
+) -> UUID:
+    """A draft with one processed photo."""
+    listing = await _listing(sessionmaker, owner, category, "Lampe opaline verte")
+    media = await photo(sessionmaker, owner)
+    async with sessionmaker() as db:
+        await db.execute(
+            text("INSERT INTO listing_media (listing_id, media_id, position) VALUES (:l, :m, 0)"),
+            {"l": listing, "m": media},
+        )
+        await db.commit()
+    return listing
+
+
 async def _owned_resources(
-    sessionmaker: async_sessionmaker[AsyncSession], client: AsyncClient, owner: Account
+    sessionmaker: async_sessionmaker[AsyncSession],
+    client: AsyncClient,
+    owner: Account,
+    category: UUID,
 ) -> dict[str, UUID]:
     """One of each resource the OWNED_ROUTES name, all belonging to `owner`."""
     async with sessionmaker() as db:
@@ -263,6 +311,7 @@ async def _owned_resources(
     )
     assert built
     return {
+        "listing_id": await _draft_listing(sessionmaker, owner.id, category),
         "session_id": other_device.session_id,
         "request_id": request_id,
         "passkey_id": passkey_id,
@@ -273,11 +322,11 @@ async def _owned_resources(
 
 
 async def test_someone_elses_resources_answer_404(
-    sessionmaker: async_sessionmaker[AsyncSession], client: AsyncClient
+    sessionmaker: async_sessionmaker[AsyncSession], client: AsyncClient, category: UUID
 ) -> None:
     owner = await make_account(sessionmaker, completed=True)
     intruder = await make_account(sessionmaker, completed=True)  # strong sign-in, like owner
-    ids = await _owned_resources(sessionmaker, client, owner)
+    ids = await _owned_resources(sessionmaker, client, owner, category)
 
     answers = {key: await _call(client, key, ids, intruder.headers) for key in sorted(OWNED_ROUTES)}
     assert {key: status for key, status in answers.items() if status != 404} == {}
