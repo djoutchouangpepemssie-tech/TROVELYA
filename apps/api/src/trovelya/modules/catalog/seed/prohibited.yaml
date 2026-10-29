@@ -14,7 +14,7 @@
 #
 # Écriture des termes : minuscules sans accents, une apostrophe ou un tiret vaut une espace ;
 # mots entiers ; `*` en fin de mot accepte toute fin (« munition* ») ; `(a|b c)` : l'une des
-# expressions ; `~` : un mot quelconque ; `?` après un mot ou un groupe : facultatif
+# expressions ; `~` : un mot quelconque ; `#` : un nombre ; `?` après un mot ou un groupe : facultatif
 # (« defense d? elephant »). Les chiffres et
 # symboles sosies (« r0lex », « vodk@ ») et les lettres espacées (« g l o c k ») sont lus
 # comme des mots. Ce filtre est un premier filet : la revue humaine et la modération des
@@ -36,7 +36,7 @@ reasons:
       - munition* (9mm|9|22lr|22|calibre*)
       - balle* (9mm|22lr)
       - cartouche* calibre 12
-      - glock (17|19|26)
+      - glock (17|19|26) (reel|9mm|9)
     review:
       - fusil*
       - pistolet*
@@ -145,6 +145,8 @@ reasons:
       - clopes
       - marlboro*
       - cigare*
+      - tabac
+      - tabac a pipe
       - chicha
       - puff
       - e cig*
@@ -176,6 +178,13 @@ reasons:
       - absinthe
       - jack daniel*
       - jagermeister
+      - champagne*
+      - biere*
+      - cidre*
+      - gin
+      - heineken
+      - leffe
+      - (rose|bordeaux|bourgogne|beaujolais|chablis) ~? ~? ~? (bouteille*|caisse*|carton*|magnum*)
       - havana club
       - moet
       - dom perignon
@@ -201,6 +210,8 @@ reasons:
       - puppies
       - kitten*
       - chien de race
+      - "(chat|chats|chatte|chienne|chien|chiens|lapin) ~? ~? # mois"
+      - (bebe|bebes) chats
       - lapin nain
       - perroquet*
       - perruche*
@@ -391,10 +402,13 @@ unless:
   - griffoir*
   - jeu
   - jeux
+  - airsoft
+  - replique*
+  - billes
 
 # Expressions innocentes retirées du texte avant la recherche.
 except:
-  - pistolet (a|de|pour)? (colle|peinture|silicone|calfeutrer|arrosage|eau|thermique|massage|clous|mastic|karcher|graisse|agrafe*|agrafeur|souder|soudure|gonflage|carburant|pneumatique|nettoyage|douche|decapeur|cartouche)
+  - pistolet (a|de|d|pour)? (colle|peinture|silicone|calfeutrer|arrosage|eau|thermique|massage|clous|mastic|karcher|graisse|agrafe*|agrafeur|souder|soudure|gonflage|carburant|pneumatique|nettoyage|douche|decapeur|lavage|doseur|distributeur|pompe|air)
   - pistolet a air (chaud|comprime)
   - fusil a aiguiser
   - fusil de chasse sous marine

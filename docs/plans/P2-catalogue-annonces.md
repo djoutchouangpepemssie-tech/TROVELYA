@@ -595,7 +595,7 @@ Découpée en deux PR de 600 lignes au plus : **T05b1** (texte, catégories, coo
 
 #### P2-T05b1 — Modération du texte
 
-**Branche :** `feat/P2-T05b1-moderation-texte`.
+**Branches :** `feat/P2-T05b1a-interdits` (transitions de Q29 et Q32, liste des interdits et son repérage, corpus de non-régression : 237 annonces honnêtes jamais refusées, 99 annonces interdites jamais en ligne), puis `feat/P2-T05b1-moderation-texte` (branchement sur la publication, catégories surveillées, coordonnées).
 
 **Fichiers :** `modules/catalog/state_machine.py`, `modules/catalog/service/{moderation,publishing}.py`, `modules/catalog/seed/prohibited.yaml` (la liste [PARAM] `catalog.prohibited`, en graine versionnée et relue par PR jusqu'au back-office), `tests/integration/catalog/test_moderation.py`, `tests/unit/catalog/test_prohibited.py`. Les motifs sont ceux de 8.17, plus « Stupéfiants » (illicites par la loi ; la modération d'images de 8.17 les vise déjà).
 
