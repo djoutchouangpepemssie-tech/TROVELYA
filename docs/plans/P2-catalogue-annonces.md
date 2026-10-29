@@ -617,12 +617,12 @@ Découpée en deux PR de 600 lignes au plus : **T05b1** (texte, catégories, coo
 
 **Branche :** `feat/P2-T05b2-moderation-images`.
 
-**Fichiers :** `modules/ai/adapters/classifier.py` (`ImageClassifier`, `FakeImageClassifier`), `modules/media/service/processing.py` (classification et légende à la fin du traitement), `modules/catalog/service/moderation.py`, migration (paramètre `moderation.thresholds`), `tests/integration/catalog/test_moderation_images.py`.
+**Fichiers :** `modules/media/adapters/classifier.py` (`ImageClassifier`, `FakeImageClassifier` ; l'adaptateur vit avec le traitement des images plutôt que dans un module `ai` encore inexistant), `modules/media/service/processing.py` (classification à la fin du traitement), `modules/catalog/service/moderation.py`, migration 0022 (paramètre `moderation.image_thresholds`, validé à la lecture : 0 < review ≤ refuse ≤ 1), `tests/integration/media/test_classification.py`, `tests/integration/catalog/test_moderation_images.py`. La **légende** de la photo principale (attendue par l'embedding de T11) est reportée à T06a, avec l'assistance IA. Au branchement du fournisseur (Q39), un job de rattrapage classera les photos restées non classées.
 
 **Contenu :**
 - 4. **images** : scores de classification calculés au traitement (nudité, violence, armes, drogue) ; score max ≥ 0,9 → refus ; 0,5 à 0,9 → `pending_review` ; classification absente ou en erreur → `pending_review` ;
 - 5. **doublon d'image** d'un autre vendeur (T02b) → `pending_review`.
-- Le classifieur ne reçoit que l'image, sans le texte du vendeur.
+- Le classifieur ne reçoit que l'image réencodée, sans le texte du vendeur ; en 20 s au plus ; des scores incomplets ou invalides (texte, NaN, hors de 0 à 1) laissent la photo non classée (revue). `IMAGE_CLASSIFIER=fake` est refusé hors développement et tests.
 
 - [ ] Tests d'abord : `test_image_thresholds` (0,95 → refus ; 0,7 → revue ; 0,3 → active), `test_classifier_outage_goes_to_review`, `test_duplicate_image_goes_to_review`, `test_moderation_reason_readable_fr`.
 - [ ] ÉCHEC → implémenter → vert. Commit `feat(catalogue): modération des images des annonces`.

@@ -111,6 +111,13 @@ class Settings(BaseSettings):
         return self
 
     @model_validator(mode="after")
+    def _no_fake_classifier_deployed(self) -> "Settings":
+        """Q38: deployed, the fake classifier (all 0) would put every listing online unchecked."""
+        if self.image_classifier == "fake" and self.env not in ("local", "test"):
+            raise ValueError("IMAGE_CLASSIFIER=fake is for local development and tests only")
+        return self
+
+    @model_validator(mode="after")
     def _s3_needs_endpoint_and_keys(self) -> "Settings":
         values = (
             self.storage_endpoint,
