@@ -1,6 +1,7 @@
 """SQL of the media module. Only this module's service reads or writes these tables."""
 
 import json
+from collections.abc import Sequence
 from datetime import datetime
 from typing import Any
 from uuid import UUID
@@ -232,6 +233,20 @@ async def ready_variants(db: AsyncSession, media_id: UUID) -> list[dict[str, Any
         ),
         {"id": media_id},
     )
+
+
+async def ready_variants_of(
+    db: AsyncSession, media_ids: Sequence[UUID]
+) -> dict[UUID, list[dict[str, Any]]]:
+    """The variants of each ready, not deleted media among `media_ids`, in one query."""
+    rows = await db.execute(
+        text(
+            "SELECT id, variants FROM media"
+            " WHERE id = ANY(:ids) AND status = 'ready' AND deleted_at IS NULL"
+        ),
+        {"ids": list(media_ids)},
+    )
+    return {row.id: row.variants for row in rows}
 
 
 async def erase_media(db: AsyncSession, user_id: UUID) -> None:

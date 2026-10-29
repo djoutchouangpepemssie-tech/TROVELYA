@@ -32,25 +32,31 @@ async def check_listing_photos(
             raise AppError(ErrorCode.MEDIA_NOT_READY, 409)
 
 
+def _public(variants: list[dict[str, Any]], base: str) -> list[dict[str, Any]]:
+    return [
+        {
+            "format": v["format"],
+            "width": v["width"],
+            "height": v["height"],
+            "url": f"{base}/{v['key']}",
+        }
+        for v in variants
+    ]
+
+
+async def photo_variants_by_id(
+    db: AsyncSession, media_ids: Sequence[UUID], *, public_url: str | None
+) -> dict[UUID, list[dict[str, Any]]]:
+    """The public variants of each photo still ready, by id, read in one query."""
+    base = (public_url or "").rstrip("/")
+    found = await repository.ready_variants_of(db, media_ids)
+    return {media_id: _public(variants, base) for media_id, variants in found.items() if variants}
+
+
 async def photo_variants(
     db: AsyncSession, media_ids: Sequence[UUID], *, public_url: str | None
 ) -> list[list[dict[str, Any]]]:
-    """The public variants of each photo, in the order given; a photo no longer ready (deleted,
-    removed by moderation) is left out."""
-    base = (public_url or "").rstrip("/")
-    photos: list[list[dict[str, Any]]] = []
-    for media_id in media_ids:
-        variants = await repository.ready_variants(db, media_id)
-        if variants:
-            photos.append(
-                [
-                    {
-                        "format": v["format"],
-                        "width": v["width"],
-                        "height": v["height"],
-                        "url": f"{base}/{v['key']}",
-                    }
-                    for v in variants
-                ]
-            )
-    return photos
+    """The public variants of each photo, in the order given, read in one query; a photo no
+    longer ready (deleted, removed by moderation) is left out."""
+    found = await photo_variants_by_id(db, media_ids, public_url=public_url)
+    return [found[media_id] for media_id in media_ids if media_id in found]

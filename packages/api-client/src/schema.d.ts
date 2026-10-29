@@ -751,6 +751,26 @@ export interface paths {
         patch?: never;
         trace?: never;
     };
+    "/v1/me/listings": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        /**
+         * Get My Listings
+         * @description The caller's listings, newest first, any status but deleted ones; `status` filters.
+         */
+        get: operations["me_listings"];
+        put?: never;
+        post?: never;
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
     "/v1/me/passkeys": {
         parameters: {
             query?: never;
@@ -1755,6 +1775,53 @@ export interface components {
          * @enum {string}
          */
         ListingStatus: "draft" | "pending_review" | "active" | "reserved" | "sold" | "withdrawn" | "removed" | "expired";
+        /**
+         * ListingSummary
+         * @description A line of the seller's listings (W10): no coordinate, the first photo only.
+         */
+        ListingSummary: {
+            /** Cover */
+            cover: components["schemas"]["PhotoVariant"][] | null;
+            /**
+             * Created At
+             * Format: date-time
+             */
+            created_at: string;
+            /** Expires At */
+            expires_at: string | null;
+            /**
+             * Id
+             * Format: uuid
+             */
+            id: string;
+            price: components["schemas"]["Money"];
+            /** Published At */
+            published_at: string | null;
+            /** Short Id */
+            short_id: string;
+            status: components["schemas"]["ListingStatus"];
+            /** Title */
+            title: string;
+            /**
+             * Updated At
+             * Format: date-time
+             */
+            updated_at: string;
+            /** Version */
+            version: number;
+        };
+        /**
+         * ListingSummaryPage
+         * @description Section 11.3: a page and the cursor of the next one.
+         */
+        ListingSummaryPage: {
+            /** Data */
+            data: components["schemas"]["ListingSummary"][];
+            /** Has More */
+            has_more: boolean;
+            /** Next Cursor */
+            next_cursor: string | null;
+        };
         /** MagicLinkRequest */
         MagicLinkRequest: {
             /** Captcha Token */
@@ -3618,6 +3685,39 @@ export interface operations {
                     [name: string]: unknown;
                 };
                 content?: never;
+            };
+        };
+    };
+    me_listings: {
+        parameters: {
+            query?: {
+                status?: components["schemas"]["ListingStatus"] | null;
+                cursor?: string | null;
+                limit?: number;
+            };
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description Successful Response */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ListingSummaryPage"];
+                };
+            };
+            /** @description Validation Error */
+            422: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["HTTPValidationError"];
+                };
             };
         };
     };

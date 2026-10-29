@@ -73,6 +73,7 @@ SELF_ROUTES = {
     "DELETE /v1/users/{user_id}/block",
     "POST /v1/media/uploads",
     "POST /v1/listings",
+    "GET /v1/me/listings",
 }
 OWNED_ROUTES = {
     "DELETE /v1/me/sessions/{session_id}",
