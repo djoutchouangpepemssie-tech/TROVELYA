@@ -2,26 +2,35 @@
 
 The seller's lock comes first, as for drafts: one write of a seller's listings at a time, so
 two publications cannot both slip under the quota, and the photos are never taken in two
-orders (no deadlock).
+orders (no deadlock). Checks run in this order: 404 not theirs, 403 `publish_forbidden` with
+its reason (Q1), 409 `invalid_transition`, 422 `photo_required`, 429 `publication_limit`; the
+moderation decides last, on a listing that may go online.
 """
 
 import math
-from datetime import timedelta
+from collections.abc import Awaitable, Callable, Collection
+from datetime import datetime, timedelta
 from typing import Protocol
 from uuid import UUID
 
 from sqlalchemy.ext.asyncio import AsyncSession
 
-from trovelya.core.errors import AppError, ErrorCode
+from trovelya.core.errors import AppError, ErrorCode, FieldError
 from trovelya.modules.catalog import policies, repository
 from trovelya.modules.catalog.models import ListingStatus
 from trovelya.modules.catalog.schemas import ListingOut
 from trovelya.modules.catalog.service.listings import own_listing
 from trovelya.modules.catalog.service.states import Actor, apply_transition
-from trovelya.modules.catalog.state_machine import TRANSITIONS, ListingEvent
+from trovelya.modules.catalog.state_machine import ListingEvent
 from trovelya.shared.clock import Clock, FixedClock
 
 QUOTA_WINDOW = timedelta(hours=24)
+
+_REFUSALS = {
+    "profile_incomplete": "Profil à compléter",
+    "too_young": "Il faut avoir 18 ans pour publier",
+    "account_restricted": "Ce compte ne peut pas publier pour l'instant",
+}
 
 
 class ModerationGate(Protocol):
@@ -37,54 +46,66 @@ class PublishEverything:
         return ListingEvent.PUBLISH
 
 
+def retry_after(put_online: list[datetime], limit: int, now: datetime) -> int | None:
+    """Q24: None while fewer than `limit` puttings online fall in the last 24 hours; else the
+    seconds until enough of them leave the window for one more (the whole window when the
+    limit is 0: publications frozen)."""
+    if limit <= 0:
+        return int(QUOTA_WINDOW.total_seconds())
+    if len(put_online) < limit:
+        return None
+    leaving = put_online[len(put_online) - limit]  # the oldest that must leave
+    return max(1, math.ceil((leaving + QUOTA_WINDOW - now).total_seconds()))
+
+
 async def check_publication_quota(db: AsyncSession, seller_id: UUID, *, clock: Clock) -> None:
-    """Q24: 429 `publication_limit` once the seller has put `listings.max_publications_per_day`
-    listings online over the last 24 hours (first publications, republications and renewals);
-    `Retry-After` says when the oldest of them leaves the window."""
+    """429 `publication_limit` once the seller has put `listings.max_publications_per_day`
+    listings online over the last 24 hours, `Retry-After` set (Q24)."""
     now = clock.now()
     limit = await repository.setting_int(db, "listings.max_publications_per_day")
     window = await repository.put_online_since(db, seller_id, now - QUOTA_WINDOW)
-    if window.n >= limit:
-        wait = (window.oldest + QUOTA_WINDOW - now).total_seconds()
-        raise AppError(
-            ErrorCode.PUBLICATION_LIMIT, 429, headers={"Retry-After": str(max(1, math.ceil(wait)))}
-        )
+    wait = retry_after(window, limit, now)
+    if wait is not None:
+        raise AppError(ErrorCode.PUBLICATION_LIMIT, 429, headers={"Retry-After": str(wait)})
 
 
-async def put_online(
+async def _put_online(
     db: AsyncSession,
     *,
     seller_id: UUID,
     listing_id: UUID,
-    event: ListingEvent,
+    allowed: Collection[ListingStatus],
+    event_for: Callable[[ListingStatus], Awaitable[ListingEvent]],
     clock: Clock,
 ) -> ListingOut:
-    """A transition to the shop window made by the seller, with its checks in order: 404 not
-    theirs, 403 `publish_forbidden` (Q1), 409 `invalid_transition`, 422 `photo_required`, 429
-    `publication_limit`. Online from now for `listings.expiry_days` (Q15)."""
     await repository.lock_seller_listings(db, seller_id)
     locked = await repository.lock_own_listing(db, listing_id=listing_id, seller_id=seller_id)
     if locked is None:
         raise AppError(ErrorCode.NOT_FOUND, 404)
-    if not await policies.can_publish_listing(db, seller_id, clock=clock):
-        raise AppError(ErrorCode.PUBLISH_FORBIDDEN, 403)
-    # Checked here too, so a listing that cannot go online says 409 before anything else.
-    if (ListingStatus(locked.status), event) not in TRANSITIONS:
+    refusal = await policies.publish_refusal(db, seller_id, clock=clock)
+    if refusal is not None:
+        raise AppError(
+            ErrorCode.PUBLISH_FORBIDDEN,
+            403,
+            errors=[FieldError(field="account", code=refusal, message=_REFUSALS[refusal])],
+        )
+    status = ListingStatus(locked.status)
+    if status not in allowed:
         raise AppError(ErrorCode.INVALID_TRANSITION, 409)
     if not await repository.has_ready_photo(db, listing_id):
         raise AppError(ErrorCode.PHOTO_REQUIRED, 422)
     await check_publication_quota(db, seller_id, clock=clock)
-    now = clock.now()
-    # One instant for the history and the listing: `published_at` is the transition's time.
+    event = await event_for(status)
+    days = await repository.setting_int(db, "listings.expiry_days")
+    now = clock.now()  # one instant for the history, `published_at` and `expires_at`
     await apply_transition(
         db,
         listing_id=listing_id,
         event=event,
         actor=Actor("user", seller_id),
         clock=FixedClock(now),
+        online_until=now + timedelta(days=days),
     )
-    days = await repository.setting_int(db, "listings.expiry_days")
-    await repository.mark_online(db, listing_id, now=now, expires_at=now + timedelta(days=days))
     return await own_listing(db, seller_id=seller_id, listing_id=listing_id)
 
 
@@ -97,7 +118,15 @@ async def publish(
     clock: Clock,
 ) -> ListingOut:
     """A draft goes online, or to moderation when the gate says so."""
-    event = await gate.route(db, listing_id)
-    return await put_online(
-        db, seller_id=seller_id, listing_id=listing_id, event=event, clock=clock
+
+    async def route(_: ListingStatus) -> ListingEvent:
+        return await gate.route(db, listing_id)
+
+    return await _put_online(
+        db,
+        seller_id=seller_id,
+        listing_id=listing_id,
+        allowed={ListingStatus.DRAFT},
+        event_for=route,
+        clock=clock,
     )

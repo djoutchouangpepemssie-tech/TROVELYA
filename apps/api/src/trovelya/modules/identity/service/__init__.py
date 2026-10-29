@@ -29,8 +29,8 @@ from trovelya.modules.identity.service.magic_links import (
 from trovelya.modules.identity.service.places import MemberPlace, PlaceSource, member_place
 from trovelya.modules.identity.service.profile import (
     default_zone_center,
-    may_trade,
     public_seller,
+    trade_refusal,
 )
 from trovelya.modules.identity.service.sessions import (
     CurrentUser,
@@ -66,7 +66,6 @@ __all__ = [
     "limit_magic_link_requests",
     "list_sessions",
     "magic_link_ttl_min",
-    "may_trade",
     "member_place",
     "optional_user",
     "process_erasures",
@@ -79,5 +78,6 @@ __all__ = [
     "revoke_session",
     "rotate_session",
     "set_session_cookie",
+    "trade_refusal",
     "verify_magic_link",
 ]
