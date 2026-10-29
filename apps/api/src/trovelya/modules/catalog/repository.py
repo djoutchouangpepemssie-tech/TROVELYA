@@ -1218,3 +1218,38 @@ async def similar_listings(
     params = {"id": listing_id, "seller_id": seller_id, "universe": universe, "model": model}
     params |= {"viewer": viewer_id, "limit": limit}
     return [dict(row) for row in (await db.execute(_SIMILAR, params)).mappings()]
+
+
+# --- Comparable prices (P2-T06a3a, plan Q44) ---------------------------------------------------
+
+# As `_SIMILAR`: the index's predicate as literals, the nearest read from the HNSW index with the
+# filters applied as the scan goes on (`_ITERATIVE_SCAN`, set by the caller's transaction).
+_COMPARABLE_PRICES = text(
+    "SELECT l.price_minor FROM listings l"
+    " WHERE l.status = 'active' AND l.embedding IS NOT NULL AND l.embedding_model = :model"
+    " AND l.deleted_at IS NULL AND l.category_id = :category_id"
+    " AND l.condition = CAST(:condition AS item_condition) AND l.currency = 'EUR'"
+    " AND l.seller_id <> :member_id"
+    " AND EXISTS (SELECT 1 FROM users u WHERE u.id = l.seller_id"
+    " AND u.status IN ('active', 'restricted') AND u.erasure_requested_at IS NULL"
+    " AND u.profile_completed_at IS NOT NULL)"
+    " ORDER BY l.embedding <=> CAST(:vector AS vector) LIMIT :limit"
+)
+
+
+async def comparable_prices(
+    db: AsyncSession,
+    *,
+    category_id: UUID,
+    condition: str,
+    member_id: UUID,
+    vector: list[float],
+    model: str,
+    limit: int,
+) -> list[int]:
+    """The prices of the listings online nearest to `vector`, of the same leaf and condition,
+    in euros, the member's own and those of sellers not shown left out."""
+    await db.execute(_ITERATIVE_SCAN)
+    params = {"category_id": category_id, "condition": condition, "member_id": member_id}
+    params |= {"vector": str(vector), "model": model, "limit": limit}
+    return list(await db.scalars(_COMPARABLE_PRICES, params))

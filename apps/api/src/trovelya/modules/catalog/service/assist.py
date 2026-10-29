@@ -5,11 +5,12 @@ From 1 to 4 of the member's photos, the provider proposes a title, a category, a
 condition, attributes and a caption. The server never invents a value and keeps only what the
 catalogue allows: a category that is not an active leaf goes, with its attributes; an attribute
 the category refuses goes; a condition or a brand the category does not take goes. The member
-decides from there (W09)."""
+decides from there (W09). A price range comes from the comparable listings online (Q44)."""
 
 from typing import Any
 from uuid import UUID
 
+import structlog
 from pydantic import TypeAdapter, ValidationError
 from sqlalchemy import Row
 from sqlalchemy.ext.asyncio import AsyncSession, async_sessionmaker
@@ -17,12 +18,18 @@ from sqlalchemy.ext.asyncio import AsyncSession, async_sessionmaker
 from trovelya.core.errors import AppError, ErrorCode
 from trovelya.modules.ai import service as ai
 from trovelya.modules.catalog import repository
+from trovelya.modules.catalog.adapters.embedder import Embedder, checked_vector
 from trovelya.modules.catalog.models import ItemCondition
-from trovelya.modules.catalog.schemas import AssistOut, BrandName, Caption, Title
+from trovelya.modules.catalog.schemas import AssistOut, BrandName, Caption, PriceRange, Title
 from trovelya.modules.catalog.service.categories import LOCALE
 from trovelya.modules.catalog.service.draft_rules import brand_slug, valid_attributes
+from trovelya.modules.catalog.service.embeddings import compose_text
+from trovelya.modules.catalog.service.price_range import COMPARABLES, price_range
 from trovelya.modules.media.service import listing_photos
 from trovelya.shared.clock import Clock
+
+logger = structlog.get_logger(__name__)
+Session = async_sessionmaker[AsyncSession]
 
 _TITLE: TypeAdapter[str] = TypeAdapter(Title)
 _BRAND: TypeAdapter[str] = TypeAdapter(BrandName)
@@ -76,9 +83,53 @@ async def _kept(
     return AssistOut.model_validate(kept)
 
 
+async def _price_range(
+    sessionmaker: Session,
+    embedder: Embedder | None,
+    *,
+    member_id: UUID,
+    kept: AssistOut,
+    leaf: Row[Any] | None,
+) -> dict[str, Any] | None:
+    """Q44: from the 20 listings online nearest to the suggestion, of its leaf and condition;
+    none without an embedder, a title, a leaf or a condition, or when the embedder fails (the
+    suggestion is still shown). The embedder is called outside any transaction."""
+    if embedder is None or leaf is None or kept.title is None or kept.condition is None:
+        return None
+    async with sessionmaker() as db:
+        text = await compose_text(
+            db,
+            texts=[kept.title],
+            category_id=leaf.id,
+            attributes=kept.attributes,
+            brand=kept.brand,
+        )
+    try:
+        vector = checked_vector(await embedder.embed(text))
+    except Exception:
+        logger.exception("catalog.assist_embedding_failed", suggestion_id=str(kept.suggestion_id))
+        return None
+    async with sessionmaker() as db:
+        prices = await repository.comparable_prices(
+            db,
+            category_id=leaf.id,
+            condition=kept.condition,
+            member_id=member_id,
+            vector=vector,
+            model=embedder.model,
+            limit=COMPARABLES,
+        )
+    found = price_range(prices)
+    if found is None:
+        return None
+    low, high = found
+    return {"low": {"amount_minor": low}, "high": {"amount_minor": high}}
+
+
 async def assist(
-    sessionmaker: async_sessionmaker[AsyncSession],
+    sessionmaker: Session,
     provider: ai.AIProvider,
+    embedder: Embedder | None,
     *,
     member_id: UUID,
     media_ids: list[UUID],
@@ -105,4 +156,7 @@ async def assist(
         leaves=[ai.Leaf(key=row.key, name=row.names[LOCALE]) for row in leaves.values()],
     )
     async with sessionmaker() as db:
-        return await _kept(db, call_id, suggestion, leaves, clock)
+        kept = await _kept(db, call_id, suggestion, leaves, clock)
+    leaf = leaves.get(kept.category.key) if kept.category else None
+    found = await _price_range(sessionmaker, embedder, member_id=member_id, kept=kept, leaf=leaf)
+    return kept.model_copy(update={"price_range": found and PriceRange.model_validate(found)})

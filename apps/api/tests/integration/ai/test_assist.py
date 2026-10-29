@@ -19,6 +19,7 @@ from tests.conftest import TEST_PROXY_SECRET, make_settings
 from tests.integration.catalog.test_categories_api import seeded  # noqa: F401  # pyright: ignore[reportUnusedImport]
 from tests.integration.catalog.test_draft_rules import photo
 from tests.integration.catalog.test_drafts import Session
+from tests.integration.catalog.test_review_queue import _listing  # pyright: ignore[reportPrivateUsage]
 from tests.integration.identity.test_profile import Account, make_account
 from trovelya.core.flags import FlagService
 from trovelya.main import create_app
@@ -29,6 +30,8 @@ from trovelya.modules.ai.adapters.provider import (
     Leaf,
     ProviderAnswer,
 )
+from trovelya.modules.catalog.adapters.embedder import FakeEmbedder
+from trovelya.modules.catalog.service.embeddings import embed_listing
 from trovelya.shared.ids import new_id
 
 ASSIST = "/v1/listings/assist"
@@ -299,3 +302,21 @@ async def test_photo_in_quarantine_refused_before_any_call(ai: Ai, sessionmaker:
         await db.commit()
     assert (await _assist(ai, member, media)).status_code == 409
     assert await _calls(sessionmaker, member.id) == []
+
+
+async def test_assist_no_price_without_comparables(ai: Ai, sessionmaker: Session) -> None:
+    """Q44: 4 comparables online (same leaf and condition, current model): no range; a 5th:
+    the 25th to 75th percentile, in euros. The member's own listings never count."""
+    model = f"fake-{new_id()}"  # this test's listings only (the database is shared)
+    ai.app.state.embedder = FakeEmbedder(model)
+    member, media = await _member(sessionmaker)
+    for euros in (10, 20, 30, 40, 50):
+        price = {"amount_minor": euros * 100, "currency": "EUR"}
+        _, listing = await _listing(ai.client, sessionmaker, price=price)
+        assert await embed_listing(sessionmaker, FakeEmbedder(model), UUID(listing["id"]))
+        if euros == 40:
+            assert (await _assist(ai, member, media)).json()["price_range"] is None
+    found = (await _assist(ai, member, media)).json()["price_range"]
+    assert (found["low"]["amount_minor"], found["high"]["amount_minor"]) == (2000, 4000)
+    ai.app.state.embedder = None  # no embedder: no range
+    assert (await _assist(ai, member, media)).json()["price_range"] is None
