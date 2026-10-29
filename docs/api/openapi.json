@@ -2802,6 +2802,41 @@
         "title": "Preferences",
         "type": "object"
       },
+      "PriceHistory": {
+        "description": "The prices shown online, from the first time online (Q43), oldest first.",
+        "properties": {
+          "prices": {
+            "items": {
+              "$ref": "#/components/schemas/PricePoint"
+            },
+            "title": "Prices",
+            "type": "array"
+          }
+        },
+        "required": [
+          "prices"
+        ],
+        "title": "PriceHistory",
+        "type": "object"
+      },
+      "PricePoint": {
+        "properties": {
+          "at": {
+            "format": "date-time",
+            "title": "At",
+            "type": "string"
+          },
+          "price": {
+            "$ref": "#/components/schemas/Money"
+          }
+        },
+        "required": [
+          "at",
+          "price"
+        ],
+        "title": "PricePoint",
+        "type": "object"
+      },
       "PriceWatch": {
         "properties": {
           "target_minor": {
@@ -5273,6 +5308,53 @@
           }
         },
         "summary": "Add Favorite",
+        "tags": [
+          "catalog"
+        ]
+      }
+    },
+    "/v1/listings/{listing_id}/price-history": {
+      "get": {
+        "description": "The prices shown online since the first time online, oldest first; anybody may read.",
+        "operationId": "listing_price_history",
+        "parameters": [
+          {
+            "in": "path",
+            "name": "listing_id",
+            "required": true,
+            "schema": {
+              "format": "uuid",
+              "title": "Listing Id",
+              "type": "string"
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/PriceHistory"
+                }
+              }
+            },
+            "description": "Successful Response"
+          },
+          "404": {
+            "description": "No such listing online"
+          },
+          "422": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/HTTPValidationError"
+                }
+              }
+            },
+            "description": "Validation Error"
+          }
+        },
+        "summary": "Price History",
         "tags": [
           "catalog"
         ]
