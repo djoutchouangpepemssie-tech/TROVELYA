@@ -2,6 +2,7 @@
 only what the catalogue allows, never invents a value; every call is logged, capped per day
 (Q45) and in cost."""
 
+import json
 from collections.abc import AsyncIterator, Sequence
 from dataclasses import dataclass
 from datetime import timedelta
@@ -34,15 +35,18 @@ ASSIST = "/v1/listings/assist"
 
 
 class _Saying(FakeAIProvider):
-    """Answers `changes` over the fake suggestion, at `cost` micro-euros."""
+    """Answers `changes` over the fake suggestion, at `cost` micro-euros; keeps what it saw."""
 
     def __init__(self, cost: int = 500, **changes: Any) -> None:
         super().__init__()
         self.cost, self.changes = cost, changes
+        self.images: Sequence[ImageRef] = []
+        self.leaves: Sequence[Leaf] = []
 
     async def suggest_listing(
         self, images: Sequence[ImageRef], leaves: Sequence[Leaf]
     ) -> ProviderAnswer:
+        self.images, self.leaves = images, leaves
         answer = await super().suggest_listing(images, leaves)
         return ProviderAnswer(output=answer.output | self.changes, cost_microeur=self.cost)
 
@@ -93,7 +97,7 @@ async def _calls(sessionmaker: Session, user_id: UUID) -> list[dict[str, Any]]:
     async with sessionmaker() as db:
         rows = await db.execute(
             text(
-                "SELECT model, outcome, suggestion, media_ids, latency_ms, cost_microeur"
+                "SELECT id, model, outcome, suggestion, media_ids, latency_ms, cost_microeur"
                 " FROM ai_listing_suggestions WHERE user_id = :u ORDER BY created_at, id"
             ),
             {"u": user_id},
@@ -124,7 +128,7 @@ async def test_assist_returns_schema_valid_suggestion(ai: Ai, sessionmaker: Sess
     assert set(body["confidence"]) == {"title", "category", "condition", "attributes"}
     [call] = await _calls(sessionmaker, member.id)
     assert (call["outcome"], call["media_ids"]) == ("ok", [media])
-    assert str(body["suggestion_id"])
+    assert body["suggestion_id"] == str(call["id"])
 
 
 @pytest.mark.parametrize(
@@ -229,3 +233,69 @@ async def test_assist_unavailable(ai: Ai, sessionmaker: Session) -> None:
     off = await _assist(ai, member, media)
     assert (off.status_code, off.json()["code"]) == (503, "ai_unavailable")
     assert len(await _calls(sessionmaker, member.id)) == 2
+
+
+@pytest.mark.parametrize(
+    ("changes", "dropped"),
+    [
+        ({"title": "Robe"}, "title"),  # too short
+        ({"title": "Robe en lin\nbleue"}, "title"),
+        ({"caption": "Robe\u0085 bleue"}, "caption"),  # a C1 control character
+        (  # sealed beauty products: new only (8.19)
+            {"category_key": "beaute_bien_etre.soins_maquillage.maquillage", "attributes": {}},
+            "condition",
+        ),
+        (  # books name no brand
+            {"category_key": "culture_loisirs.livres.romans", "brand": "Gallimard"},
+            "brand",
+        ),
+    ],
+)
+async def test_values_the_category_refuses_dropped(
+    ai: Ai, sessionmaker: Session, changes: dict[str, Any], dropped: str
+) -> None:
+    ai.answers_with(_Saying(**changes))
+    member, media = await _member(sessionmaker)
+    body = (await _assist(ai, member, media)).json()
+    assert body[dropped] is None and dropped not in body["confidence"]
+
+
+async def test_provider_sees_webp_and_active_leaves(ai: Ai, sessionmaker: Session) -> None:
+    """The widest WebP up to 1080 px of each photo, in order; the active leaves of goods only
+    (no vertical without its flag)."""
+    spy = _Saying()
+    ai.answers_with(spy)
+    member, first = await _member(sessionmaker)
+    second = await photo(sessionmaker, member.id)
+    variants = [
+        {"format": f, "width": w, "height": w, "key": f"{f}{w}", "bytes": 1}
+        for f in ("avif", "webp")
+        for w in (640, 1080, 1600)
+    ]
+    async with sessionmaker() as db:
+        await db.execute(
+            text("UPDATE media SET variants = CAST(:v AS jsonb) WHERE id = :m"),
+            {"v": json.dumps(variants), "m": first},
+        )
+        verticals = set(
+            await db.scalars(text("SELECT key FROM categories WHERE vertical <> 'goods'"))
+        )
+        await db.commit()
+    assert (await _assist(ai, member, second, first)).status_code == 200
+    assert [(i.format, i.width) for i in spy.images] == [("webp", 640), ("webp", 1080)]
+    assert spy.images[1].key == "webp1080"
+    keys = {leaf.key for leaf in spy.leaves}
+    assert "mode.femme.robes" in keys and "mode.femme" not in keys
+    assert not keys & verticals
+
+
+async def test_photo_in_quarantine_refused_before_any_call(ai: Ai, sessionmaker: Session) -> None:
+    """Q40: a photo taken down stays the member's, but is never sent to the provider."""
+    member, media = await _member(sessionmaker)
+    async with sessionmaker() as db:
+        await db.execute(
+            text("UPDATE media SET quarantined_at = now() WHERE id = :m"), {"m": media}
+        )
+        await db.commit()
+    assert (await _assist(ai, member, media)).status_code == 409
+    assert await _calls(sessionmaker, member.id) == []

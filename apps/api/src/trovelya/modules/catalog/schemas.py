@@ -126,6 +126,12 @@ Title = Annotated[
     StringConstraints(strip_whitespace=True, min_length=5, max_length=120),
     AfterValidator(_one_line),
 ]
+# What the AI says a photo shows (P2-T06a): one line, embedded with the listing (T11).
+Caption = Annotated[
+    str,
+    StringConstraints(strip_whitespace=True, min_length=1, max_length=300),
+    AfterValidator(_one_line),
+]
 Description = Annotated[
     str,
     StringConstraints(strip_whitespace=True, min_length=20, max_length=5000),
