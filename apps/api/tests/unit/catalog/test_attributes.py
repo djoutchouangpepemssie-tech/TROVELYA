@@ -83,6 +83,7 @@ def test_optional_attributes_may_be_absent_or_null() -> None:
         ({"isbn": "978\x00"}, ("isbn", "invalid_characters")),
         ({"isbn": "978\n2"}, ("isbn", "invalid_characters")),
         ({"isbn": " \u200b "}, ("isbn", "empty")),
+        ({"isbn": "978\ud800"}, ("isbn", "invalid_characters")),  # PostgreSQL refuses it
     ],
 )
 def test_attribute_validation(given: dict[str, Any], error: tuple[str, str]) -> None:
