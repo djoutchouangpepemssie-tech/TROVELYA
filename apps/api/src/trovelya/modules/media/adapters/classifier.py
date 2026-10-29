@@ -1,13 +1,11 @@
-"""Image classification behind a protocol (P2-T05b2, section 8.17, plan Q38, Q39): scores from
-0 to 1 for nudity, violence, weapons and drugs, by an EU provider chosen before production. The
-classifier gets the re-encoded image only: never the seller's text, never metadata.
+"""Image classification behind a protocol (P2-T05b2, 8.17, plan Q38, Q39): scores from 0 to 1
+by an EU provider chosen before production, on the re-encoded image only (no text, no
+metadata). None configured: photos unclassified, listings reviewed (Q38); the fake one is for
+tests and local development."""
 
-Until a provider is configured there is no classifier: listing photos stay unclassified and
-the listing goes to human review (Q38). The fake one exists for tests and local development.
-"""
-
+import math
 from collections.abc import Mapping
-from typing import Protocol
+from typing import Any, Protocol, cast
 
 from trovelya.core.config import Settings
 
@@ -32,6 +30,25 @@ class FakeImageClassifier:
 
     async def classify(self, image: bytes, content_type: str) -> dict[str, float]:
         return dict(self.scores)
+
+
+def valid_scores(raw: Any) -> dict[str, float] | None:
+    """The four scores, as floats from 0 to 1, other categories dropped; None when one is
+    missing or not a number (a string, a boolean, NaN, out of range): the photo is then
+    unclassified, and reviewed by a human."""
+    if not isinstance(raw, Mapping):
+        return None
+    given = cast(Mapping[str, Any], raw)
+    scores: dict[str, float] = {}
+    for category in CATEGORIES:
+        value = given.get(category)
+        if isinstance(value, bool) or not isinstance(value, int | float):
+            return None
+        score = float(value)
+        if not math.isfinite(score) or not 0 <= score <= 1:
+            return None
+        scores[category] = score
+    return scores
 
 
 def classifier_from_settings(settings: Settings) -> ImageClassifier | None:
