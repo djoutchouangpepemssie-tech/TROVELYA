@@ -3032,6 +3032,152 @@
         "title": "Relationship",
         "type": "object"
       },
+      "ReviewDetection": {
+        "description": "What the anti-circumvention found in a listing (never the original text).",
+        "properties": {
+          "action_taken": {
+            "title": "Action Taken",
+            "type": "string"
+          },
+          "part": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Part"
+          },
+          "review_status": {
+            "title": "Review Status",
+            "type": "string"
+          },
+          "signals": {
+            "items": {
+              "type": "string"
+            },
+            "title": "Signals",
+            "type": "array"
+          }
+        },
+        "required": [
+          "part",
+          "signals",
+          "action_taken",
+          "review_status"
+        ],
+        "title": "ReviewDetection",
+        "type": "object"
+      },
+      "ReviewItem": {
+        "description": "A listing awaiting moderation in the staff's queue (P2-T05c1).",
+        "properties": {
+          "category": {
+            "title": "Category",
+            "type": "string"
+          },
+          "description": {
+            "title": "Description",
+            "type": "string"
+          },
+          "detections": {
+            "items": {
+              "$ref": "#/components/schemas/ReviewDetection"
+            },
+            "title": "Detections",
+            "type": "array"
+          },
+          "id": {
+            "format": "uuid",
+            "title": "Id",
+            "type": "string"
+          },
+          "photos": {
+            "items": {
+              "items": {
+                "additionalProperties": true,
+                "type": "object"
+              },
+              "type": "array"
+            },
+            "title": "Photos",
+            "type": "array"
+          },
+          "price": {
+            "$ref": "#/components/schemas/Money"
+          },
+          "reason_text": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Reason Text"
+          },
+          "reasons": {
+            "items": {
+              "$ref": "#/components/schemas/ModerationReason"
+            },
+            "title": "Reasons",
+            "type": "array"
+          },
+          "seller_id": {
+            "format": "uuid",
+            "title": "Seller Id",
+            "type": "string"
+          },
+          "short_id": {
+            "title": "Short Id",
+            "type": "string"
+          },
+          "submitted_at": {
+            "format": "date-time",
+            "title": "Submitted At",
+            "type": "string"
+          },
+          "title": {
+            "title": "Title",
+            "type": "string"
+          }
+        },
+        "required": [
+          "id",
+          "short_id",
+          "title",
+          "description",
+          "category",
+          "price",
+          "seller_id",
+          "submitted_at",
+          "reasons",
+          "reason_text",
+          "photos",
+          "detections"
+        ],
+        "title": "ReviewItem",
+        "type": "object"
+      },
+      "ReviewQueue": {
+        "properties": {
+          "items": {
+            "items": {
+              "$ref": "#/components/schemas/ReviewItem"
+            },
+            "title": "Items",
+            "type": "array"
+          }
+        },
+        "required": [
+          "items"
+        ],
+        "title": "ReviewQueue",
+        "type": "object"
+      },
       "SellerOut": {
         "description": "What the page shows of the seller (level, badges and rank arrive with later phases).",
         "properties": {
@@ -3172,6 +3318,53 @@
           "profile_completed"
         ],
         "title": "SignInResult",
+        "type": "object"
+      },
+      "StaffDecisionIn": {
+        "description": "A rejection or a removal: a reason from the closed list, explained for `other`.",
+        "properties": {
+          "reason_code": {
+            "maxLength": 64,
+            "minLength": 1,
+            "title": "Reason Code",
+            "type": "string"
+          },
+          "reason_text": {
+            "anyOf": [
+              {
+                "maxLength": 1000,
+                "pattern": "^[^\\x00-\\x1f]*$",
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Reason Text"
+          }
+        },
+        "required": [
+          "reason_code"
+        ],
+        "title": "StaffDecisionIn",
+        "type": "object"
+      },
+      "StaffDecisionOut": {
+        "properties": {
+          "id": {
+            "format": "uuid",
+            "title": "Id",
+            "type": "string"
+          },
+          "status": {
+            "$ref": "#/components/schemas/ListingStatus"
+          }
+        },
+        "required": [
+          "id",
+          "status"
+        ],
+        "title": "StaffDecisionOut",
         "type": "object"
       },
       "StaffEnrolmentOptions": {
@@ -6145,6 +6338,217 @@
           }
         },
         "summary": "Post Reject",
+        "tags": [
+          "staff"
+        ]
+      }
+    },
+    "/v1/staff/listings/{listing_id}/remove": {
+      "post": {
+        "description": "An active listing is taken down with its reason; its photos leave storage (Q6).",
+        "operationId": "staff_listing_remove",
+        "parameters": [
+          {
+            "in": "path",
+            "name": "listing_id",
+            "required": true,
+            "schema": {
+              "format": "uuid",
+              "title": "Listing Id",
+              "type": "string"
+            }
+          }
+        ],
+        "requestBody": {
+          "content": {
+            "application/json": {
+              "schema": {
+                "$ref": "#/components/schemas/StaffDecisionIn"
+              }
+            }
+          },
+          "required": true
+        },
+        "responses": {
+          "200": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/StaffDecisionOut"
+                }
+              }
+            },
+            "description": "Successful Response"
+          },
+          "403": {
+            "description": "Not a staff session with the permission, or the reviewer's own"
+          },
+          "404": {
+            "description": "No such listing"
+          },
+          "409": {
+            "description": "Not in the status the decision applies to"
+          },
+          "422": {
+            "description": "Reason off the list, or unexplained"
+          }
+        },
+        "summary": "Remove Listing",
+        "tags": [
+          "staff"
+        ]
+      }
+    },
+    "/v1/staff/moderation/listings": {
+      "get": {
+        "description": "The listings awaiting moderation, the longest waiting first.",
+        "operationId": "staff_review_queue",
+        "parameters": [
+          {
+            "in": "query",
+            "name": "limit",
+            "required": false,
+            "schema": {
+              "default": 50,
+              "maximum": 100,
+              "minimum": 1,
+              "title": "Limit",
+              "type": "integer"
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ReviewQueue"
+                }
+              }
+            },
+            "description": "Successful Response"
+          },
+          "422": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/HTTPValidationError"
+                }
+              }
+            },
+            "description": "Validation Error"
+          }
+        },
+        "summary": "Get Review Queue",
+        "tags": [
+          "staff"
+        ]
+      }
+    },
+    "/v1/staff/moderation/listings/{listing_id}/approve": {
+      "post": {
+        "description": "The listing goes online for `listings.expiry_days` days.",
+        "operationId": "staff_review_approve",
+        "parameters": [
+          {
+            "in": "path",
+            "name": "listing_id",
+            "required": true,
+            "schema": {
+              "format": "uuid",
+              "title": "Listing Id",
+              "type": "string"
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/StaffDecisionOut"
+                }
+              }
+            },
+            "description": "Successful Response"
+          },
+          "403": {
+            "description": "Not a staff session with the permission, or the reviewer's own"
+          },
+          "404": {
+            "description": "No such listing"
+          },
+          "409": {
+            "description": "Not in the status the decision applies to"
+          },
+          "422": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/HTTPValidationError"
+                }
+              }
+            },
+            "description": "Validation Error"
+          }
+        },
+        "summary": "Approve Listing",
+        "tags": [
+          "staff"
+        ]
+      }
+    },
+    "/v1/staff/moderation/listings/{listing_id}/reject": {
+      "post": {
+        "description": "The listing is removed with its reason; its photos leave storage (Q6).",
+        "operationId": "staff_review_reject",
+        "parameters": [
+          {
+            "in": "path",
+            "name": "listing_id",
+            "required": true,
+            "schema": {
+              "format": "uuid",
+              "title": "Listing Id",
+              "type": "string"
+            }
+          }
+        ],
+        "requestBody": {
+          "content": {
+            "application/json": {
+              "schema": {
+                "$ref": "#/components/schemas/StaffDecisionIn"
+              }
+            }
+          },
+          "required": true
+        },
+        "responses": {
+          "200": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/StaffDecisionOut"
+                }
+              }
+            },
+            "description": "Successful Response"
+          },
+          "403": {
+            "description": "Not a staff session with the permission, or the reviewer's own"
+          },
+          "404": {
+            "description": "No such listing"
+          },
+          "409": {
+            "description": "Not in the status the decision applies to"
+          },
+          "422": {
+            "description": "Reason off the list, or unexplained"
+          }
+        },
+        "summary": "Reject Listing",
         "tags": [
           "staff"
         ]

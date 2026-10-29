@@ -320,3 +320,45 @@ class ListingSummaryPage(BaseModel):
     data: list[ListingSummary]
     next_cursor: str | None
     has_more: bool
+
+
+class ReviewDetection(BaseModel):
+    """What the anti-circumvention found in a listing (never the original text)."""
+
+    part: str | None  # title or description
+    signals: list[str]
+    action_taken: str  # masked or queued
+    review_status: str
+
+
+class ReviewItem(BaseModel):
+    """A listing awaiting moderation in the staff's queue (P2-T05c1)."""
+
+    id: UUID
+    short_id: str
+    title: str
+    description: str
+    category: str
+    price: Money
+    seller_id: UUID
+    submitted_at: datetime
+    reasons: list[ModerationReason]
+    reason_text: str | None
+    photos: list[list[dict[str, Any]]]
+    detections: list[ReviewDetection]
+
+
+class ReviewQueue(BaseModel):
+    items: list[ReviewItem]
+
+
+class StaffDecisionIn(BaseModel):
+    """A rejection or a removal: a reason from the closed list, explained for `other`."""
+
+    reason_code: str = Field(min_length=1, max_length=64)
+    reason_text: str | None = Field(default=None, max_length=1000, pattern=r"^[^\x00-\x1f]*$")
+
+
+class StaffDecisionOut(BaseModel):
+    id: UUID
+    status: ListingStatus

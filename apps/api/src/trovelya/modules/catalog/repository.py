@@ -932,3 +932,25 @@ async def setting_json(db: AsyncSession, key: str) -> Any:
     if value is None:
         raise LookupError(f"platform setting {key} is missing")
     return value
+
+
+# --- The staff's review queue (P2-T05c1) -------------------------------------------------------
+
+_REVIEW_QUEUE = text(
+    "SELECT l.id, l.short_id, l.title, l.description, c.key AS category, l.price_minor,"
+    " l.currency, l.seller_id, h.created_at AS submitted_at, h.reason_code, h.reason_text,"
+    " ARRAY(SELECT m.media_id FROM listing_media m WHERE m.listing_id = l.id"
+    " ORDER BY m.position) AS media_ids"
+    " FROM listings l JOIN categories c ON c.id = l.category_id"
+    " JOIN LATERAL (SELECT created_at, reason_code, reason_text FROM listing_status_history"
+    " WHERE listing_id = l.id AND to_status = 'pending_review'"
+    " ORDER BY created_at DESC, id DESC LIMIT 1) h ON true"
+    " WHERE l.status = 'pending_review' AND l.deleted_at IS NULL"
+    " ORDER BY h.created_at, l.id LIMIT :limit"
+)
+
+
+async def review_queue(db: AsyncSession, *, limit: int) -> list[dict[str, Any]]:
+    """The listings awaiting moderation, the longest waiting first, with why they wait."""
+    rows = (await db.execute(_REVIEW_QUEUE, {"limit": limit})).mappings()
+    return [dict(row) for row in rows]
