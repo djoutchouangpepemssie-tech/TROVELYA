@@ -2,6 +2,7 @@
 not fit the schema is refused, so that what is kept can always be stored as JSONB."""
 
 import json
+from datetime import UTC, datetime, timedelta
 from typing import Any
 
 import pytest
@@ -14,6 +15,8 @@ from tests.integration.identity.test_profile import make_account
 from trovelya.core.gdpr import registered_erasers, registered_exporters
 from trovelya.modules.ai.adapters.provider import FakeAIProvider
 from trovelya.modules.ai.schemas import ListingSuggestion
+from trovelya.modules.ai.tasks import purge_old_calls
+from trovelya.shared.clock import FixedClock
 from trovelya.shared.ids import new_id
 
 
@@ -70,3 +73,30 @@ def test_answer_beyond_the_schema_ignored() -> None:
 def test_fake_provider_refused_outside_development(environment: str) -> None:
     with pytest.raises(ValueError, match="AI_PROVIDER"):
         make_settings(env=environment, ai_provider="fake")
+
+
+async def test_calls_purged_after_a_year(sessionmaker: Session) -> None:
+    """Q46: a call is kept 365 days ([PARAM] retention.ai_suggestion_days), then erased by the
+    daily purge; a younger one stays."""
+    member = await make_account(sessionmaker, completed=True)
+    now = datetime(2026, 10, 29, 12, tzinfo=UTC)
+    ages = {"old": timedelta(days=365, microseconds=1), "edge": timedelta(days=365)}
+    ids = {name: new_id() for name in ages}
+    async with sessionmaker() as db:
+        for name, call_id in ids.items():
+            await db.execute(
+                text(
+                    "INSERT INTO ai_listing_suggestions (id, user_id, media_ids, model,"
+                    " created_at) VALUES (:id, :u, ARRAY[CAST(:m AS uuid)], 'fake', :at)"
+                ),
+                {"id": call_id, "u": member.id, "m": new_id(), "at": now - ages[name]},
+            )
+        await db.commit()
+    assert await purge_old_calls(sessionmaker, clock=FixedClock(now)) >= 1
+    async with sessionmaker() as db:
+        left = set(
+            await db.scalars(
+                text("SELECT id FROM ai_listing_suggestions WHERE user_id = :u"), {"u": member.id}
+            )
+        )
+    assert left == {ids["edge"]}  # exactly 365 days old: kept until the next purge
