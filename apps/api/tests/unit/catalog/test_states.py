@@ -6,6 +6,7 @@ import itertools
 import pytest
 
 from trovelya.modules.catalog.models import ListingStatus as S
+from trovelya.modules.catalog.service.states import EVENT_TYPES
 from trovelya.modules.catalog.state_machine import (
     TRANSITIONS,
     InvalidTransition,
@@ -53,3 +54,7 @@ def test_sold_and_removed_never_back_to_active() -> None:
 
 def test_every_event_is_used() -> None:
     assert {event for _, event in TRANSITIONS} == set(E)
+
+
+def test_every_event_has_an_outbox_type() -> None:
+    assert set(EVENT_TYPES) == set(E)
