@@ -982,7 +982,7 @@ async def review_queue(db: AsyncSession, *, staff_id: UUID, limit: int) -> list[
     return [dict(row) for row in rows]
 
 
-# --- Favorites, price watches, price history (P2-T08) -----------------------------------------
+# --- Favorites and price watches (P2-T08) -----------------------------------------------------
 
 _FAVORITE_TARGET = text(
     "SELECT status::text AS status, seller_id, price_minor, currency FROM listings"
@@ -1016,14 +1016,6 @@ _MY_FAVORITES = text(
     " AND (CAST(:at AS timestamptz) IS NULL OR (f.created_at, f.listing_id)"
     " < (CAST(:at AS timestamptz), CAST(:after_id AS uuid)))"
     " ORDER BY f.created_at DESC, f.listing_id DESC LIMIT :limit"
-)
-_PRICE_CHANGES = text(
-    "SELECT changed_at, price_minor FROM listing_price_history WHERE listing_id = :id"
-    " ORDER BY changed_at, id"
-)
-_FIRST_ONLINE = text(
-    "SELECT min(created_at) FROM listing_status_history"
-    " WHERE listing_id = :id AND to_status = 'active'"
 )
 
 
@@ -1061,12 +1053,3 @@ async def my_favorites(
     at, after_id = after or (None, None)
     params = {"user_id": user_id, "at": at, "after_id": after_id, "limit": limit}
     return [dict(row) for row in (await db.execute(_MY_FAVORITES, params)).mappings()]
-
-
-async def price_changes(
-    db: AsyncSession, listing_id: UUID
-) -> tuple[list[tuple[datetime, int]], datetime | None]:
-    """Every recorded price of the listing, and when it first went online (None: never)."""
-    rows = await db.execute(_PRICE_CHANGES, {"id": listing_id})
-    changes = [(row.changed_at, row.price_minor) for row in rows]
-    return changes, await db.scalar(_FIRST_ONLINE, {"id": listing_id})

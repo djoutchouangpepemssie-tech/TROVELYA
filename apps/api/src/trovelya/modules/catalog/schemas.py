@@ -363,17 +363,6 @@ class FavoritePage(BaseModel):
     has_more: bool
 
 
-class PricePoint(BaseModel):
-    at: datetime
-    price: Money
-
-
-class PriceHistory(BaseModel):
-    """The prices shown online, from the first time online (Q43), oldest first."""
-
-    prices: list[PricePoint]
-
-
 class ListingSummaryPage(BaseModel):
     """Section 11.3: a page and the cursor of the next one."""
 

@@ -1,4 +1,4 @@
-"""Favorites, price watches and price history (P2-T08, section 11.5, plan Q43)."""
+"""Favorites and price watches (P2-T08, section 11.5, plan Q43)."""
 
 from typing import Annotated
 from uuid import UUID
@@ -7,8 +7,8 @@ from fastapi import APIRouter, Depends, Request, Response, status
 
 from trovelya.core.db import Uow
 from trovelya.core.pagination import DEFAULT_LIMIT, Cursor, Limit
-from trovelya.modules.catalog.schemas import FavoritePage, PriceHistory, PriceWatchIn
-from trovelya.modules.catalog.service import favorites, prices
+from trovelya.modules.catalog.schemas import FavoritePage, PriceWatchIn
+from trovelya.modules.catalog.service import favorites
 from trovelya.modules.identity.service import CurrentUser, get_clock
 from trovelya.modules.identity.service.auth import completed_user
 from trovelya.shared.clock import Clock
@@ -86,22 +86,4 @@ async def my_favorites(
         cursor=cursor,
         limit=limit,
         media_public_url=request.app.state.settings.media_public_url,
-    )
-
-
-@router.get(
-    "/listings/{listing_id}/price-history",
-    operation_id="listing_price_history",
-    responses={404: {"description": "No such listing online"}},
-)
-async def price_history(listing_id: UUID, db: Uow) -> PriceHistory:
-    """The prices shown online since the first time online, oldest first; anybody may read."""
-    currency, points = await prices.price_history(db, listing_id)
-    return PriceHistory.model_validate(
-        {
-            "prices": [
-                {"at": at, "price": {"amount_minor": price, "currency": currency}}
-                for at, price in points
-            ]
-        }
     )

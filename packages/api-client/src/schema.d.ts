@@ -540,26 +540,6 @@ export interface paths {
         patch?: never;
         trace?: never;
     };
-    "/v1/listings/{listing_id}/price-history": {
-        parameters: {
-            query?: never;
-            header?: never;
-            path?: never;
-            cookie?: never;
-        };
-        /**
-         * Price History
-         * @description The prices shown online since the first time online, oldest first; anybody may read.
-         */
-        get: operations["listing_price_history"];
-        put?: never;
-        post?: never;
-        delete?: never;
-        options?: never;
-        head?: never;
-        patch?: never;
-        trace?: never;
-    };
     "/v1/listings/{listing_id}/price-watch": {
         parameters: {
             query?: never;
@@ -2325,23 +2305,6 @@ export interface components {
                 [key: string]: string;
             };
         };
-        /**
-         * PriceHistory
-         * @description The prices shown online, from the first time online (Q43), oldest first.
-         */
-        PriceHistory: {
-            /** Prices */
-            prices: components["schemas"]["PricePoint"][];
-        };
-        /** PricePoint */
-        PricePoint: {
-            /**
-             * At
-             * Format: date-time
-             */
-            at: string;
-            price: components["schemas"]["Money"];
-        };
         /** PriceWatch */
         PriceWatch: {
             /** Target Minor */
@@ -3778,44 +3741,6 @@ export interface operations {
         responses: {
             /** @description Successful Response */
             204: {
-                headers: {
-                    [name: string]: unknown;
-                };
-                content?: never;
-            };
-            /** @description Validation Error */
-            422: {
-                headers: {
-                    [name: string]: unknown;
-                };
-                content: {
-                    "application/json": components["schemas"]["HTTPValidationError"];
-                };
-            };
-        };
-    };
-    listing_price_history: {
-        parameters: {
-            query?: never;
-            header?: never;
-            path: {
-                listing_id: string;
-            };
-            cookie?: never;
-        };
-        requestBody?: never;
-        responses: {
-            /** @description Successful Response */
-            200: {
-                headers: {
-                    [name: string]: unknown;
-                };
-                content: {
-                    "application/json": components["schemas"]["PriceHistory"];
-                };
-            };
-            /** @description No such listing online */
-            404: {
                 headers: {
                     [name: string]: unknown;
                 };
