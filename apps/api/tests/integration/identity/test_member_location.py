@@ -58,15 +58,25 @@ async def make_zone(
     *,
     at: tuple[float, float] = (45.74, 4.84),
     place_name: str = "Lyon 7e",
+    default: bool = False,
 ) -> UUID:
     zone_id = new_id()
     async with sessionmaker() as db:
         await db.execute(
             text(
-                "INSERT INTO search_zones (id, user_id, label, place_name, center, radius_m)"
-                " VALUES (:id, :u, 'Maison', :name, ST_MakePoint(:lon, :lat)::geography, 5000)"
+                "INSERT INTO search_zones (id, user_id, label, place_name, center, radius_m,"
+                " is_default)"
+                " VALUES (:id, :u, 'Maison', :name, ST_MakePoint(:lon, :lat)::geography, 5000,"
+                " :default)"
             ),
-            {"id": zone_id, "u": user_id, "name": place_name, "lat": at[0], "lon": at[1]},
+            {
+                "id": zone_id,
+                "u": user_id,
+                "name": place_name,
+                "lat": at[0],
+                "lon": at[1],
+                "default": default,
+            },
         )
         await db.commit()
     return zone_id

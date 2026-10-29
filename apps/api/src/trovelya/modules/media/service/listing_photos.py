@@ -6,6 +6,7 @@ never deletes a photo being attached.
 """
 
 from collections.abc import Sequence
+from typing import Any
 from uuid import UUID
 
 from sqlalchemy.ext.asyncio import AsyncSession
@@ -29,3 +30,27 @@ async def check_listing_photos(
             raise AppError(ErrorCode.MEDIA_REJECTED, 422)
         if row.status != "ready":
             raise AppError(ErrorCode.MEDIA_NOT_READY, 409)
+
+
+async def photo_variants(
+    db: AsyncSession, media_ids: Sequence[UUID], *, public_url: str | None
+) -> list[list[dict[str, Any]]]:
+    """The public variants of each photo, in the order given; a photo no longer ready (deleted,
+    removed by moderation) is left out."""
+    base = (public_url or "").rstrip("/")
+    photos: list[list[dict[str, Any]]] = []
+    for media_id in media_ids:
+        variants = await repository.ready_variants(db, media_id)
+        if variants:
+            photos.append(
+                [
+                    {
+                        "format": v["format"],
+                        "width": v["width"],
+                        "height": v["height"],
+                        "url": f"{base}/{v['key']}",
+                    }
+                    for v in variants
+                ]
+            )
+    return photos

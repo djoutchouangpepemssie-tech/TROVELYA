@@ -99,6 +99,7 @@ OPTIONAL_ROUTES = {
     "GET /v1/me/consents",
     "POST /v1/me/consents",
     "GET /v1/users/{username}",
+    "GET /v1/listings/{listing_id}",
 }
 PUBLIC_ROUTES = {
     "GET /health",

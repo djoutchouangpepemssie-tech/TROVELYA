@@ -27,6 +27,7 @@ from trovelya.modules.identity.service.magic_links import (
     limit_requests as limit_magic_link_requests,
 )
 from trovelya.modules.identity.service.places import MemberPlace, PlaceSource, member_place
+from trovelya.modules.identity.service.profile import default_zone_center, public_seller
 from trovelya.modules.identity.service.sessions import (
     CurrentUser,
     IssuedSession,
@@ -53,6 +54,7 @@ __all__ = [
     "clear_session_cookie",
     "create_session",
     "current_user",
+    "default_zone_center",
     "expire_approvals",
     "get_clock",
     "get_session_policy",
@@ -63,6 +65,7 @@ __all__ = [
     "member_place",
     "optional_user",
     "process_erasures",
+    "public_seller",
     "purge_expired_exports",
     "purge_expired_magic_links",
     "request_magic_link",

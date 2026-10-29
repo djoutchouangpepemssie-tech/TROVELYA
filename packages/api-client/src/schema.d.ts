@@ -498,7 +498,12 @@ export interface paths {
             path?: never;
             cookie?: never;
         };
-        get?: never;
+        /**
+         * Get Listing
+         * @description The listing page: anybody for an active listing, its seller only otherwise. Never kept
+         *     by a shared cache: the answer depends on who asks (a draft, a distance).
+         */
+        get: operations["listing_get"];
         put?: never;
         post?: never;
         delete?: never;
@@ -1258,6 +1263,22 @@ export interface components {
             /** Values */
             values: components["schemas"]["AttributeValueOut"][] | null;
         };
+        /**
+         * AttributeShown
+         * @description An attribute as shown on the page: its label, its value and the value's label (enums).
+         */
+        AttributeShown: {
+            /** Key */
+            key: string;
+            /** Name */
+            name: string;
+            /** Unit */
+            unit: string | null;
+            /** Value */
+            value: unknown;
+            /** Value Name */
+            value_name: string | null;
+        };
         /** AttributeValueOut */
         AttributeValueOut: {
             /** Key */
@@ -1380,6 +1401,13 @@ export interface components {
              * @enum {string}
              */
             vertical: "goods" | "real_estate" | "vehicles" | "services";
+        };
+        /** CategoryRef */
+        CategoryRef: {
+            /** Key */
+            key: string;
+            /** Name */
+            name: string;
         };
         /**
          * CategoryTree
@@ -1673,6 +1701,56 @@ export interface components {
             weight_g: number | null;
         };
         /**
+         * ListingPage
+         * @description The listing page (section 11.5). Never a coordinate (8.11): the place name and, for a
+         *     signed-in visitor with a zone, the distance to the public position, rounded (Q17).
+         */
+        ListingPage: {
+            /** Accepts Offers */
+            accepts_offers: boolean;
+            /** Attributes */
+            attributes: components["schemas"]["AttributeShown"][];
+            /** Brand */
+            brand: string | null;
+            category: components["schemas"]["CategoryRef"];
+            condition: components["schemas"]["ItemCondition"];
+            /** Description */
+            description: string;
+            /** Distance */
+            distance: string | null;
+            /** Handover Enabled */
+            handover_enabled: boolean;
+            /**
+             * Id
+             * Format: uuid
+             */
+            id: string;
+            /** Parcel Size */
+            parcel_size: ("xs" | "s" | "m" | "l" | "xl") | null;
+            /** Photos */
+            photos: components["schemas"]["PhotoVariant"][][];
+            /** Place Name */
+            place_name: string;
+            price: components["schemas"]["Money"];
+            /** Published At */
+            published_at: string | null;
+            seller: components["schemas"]["SellerOut"];
+            /** Shipping Enabled */
+            shipping_enabled: boolean;
+            /** Short Id */
+            short_id: string;
+            status: components["schemas"]["ListingStatus"];
+            /** Title */
+            title: string;
+            /**
+             * Updated At
+             * Format: date-time
+             */
+            updated_at: string;
+            /** Weight G */
+            weight_g: number | null;
+        };
+        /**
          * ListingStatus
          * @enum {string}
          */
@@ -1818,6 +1896,17 @@ export interface components {
             /** Name */
             name: string;
         };
+        /** PhotoVariant */
+        PhotoVariant: {
+            /** Format */
+            format: string;
+            /** Height */
+            height: number;
+            /** Url */
+            url: string;
+            /** Width */
+            width: number;
+        };
         /** PlaceList */
         PlaceList: {
             /** Data */
@@ -1932,6 +2021,28 @@ export interface components {
             blocking: boolean;
             /** Following */
             following: boolean;
+        };
+        /**
+         * SellerOut
+         * @description What the page shows of the seller (level, badges and rank arrive with later phases).
+         */
+        SellerOut: {
+            /** Avatar */
+            avatar: components["schemas"]["PhotoVariant"][] | null;
+            /** Display Name */
+            display_name: string;
+            /**
+             * Id
+             * Format: uuid
+             */
+            id: string;
+            /**
+             * Member Since
+             * Format: date
+             */
+            member_since: string;
+            /** Username */
+            username: string;
         };
         /** SessionList */
         SessionList: {
@@ -2946,6 +3057,44 @@ export interface operations {
                     [name: string]: unknown;
                 };
                 content?: never;
+            };
+        };
+    };
+    listing_get: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                listing_id: string;
+            };
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description Successful Response */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ListingPage"];
+                };
+            };
+            /** @description Unknown, deleted, or not active and not the caller's */
+            404: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content?: never;
+            };
+            /** @description Validation Error */
+            422: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["HTTPValidationError"];
+                };
             };
         };
     };
