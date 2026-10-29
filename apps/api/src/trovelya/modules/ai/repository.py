@@ -64,6 +64,23 @@ async def finish(
     suggestion: dict[str, Any],
     latency_ms: int,
     cost_microeur: int | None,
-) -> None:
+) -> bool:
+    """False when the call is not pending (never reserved, or already finished)."""
     params = {"id": call_id, "outcome": outcome, "suggestion": json.dumps(suggestion)}
-    await db.execute(_FINISH, params | {"latency_ms": latency_ms, "cost": cost_microeur})
+    result = await db.execute(_FINISH, params | {"latency_ms": latency_ms, "cost": cost_microeur})
+    return int(result.rowcount) == 1  # pyright: ignore[reportAttributeAccessIssue, reportUnknownArgumentType, reportUnknownMemberType]
+
+
+_EXPORT = text(
+    "SELECT id, media_ids, model, outcome, suggestion, accepted_fields, latency_ms,"
+    " cost_microeur, created_at FROM ai_listing_suggestions WHERE user_id = :u"
+    " ORDER BY created_at, id"
+)
+
+
+async def export_calls(db: AsyncSession, user_id: UUID) -> list[dict[str, Any]]:
+    return [dict(row) for row in (await db.execute(_EXPORT, {"u": user_id})).mappings()]
+
+
+async def erase_calls(db: AsyncSession, user_id: UUID) -> None:
+    await db.execute(text("DELETE FROM ai_listing_suggestions WHERE user_id = :u"), {"u": user_id})

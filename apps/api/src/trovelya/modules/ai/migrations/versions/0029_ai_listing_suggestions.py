@@ -22,7 +22,7 @@ UPGRADE = r"""
 CREATE TABLE ai_listing_suggestions (
   id              UUID PRIMARY KEY,
   user_id         UUID NOT NULL REFERENCES users(id),
-  media_ids       UUID[] NOT NULL,
+  media_ids       UUID[] NOT NULL CHECK (cardinality(media_ids) BETWEEN 1 AND 4),
   model           TEXT NOT NULL,
   outcome         TEXT NOT NULL DEFAULT 'pending'
                     CHECK (outcome IN ('pending','ok','over_cost','invalid','failed')),
