@@ -16,6 +16,7 @@ from tests.integration.catalog.test_review_queue import (
     _listing,  # pyright: ignore[reportPrivateUsage]
     _moderator,  # pyright: ignore[reportPrivateUsage]
 )
+from tests.integration.catalog.test_withdraw_renew import _call  # pyright: ignore[reportPrivateUsage]
 from tests.integration.identity.test_staff_access import Staff
 from trovelya.shared.ids import new_id
 
@@ -103,22 +104,68 @@ ERASING = "UPDATE users SET erasure_requested_at = now() WHERE id = :u"
 NO_PHOTO = "UPDATE media SET deleted_at = now() WHERE id IN (SELECT media_id FROM listing_media"
 
 
-@pytest.mark.parametrize(
-    ("change", "code"), [(ERASING, "publish_forbidden"), (NO_PHOTO, "photo_required")]
-)
-async def test_approval_checks_the_listing_again(
-    client: AsyncClient, sessionmaker: Session, change: str, code: str
-) -> None:
-    """The seller may no longer publish, or the photo is gone: the reviewer rejects it instead."""
-    account, listing = await _in_review(client, sessionmaker)
-    if change == ERASING:
-        await _execute(sessionmaker, change, u=account.id)
-    else:
-        await _execute(sessionmaker, change + " WHERE listing_id = :l)", l=listing["id"])
+async def test_approval_refused_without_a_photo(client: AsyncClient, sessionmaker: Session) -> None:
+    """The photo is gone meanwhile: the reviewer rejects the listing instead."""
+    _, listing = await _in_review(client, sessionmaker)
+    await _execute(sessionmaker, NO_PHOTO + " WHERE listing_id = :l)", l=listing["id"])
     staff = await _moderator(sessionmaker)
     response = await _decide(client, staff, listing["id"], "approve")
-    assert (response.status_code, response.json()["code"]) == (409, code)
+    assert (response.status_code, response.json()["code"]) == (409, "photo_required")
     assert (await _decide(client, staff, listing["id"], "reject", SPAM)).status_code == 200
+
+
+SELLER_CHANGES = {
+    "account_restricted": ERASING,
+    "profile_incomplete": "UPDATE users SET profile_completed_at = NULL WHERE id = :u",
+    "too_young": "UPDATE users SET birth_year = extract(year FROM now()) - 10 WHERE id = :u",
+}
+UNDO = "UPDATE users SET erasure_requested_at = NULL WHERE id = :u"
+
+
+@pytest.mark.parametrize("refusal", [*SELLER_CHANGES, "suspended", "no_photo_too"])
+async def test_seller_no_longer_publishing_withdrawn_without_sanction(
+    client: AsyncClient, sessionmaker: Session, refusal: str
+) -> None:
+    """Q41: approving the listing of a seller who may no longer publish withdraws it, by the
+    platform (photo or not): no moderation removal, no quarantine, never online; resubmitted
+    once the account is in order."""
+    account, listing = await _in_review(client, sessionmaker)
+    change = {"suspended": "UPDATE users SET status = 'suspended' WHERE id = :u"}.get(refusal)
+    await _execute(sessionmaker, change or SELLER_CHANGES.get(refusal, ERASING), u=account.id)
+    if refusal == "no_photo_too":
+        await _execute(sessionmaker, NO_PHOTO + " WHERE listing_id = :l)", l=listing["id"])
+    code = refusal if refusal in SELLER_CHANGES else "account_restricted"
+    staff = await _moderator(sessionmaker)
+    response = await _decide(client, staff, listing["id"], "approve")
+    assert (response.status_code, response.json()["status"]) == (200, "withdrawn")
+    sql = (
+        "SELECT h.actor_kind, h.event, h.reason_code, o.type, l.published_at, l.expires_at"
+        " FROM listing_status_history h JOIN listings l ON l.id = h.listing_id"
+        " JOIN outbox_events o ON o.aggregate_id = h.listing_id AND o.type = 'listing.withdrawn'"
+        " WHERE h.listing_id = :l AND h.event = 'withdraw'"
+    )
+    row = tuple(await _row(sessionmaker, sql, l=listing["id"]))
+    assert row == ("system", "withdraw", code, "listing.withdrawn", None, None)
+    sql = "SELECT action, reason, after FROM audit_log WHERE target_id = :l"
+    action, reason, after = await _row(sessionmaker, sql, l=listing["id"])
+    assert (action, reason, after["status"]) == ("listing.approve", code, "withdrawn")
+    sql = (
+        "SELECT bool_or(m.quarantined_at IS NOT NULL) FROM listing_media lm"
+        " JOIN media m ON m.id = lm.media_id WHERE lm.listing_id = :l"
+    )
+    assert (await _row(sessionmaker, sql, l=listing["id"]))[0] is False
+
+
+async def test_withdrawn_listing_resubmitted_once_account_in_order(
+    client: AsyncClient, sessionmaker: Session
+) -> None:
+    account, listing = await _in_review(client, sessionmaker)
+    await _execute(sessionmaker, ERASING, u=account.id)
+    staff = await _moderator(sessionmaker)
+    assert (await _decide(client, staff, listing["id"], "approve")).json()["status"] == "withdrawn"
+    await _execute(sessionmaker, UNDO, u=account.id)
+    renewed = await _call(client, account, listing["id"], "renew")
+    assert (renewed.status_code, renewed.json()["status"]) == (200, "pending_review")
 
 
 @pytest.mark.parametrize(

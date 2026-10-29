@@ -7,6 +7,12 @@ from sqlalchemy.ext.asyncio import AsyncSession
 from trovelya.modules.identity.service import trade_refusal
 from trovelya.shared.clock import Clock
 
+REFUSALS = {
+    "profile_incomplete": "Profil à compléter",
+    "too_young": "Il faut avoir 18 ans pour publier",
+    "account_restricted": "Ce compte ne peut pas publier pour l'instant",
+}
+
 
 async def publish_refusal(db: AsyncSession, user_id: UUID, *, clock: Clock) -> str | None:
     """`can_publish_listing` of Q1: why the member may not put a listing online

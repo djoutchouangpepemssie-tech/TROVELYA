@@ -6387,7 +6387,7 @@
             "description": "No such listing"
           },
           "409": {
-            "description": "Not in the status the decision applies to, or no longer publishable"
+            "description": "Not in the status the decision applies to, or no photo left"
           },
           "422": {
             "description": "Reason off the list, or unexplained"
@@ -6447,7 +6447,7 @@
     },
     "/v1/staff/moderation/listings/{listing_id}/approve": {
       "post": {
-        "description": "The listing goes online for `listings.expiry_days` days.",
+        "description": "The listing goes online for `listings.expiry_days` days; withdrawn by the platform when\nits seller may no longer publish (Q41).",
         "operationId": "staff_review_approve",
         "parameters": [
           {
@@ -6479,7 +6479,7 @@
             "description": "No such listing"
           },
           "409": {
-            "description": "Not in the status the decision applies to, or no longer publishable"
+            "description": "Not in the status the decision applies to, or no photo left"
           },
           "422": {
             "content": {
@@ -6542,7 +6542,7 @@
             "description": "No such listing"
           },
           "409": {
-            "description": "Not in the status the decision applies to, or no longer publishable"
+            "description": "Not in the status the decision applies to, or no photo left"
           },
           "422": {
             "description": "Reason off the list, or unexplained"

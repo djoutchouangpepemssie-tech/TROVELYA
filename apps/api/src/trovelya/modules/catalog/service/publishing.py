@@ -34,12 +34,6 @@ from trovelya.shared.clock import Clock, FixedClock
 
 QUOTA_WINDOW = timedelta(hours=24)
 
-_REFUSALS = {
-    "profile_incomplete": "Profil à compléter",
-    "too_young": "Il faut avoir 18 ans pour publier",
-    "account_restricted": "Ce compte ne peut pas publier pour l'instant",
-}
-
 
 class ModerationGate(Protocol):
     """Whether a listing goes online, to review or is refused (service/moderation.py)."""
@@ -91,7 +85,7 @@ async def _put_online(
         raise AppError(
             ErrorCode.PUBLISH_FORBIDDEN,
             403,
-            errors=[FieldError(field="account", code=refusal, message=_REFUSALS[refusal])],
+            errors=[FieldError(field="account", code=refusal, message=policies.REFUSALS[refusal])],
         )
     status = ListingStatus(locked.status)
     if status not in allowed:

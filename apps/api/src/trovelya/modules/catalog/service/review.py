@@ -14,7 +14,7 @@ from trovelya.core.errors import AppError, ErrorCode, FieldError
 from trovelya.modules.catalog import policies, repository
 from trovelya.modules.catalog.models import ListingStatus
 from trovelya.modules.catalog.service.moderation import PROHIBITED, label
-from trovelya.modules.catalog.service.states import Actor, apply_transition
+from trovelya.modules.catalog.service.states import SYSTEM, Actor, apply_transition
 from trovelya.modules.catalog.state_machine import ListingEvent
 from trovelya.modules.circumvention.service import detections_of
 from trovelya.modules.media.service import listing_photos
@@ -85,15 +85,24 @@ async def _decide(
         raise AppError(ErrorCode.FORBIDDEN, 403)
     now = FixedClock(clock.now())
     online_until = None
+    actor = Actor("staff", staff_id)
     if event is ListingEvent.APPROVE and locked.status == ListingStatus.PENDING_REVIEW.value:
-        await _check_still_publishable(db, listing_id, locked.seller_id, clock=now)
-        days = await repository.setting_int(db, "listings.expiry_days")
-        online_until = now.now() + timedelta(days=days)
+        refusal = await policies.publish_refusal(db, locked.seller_id, clock=now)
+        if refusal is not None:
+            # Q41: the seller may no longer publish; the platform withdraws the listing (photo
+            # or not), no moderation removal: resubmitted once the account is in order.
+            event, actor = ListingEvent.WITHDRAW, SYSTEM
+            reason_code, reason_text = refusal, policies.REFUSALS[refusal]
+        elif not await repository.has_ready_photo(db, listing_id):
+            raise AppError(ErrorCode.PHOTO_REQUIRED, 409)  # the reviewer rejects it instead
+        else:
+            days = await repository.setting_int(db, "listings.expiry_days")
+            online_until = now.now() + timedelta(days=days)
     transition = await apply_transition(
         db,
         listing_id=listing_id,
         event=event,
-        actor=Actor("staff", staff_id),
+        actor=actor,
         clock=now,
         reason_code=reason_code,
         reason_text=reason_text,
@@ -112,19 +121,6 @@ async def _decide(
         after={"status": transition.to_status.value, "seller_id": str(locked.seller_id)},
     )
     return transition.to_status
-
-
-async def _check_still_publishable(
-    db: AsyncSession, listing_id: UUID, seller_id: UUID, *, clock: Clock
-) -> None:
-    """What the seller's publication checked may have changed while the listing waited: an
-    account since restricted, a photo since deleted. 409: the reviewer rejects it instead."""
-    refusal = await policies.publish_refusal(db, seller_id, clock=clock)
-    if refusal is not None:
-        field = FieldError(field="account", code=refusal, message="Le vendeur ne peut plus publier")
-        raise AppError(ErrorCode.PUBLISH_FORBIDDEN, 409, errors=[field])
-    if not await repository.has_ready_photo(db, listing_id):
-        raise AppError(ErrorCode.PHOTO_REQUIRED, 409)
 
 
 async def approve(db: AsyncSession, *, listing_id: UUID, staff_id: UUID, clock: Clock) -> str:
