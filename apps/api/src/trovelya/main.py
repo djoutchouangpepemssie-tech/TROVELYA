@@ -23,6 +23,7 @@ from trovelya.core.middleware import RequestIdMiddleware
 from trovelya.core.observability import configure_observability, trace_engine
 from trovelya.core.ratelimit import AnonymousRateLimitMiddleware
 from trovelya.modules.ai.adapters.provider import ai_provider_from_settings
+from trovelya.modules.catalog.adapters.embedder import embedder_from_settings
 from trovelya.modules.catalog.api import router as catalog_router
 from trovelya.modules.catalog.api.testing import router as catalog_testing_router
 from trovelya.modules.catalog.service.moderation import Moderation
@@ -132,6 +133,7 @@ def create_app(
     app.state.geocoder = _geocoder(settings)
     app.state.storage = storage_from_settings(settings)
     app.state.ai_provider = ai_provider_from_settings(settings)
+    app.state.embedder = embedder_from_settings(settings)  # comparable prices (Q44)
     app.state.captcha = (
         TurnstileVerifier(
             secret=settings.turnstile_secret_key.get_secret_value(), client=httpx.AsyncClient()

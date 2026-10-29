@@ -82,6 +82,7 @@ async def assist_listing(
     return await assist.assist(
         request.app.state.sessionmaker,
         provider,
+        request.app.state.embedder,
         member_id=me.id,
         media_ids=list(dict.fromkeys(body.media_ids)),
         verticals=await flags.is_enabled("verticals"),

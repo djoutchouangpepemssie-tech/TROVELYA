@@ -2,10 +2,12 @@
 `reindex` and `drop_embedding`, which are jobs or event handlers.
 
 A listing online, whose seller is shown, is embedded by the worker from its text: title,
-description, attributes with their labels, brand (the main photo's caption joins with T06a).
-Nothing else ever leaves for the provider. The vector is stored only if the listing is still
-online with the same text; it is dropped when the listing leaves the shop window. A failure
-never touches the listing: the job is tried again, then the daily reindexing catches it."""
+description, attributes with their labels, brand (the main photo's caption joins with T06a3b).
+Besides, the AI help's suggestion is embedded during the request to find comparable prices
+(P2-T06a3a, ADR-0020 point 9); nothing else ever leaves for the provider. The vector is stored
+only if the listing is still online with the same text; it is dropped when the listing leaves
+the shop window. A failure never touches the listing: the job is tried again, then the daily
+reindexing catches it."""
 
 from typing import Any
 from uuid import UUID
@@ -38,17 +40,36 @@ def _value(shown: dict[str, Any]) -> str:
     return f"{value} {shown['unit']}" if shown.get("unit") else str(value)
 
 
+async def compose_text(
+    db: AsyncSession,
+    *,
+    texts: list[str],
+    category_id: UUID,
+    attributes: dict[str, Any],
+    brand: str | None,
+) -> str:
+    """The texts given, then each attribute with its label, then the brand: the shape of every
+    embedded text, a listing's or an AI suggestion's (P2-T06a3a)."""
+    lines = list(texts)
+    for shown in await attributes_shown(db, category_id, attributes):
+        lines.append(f"{shown['name']} : {_value(shown)}")
+    if brand:
+        lines.append(f"Marque : {brand}")
+    return "\n".join(lines)
+
+
 async def listing_text(db: AsyncSession, listing_id: UUID) -> str | None:
     """The text embedded; None unless the listing is online and its seller shown."""
     row = await repository.embedding_source(db, listing_id)
     if row is None or not await shown_sellers(db, [row.seller_id]):
         return None
-    lines = [row.title, row.description]
-    for shown in await attributes_shown(db, row.category_id, row.attributes):
-        lines.append(f"{shown['name']} : {_value(shown)}")
-    if row.brand:
-        lines.append(f"Marque : {row.brand}")
-    return "\n".join(lines)
+    return await compose_text(
+        db,
+        texts=[row.title, row.description],
+        category_id=row.category_id,
+        attributes=row.attributes,
+        brand=row.brand,
+    )
 
 
 async def embed_listing(sessionmaker: Session, embedder: Embedder, listing_id: UUID) -> bool:

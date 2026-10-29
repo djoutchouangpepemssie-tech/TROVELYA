@@ -1218,3 +1218,38 @@ async def similar_listings(
     params = {"id": listing_id, "seller_id": seller_id, "universe": universe, "model": model}
     params |= {"viewer": viewer_id, "limit": limit}
     return [dict(row) for row in (await db.execute(_SIMILAR, params)).mappings()]
+
+
+# --- Comparable prices (P2-T06a3a, plan Q44) ---------------------------------------------------
+
+# An exact search within the leaf and condition (ADR-0020, point 9): the approximate HNSW scan,
+# filtered by a leaf and a condition, would stop with fewer than 20, or none, for a leaf of a
+# few hundred listings. The CTE is materialised so the index never serves the order.
+_COMPARABLE_PRICES = text(
+    "WITH candidates AS MATERIALIZED ("
+    " SELECT l.price_minor, l.embedding FROM listings l"
+    " WHERE l.category_id = :category_id AND l.condition = CAST(:condition AS item_condition)"
+    " AND l.status = 'active' AND l.embedding IS NOT NULL AND l.embedding_model = :model"
+    " AND l.deleted_at IS NULL AND l.currency = 'EUR'"
+    " AND EXISTS (SELECT 1 FROM users u WHERE u.id = l.seller_id"
+    " AND u.status IN ('active', 'restricted') AND u.erasure_requested_at IS NULL"
+    " AND u.profile_completed_at IS NOT NULL))"
+    " SELECT price_minor FROM candidates"
+    " ORDER BY embedding <=> CAST(:vector AS vector) LIMIT :limit"
+)
+
+
+async def comparable_prices(
+    db: AsyncSession,
+    *,
+    category_id: UUID,
+    condition: str,
+    vector: list[float],
+    model: str,
+    limit: int,
+) -> list[int]:
+    """The prices of the listings online nearest to `vector`, of the same leaf and condition,
+    in euros, those of sellers not shown left out."""
+    params = {"category_id": category_id, "condition": condition, "vector": str(vector)}
+    params |= {"model": model, "limit": limit}
+    return list(await db.scalars(_COMPARABLE_PRICES, params))
