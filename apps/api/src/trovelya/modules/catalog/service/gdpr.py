@@ -5,11 +5,12 @@ from uuid import UUID
 
 from sqlalchemy.ext.asyncio import AsyncSession
 
+from trovelya.core.config import Settings
 from trovelya.core.gdpr import register_eraser, register_exporter
 from trovelya.modules.catalog import repository
 
 
-async def export_catalog(db: AsyncSession, user_id: UUID) -> dict[str, Any]:
+async def export_catalog(db: AsyncSession, user_id: UUID, _: Settings) -> dict[str, Any]:
     return await repository.export_catalog(db, user_id)
 
 

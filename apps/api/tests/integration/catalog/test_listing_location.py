@@ -11,6 +11,7 @@ import pytest
 from sqlalchemy import text
 from sqlalchemy.ext.asyncio import AsyncSession, async_sessionmaker
 
+from tests.conftest import make_settings
 from tests.integration.identity.test_member_location import make_address, make_zone
 from tests.integration.identity.test_profile import make_account
 from trovelya.core.gdpr import registered_erasers, registered_exporters
@@ -187,7 +188,7 @@ async def test_draws_exported_with_place_and_erased(sessionmaker: Session) -> No
     await _locate(sessionmaker, seller.id, "zone", zone)
     await _locate(sessionmaker, other.id, "zone", others_zone)
     async with sessionmaker() as db:
-        export = await registered_exporters()["catalog"](db, seller.id)
+        export = await registered_exporters()["catalog"](db, seller.id, make_settings())
         await registered_erasers()["catalog"](db, seller.id)
         await db.commit()
         left = (

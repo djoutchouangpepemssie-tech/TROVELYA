@@ -59,6 +59,8 @@ Stockage objet Cloudflare R2 en juridiction UE (MinIO en local et en CI), deux b
 | Q32 | Modération d'une remise en ligne | Toute mise en ligne repasse par la modération : publication, renouvellement d'une annonce expirée, remise en ligne d'une annonce retirée. Conséquence sur 9.1 : `withdrawn` et `expired` acceptent `submit_for_review` → `pending_review` (validée par Arcel le 29 octobre 2026). |
 | Q33 | Alcool (8.17, « sauf vendeurs pros autorisés [À VALIDER] ») | En P2, refusé pour tous avec motif lisible ; l'exception des vendeurs pros autorisés vient avec les comptes pros (validée par Arcel le 29 octobre 2026). |
 | Q34 | Interdits dans le texte | Deux niveaux : un terme sans ambiguïté (« fusil de chasse », « contrefaçon », « cocaïne ») est **refusé** avec motif ; un terme ambigu (« réplique », « tabac », « pistolet ») part **en revue** sans mise en ligne ; une liste d'exceptions écarte les faux positifs connus (« pistolet à colle », « fusil à aiguiser »). Un refus passe par `submit_for_review` puis `reject` (acteur système, `reason_code` du motif) : l'annonce est `removed`, avec recours (validée par Arcel le 29 octobre 2026). |
+| Q35 | Export RGPD des détections | L'export contient le texte d'origine que le membre a écrit, déchiffré (droit d'accès, art. 15) ; l'archive est elle-même chiffrée (ADR-0016) (validée par Arcel le 29 octobre 2026). |
+| Q36 | Conservation des détections | 180 jours après la détection (fenêtre des sanctions de 8.16), purge quotidienne ; une détection encore en revue est gardée jusqu'à sa revue (validée par Arcel le 29 octobre 2026). |
 
 ### 0.2 Écarts et précisions par rapport au cahier
 

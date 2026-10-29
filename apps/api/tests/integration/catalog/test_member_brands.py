@@ -10,6 +10,7 @@ from redis.asyncio import Redis
 from sqlalchemy import text
 from sqlalchemy.ext.asyncio import AsyncSession, async_sessionmaker
 
+from tests.conftest import make_settings
 from tests.integration.catalog.test_categories_api import (
     catalog_client,
     seeded,  # noqa: F401  # pyright: ignore[reportUnusedImport] (fixture)
@@ -99,7 +100,7 @@ async def test_member_brands_exported_and_erased(sessionmaker: Session) -> None:
     others = await _brand(sessionmaker, other.id, "Atelier Voisin Témoin")
     await _use(sessionmaker, other.id, shared, "active")  # another seller sells it
     async with sessionmaker() as db:
-        export = await registered_exporters()["catalog"](db, member.id)
+        export = await registered_exporters()["catalog"](db, member.id, make_settings())
         await registered_erasers()["catalog"](db, member.id)
         await db.commit()
         left = dict(
