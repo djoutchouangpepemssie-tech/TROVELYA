@@ -30,12 +30,17 @@ ALLOWED = {
     (S.REMOVED, E.APPEAL_ACCEPTED): S.ACTIVE,
     (S.ACTIVE, E.EXPIRE): S.EXPIRED,
     (S.EXPIRED, E.RENEW): S.ACTIVE,
+    # Q29: the seller takes back a listing awaiting moderation.
+    (S.PENDING_REVIEW, E.WITHDRAW): S.WITHDRAWN,
+    # Q32: putting a listing back online goes through the moderation too.
+    (S.WITHDRAWN, E.SUBMIT_FOR_REVIEW): S.PENDING_REVIEW,
+    (S.EXPIRED, E.SUBMIT_FOR_REVIEW): S.PENDING_REVIEW,
 }
 
 
 def test_transition_table_exhaustive() -> None:
-    """All 8 statuses by all events: the allowed ones lead where section 9.1 says, every other
-    one is refused."""
+    """All 8 statuses by all events: the allowed ones lead where section 9.1 says (with Q29
+    and Q32), every other one is refused."""
     assert dict(TRANSITIONS) == ALLOWED
     for status, event in itertools.product(S, E):
         if (status, event) in ALLOWED:

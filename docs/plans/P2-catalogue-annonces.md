@@ -56,6 +56,9 @@ Stockage objet Cloudflare R2 en juridiction UE (MinIO en local et en CI), deux b
 | Q29 | Retrait d'une annonce en attente de modération | Le vendeur peut retirer une annonce `pending_review` (transition `pending_review` → `withdrawn`, à ajouter en T05b) au lieu d'attendre la décision (validée par Arcel le 29 octobre 2026). |
 | Q30 | Ce qui est masqué ou seulement mis en revue (8.16, Q12) | Un passage est **masqué** (et la détection confirmée automatiquement) à partir d'une confiance de 0,9 : téléphones (France, +33, Belgique, Luxembourg et autres numéros internationaux), e-mails même déguisés ou sans « .com », IBAN (clé juste ou fausse), applications de messagerie, liens externes, pseudos. En dessous, il part **en revue sans être masqué** : mots génériques de paiement (« virement », « espèces »), réseaux sociaux nommés sans pseudo (validée par Arcel le 29 octobre 2026). |
 | Q31 | Suites de chiffres et noms d'applications de paiement | Une suite de **9 chiffres ou plus** est masquée même si elle ne ressemble pas à un téléphone ; une suite de **8 chiffres** part en revue sans masquage (« tailles 36 38 40 42 ») ; une suite précédée de « ISBN », « réf. », « n° de série », « facture » ou d'un mot proche part en revue sans masquage. Lydia, PayPal, Wero, Revolut sont masqués près d'un mot de paiement, sinon mis en revue (« Lydia » est aussi un prénom) ; WhatsApp et Telegram sont toujours masqués (validée par Arcel le 29 octobre 2026). |
+| Q32 | Modération d'une remise en ligne | Toute mise en ligne repasse par la modération : publication, renouvellement d'une annonce expirée, remise en ligne d'une annonce retirée. Conséquence sur 9.1 : `withdrawn` et `expired` acceptent `submit_for_review` → `pending_review` (validée par Arcel le 29 octobre 2026). |
+| Q33 | Alcool (8.17, « sauf vendeurs pros autorisés [À VALIDER] ») | En P2, refusé pour tous avec motif lisible ; l'exception des vendeurs pros autorisés vient avec les comptes pros (validée par Arcel le 29 octobre 2026). |
+| Q34 | Interdits dans le texte | Deux niveaux : un terme sans ambiguïté (« fusil de chasse », « contrefaçon », « cocaïne ») est **refusé** avec motif ; un terme ambigu (« réplique », « tabac », « pistolet ») part **en revue** sans mise en ligne ; une liste d'exceptions écarte les faux positifs connus (« pistolet à colle », « fusil à aiguiser »). Un refus passe par `submit_for_review` puis `reject` (acteur système, `reason_code` du motif) : l'annonce est `removed`, avec recours (validée par Arcel le 29 octobre 2026). |
 | Q35 | Export RGPD des détections | L'export contient le texte d'origine que le membre a écrit, déchiffré (droit d'accès, art. 15) ; l'archive est elle-même chiffrée (ADR-0016) (validée par Arcel le 29 octobre 2026). |
 | Q36 | Conservation des détections | 180 jours après la détection (fenêtre des sanctions de 8.16), purge quotidienne ; une détection encore en revue est gardée jusqu'à sa revue (validée par Arcel le 29 octobre 2026). |
 
@@ -214,7 +217,7 @@ Contrats import-linter : un contrat `module-media`, `module-circumvention` et `m
 ```
 T01a ── T01b ──────────────────────────────┐
 T02a ── T02b ── T02c (avatar, RGPD médias)  │
-T01b + T02b ── T03a ── T03b ── T04 ─┬─ T05a ── T05b ── T05c
+T01b + T02b ── T03a ── T03b ── T04 ─┬─ T05a ── T05b1 ── T05b2 ── T05c
                                     ├─ T07
                                     ├─ T08
                                     └─ T11 (embeddings) ── T06a (comparables) ── T06b (Bedrock)
@@ -588,34 +591,38 @@ tout ── T12 (parcours 2, démo, porte)
 
 ### P2-T05b — Modération à la publication
 
-**Branche :** `feat/P2-T05b-moderation`.
+Découpée en deux PR de 600 lignes au plus : **T05b1** (texte, catégories, coordonnées, transitions de Q29 et Q32) puis **T05b2** (images : classifieur, seuils, doublons).
 
-**Fichiers :**
-- `modules/catalog/service/moderation.py` (implémente `ModerationGate`) ;
-- `modules/ai/adapters/classifier.py` (`ImageClassifier`, `FakeImageClassifier`) ;
-- `modules/media/service/processing.py` (classification et légende à la fin du traitement) ;
-- migration `0010` (complétée : [PARAM] `catalog.prohibited`, `moderation.thresholds`) ;
-- `tests/integration/catalog/test_moderation.py`.
+#### P2-T05b1 — Modération du texte
+
+**Branches :** `feat/P2-T05b1a-interdits` (transitions de Q29 et Q32, liste des interdits et son repérage, corpus de non-régression : 237 annonces honnêtes jamais refusées, 99 annonces interdites jamais en ligne), puis `feat/P2-T05b1-moderation-texte` (branchement sur la publication, catégories surveillées, coordonnées).
+
+**Fichiers :** `modules/catalog/state_machine.py`, `modules/catalog/service/{moderation,publishing}.py`, `modules/catalog/seed/prohibited.yaml` (la liste [PARAM] `catalog.prohibited`, en graine versionnée et relue par PR jusqu'au back-office), `tests/integration/catalog/test_moderation.py`, `tests/unit/catalog/test_prohibited.py`. Les motifs sont ceux de 8.17, plus « Stupéfiants » (illicites par la loi ; la modération d'images de 8.17 les vise déjà).
 
 **Contenu :**
-- À la publication, dans l'ordre :
-  1. **interdits** : texte normalisé contre `catalog.prohibited` (motif par entrée : armes, contrefaçon, médicament, tabac et vapotage, alcool, animal vivant, espèce protégée, contenu adulte, comptes numériques, billet nominatif, produit rappelé, objet volé, document d'identité) → refus avec motif lisible ;
+- Transitions ajoutées à 9.1 : `pending_review` + `withdraw` → `withdrawn` (Q29) ; `withdrawn` et `expired` + `submit_for_review` → `pending_review` (Q32).
+- La modération rend un verdict : `online`, `review` (motifs) ou `refused` (motif). Elle passe, dans l'ordre :
+  1. **interdits** (Q33, Q34) : titre et description normalisés contre `catalog.prohibited` (par motif : termes refusés, termes en revue, exceptions) ; refus → `submit_for_review` puis `reject` avec `reason_code` ; revue → `pending_review` ;
   2. **catégorie `is_restricted`** → `pending_review` ;
-  3. **coordonnées** (T05a) → titre et description masqués, annonce publiée, détection journalisée, rappel pédagogique dans la réponse ;
-  4. **images** : scores de classification déjà calculés au traitement (nudité, violence, armes, drogue) ; score max ≥ 0,9 → refus ; 0,5 à 0,9 → `pending_review` ; classification absente ou en erreur → `pending_review` ;
-  5. **doublon d'image** d'un autre vendeur (T02b) → `pending_review`.
-- Motifs lisibles dans `fr.json` ; refus → `removed` avec `reason_code` dans l'historique.
+  3. **coordonnées** (T05a, Q12) : titre et description passés par `circumvention.screen` ; le texte masqué remplace le texte de l'annonce, la détection est journalisée, la réponse porte le rappel pédagogique.
+- Publication, renouvellement et remise en ligne passent par la même modération (Q32). La réponse porte `moderation` : statut, motifs lisibles en français, rappel.
+
+- [ ] Tests d'abord : `test_prohibited_refused_with_reason` paramétré (un terme par motif, avec fautes et accents), `test_ambiguous_term_goes_to_review`, `test_exceptions_not_flagged`, `test_restricted_category_goes_to_review`, `test_contacts_masked_and_published`, `test_renew_is_moderated`, `test_withdraw_pending_review`, table de transitions exhaustive à jour.
+- [ ] ÉCHEC → implémenter → vert. Commit `feat(catalogue): modération du texte des annonces à la publication`.
+
+#### P2-T05b2 — Modération des images
+
+**Branche :** `feat/P2-T05b2-moderation-images`.
+
+**Fichiers :** `modules/ai/adapters/classifier.py` (`ImageClassifier`, `FakeImageClassifier`), `modules/media/service/processing.py` (classification et légende à la fin du traitement), `modules/catalog/service/moderation.py`, migration (paramètre `moderation.thresholds`), `tests/integration/catalog/test_moderation_images.py`.
+
+**Contenu :**
+- 4. **images** : scores de classification calculés au traitement (nudité, violence, armes, drogue) ; score max ≥ 0,9 → refus ; 0,5 à 0,9 → `pending_review` ; classification absente ou en erreur → `pending_review` ;
+- 5. **doublon d'image** d'un autre vendeur (T02b) → `pending_review`.
 - Le classifieur ne reçoit que l'image, sans le texte du vendeur.
 
-- [ ] Tests d'abord :
-  - `test_prohibited_refused_with_reason` paramétré (une phrase par motif, avec fautes et accents : « fusil de chasse », « r0lex contrefaçon », « bouteille de whisky ») ;
-  - `test_restricted_category_goes_to_review` (militaria, siège auto, billetterie) ;
-  - `test_contacts_masked_and_published` ;
-  - `test_image_thresholds` (0,95 → refus ; 0,7 → revue ; 0,3 → active) ;
-  - `test_classifier_outage_goes_to_review` ;
-  - `test_duplicate_image_goes_to_review` ;
-  - `test_moderation_reason_readable_fr`.
-- [ ] ÉCHEC → implémenter → vert. Commit `feat(catalogue): modération des annonces à la publication`.
+- [ ] Tests d'abord : `test_image_thresholds` (0,95 → refus ; 0,7 → revue ; 0,3 → active), `test_classifier_outage_goes_to_review`, `test_duplicate_image_goes_to_review`, `test_moderation_reason_readable_fr`.
+- [ ] ÉCHEC → implémenter → vert. Commit `feat(catalogue): modération des images des annonces`.
 
 ### P2-T05c — File de revue staff minimale
 
