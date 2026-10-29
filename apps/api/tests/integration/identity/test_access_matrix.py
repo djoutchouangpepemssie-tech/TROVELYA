@@ -87,6 +87,7 @@ OWNED_ROUTES = {
     "POST /v1/media/{media_id}/complete",
     "GET /v1/media/{media_id}",
     "PATCH /v1/listings/{listing_id}",
+    "POST /v1/listings/{listing_id}/publish",
 }
 STAFF_ROUTES = {
     "GET /v1/staff/approvals",
@@ -350,7 +351,8 @@ async def test_someone_elses_resources_answer_404(
     assert consents["consents"] == []
 
     # Nothing was touched, and the routes do work for the owner (a 404 for all proves nothing).
-    for key in sorted(OWNED_ROUTES, key=lambda k: k.startswith("DELETE")):  # deletions last
+    # Changes of state last: a draft is edited before it is published, deleted at the very end.
+    for key in sorted(OWNED_ROUTES, key=lambda k: (k.startswith("DELETE"), k.endswith("/publish"))):
         assert await _call(client, key, ids, owner.headers) in {200, 202, 204}, key
 
 

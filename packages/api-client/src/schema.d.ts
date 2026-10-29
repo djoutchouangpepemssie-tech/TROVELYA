@@ -516,6 +516,26 @@ export interface paths {
         patch: operations["listing_update"];
         trace?: never;
     };
+    "/v1/listings/{listing_id}/publish": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        get?: never;
+        put?: never;
+        /**
+         * Publish Listing
+         * @description A draft goes online for `listings.expiry_days` (120) days.
+         */
+        post: operations["listing_publish"];
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
     "/v1/me": {
         parameters: {
             query?: never;
@@ -1688,6 +1708,8 @@ export interface components {
             created_at: string;
             /** Description */
             description: string;
+            /** Expires At */
+            expires_at: string | null;
             /** Handover Enabled */
             handover_enabled: boolean;
             /**
@@ -1703,6 +1725,8 @@ export interface components {
             /** Place Name */
             place_name: string;
             price: components["schemas"]["Money"];
+            /** Published At */
+            published_at: string | null;
             /** Shipping Enabled */
             shipping_enabled: boolean;
             /** Short Id */
@@ -3219,6 +3243,63 @@ export interface operations {
             };
             /** @description If-Match missing */
             428: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content?: never;
+            };
+        };
+    };
+    listing_publish: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                listing_id: string;
+            };
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description Successful Response */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ListingOut"];
+                };
+            };
+            /** @description Profile incomplete, under 18, or erasure in progress (Q1) */
+            403: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content?: never;
+            };
+            /** @description Not the caller's listing */
+            404: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content?: never;
+            };
+            /** @description Not a draft */
+            409: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content?: never;
+            };
+            /** @description No ready photo */
+            422: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content?: never;
+            };
+            /** @description 50 listings put online over 24 hours; see Retry-After */
+            429: {
                 headers: {
                     [name: string]: unknown;
                 };

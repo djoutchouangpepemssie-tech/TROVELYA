@@ -216,6 +216,8 @@ class ListingOut(BaseModel):
     media_ids: list[UUID]
     created_at: datetime
     updated_at: datetime
+    published_at: datetime | None  # the last time it went online
+    expires_at: datetime | None  # while online: when it expires (Q15)
 
 
 class CategoryRef(BaseModel):

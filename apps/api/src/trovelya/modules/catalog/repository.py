@@ -471,7 +471,7 @@ _OWN_LISTING = text(
     " l.location_source_id,"
     " (SELECT coalesce(array_agg(m.media_id ORDER BY m.position), '{}')"
     " FROM listing_media m WHERE m.listing_id = l.id) AS media_ids,"
-    " l.created_at, l.updated_at"
+    " l.created_at, l.updated_at, l.published_at, l.expires_at"
     " FROM listings l JOIN categories c ON c.id = l.category_id"
     " LEFT JOIN brands b ON b.id = l.brand_id"
     " WHERE l.id = :id AND l.seller_id = :seller_id AND l.deleted_at IS NULL"
@@ -667,8 +667,12 @@ _LOCK_LISTING_STATUS = text(
     "SELECT status::text AS status, seller_id FROM listings"
     " WHERE id = :id AND deleted_at IS NULL FOR UPDATE"
 )
+# Going online sets its dates in the same UPDATE, so the version moves once.
 _SET_LISTING_STATUS = text(
-    "UPDATE listings SET status = CAST(:status AS listing_status) WHERE id = :id"
+    "UPDATE listings SET status = CAST(:status AS listing_status),"
+    " published_at = CASE WHEN CAST(:online_until AS timestamptz) IS NULL THEN published_at"
+    " ELSE :now END,"
+    " expires_at = coalesce(CAST(:online_until AS timestamptz), expires_at) WHERE id = :id"
 )
 _RECORD_TRANSITION = text(
     "INSERT INTO listing_status_history (id, listing_id, from_status, to_status, event,"
@@ -684,11 +688,56 @@ async def lock_listing_status(db: AsyncSession, listing_id: UUID) -> Row[Any] | 
     return (await db.execute(_LOCK_LISTING_STATUS, {"id": listing_id})).one_or_none()
 
 
-async def set_listing_status(db: AsyncSession, listing_id: UUID, status: str) -> None:
-    """The status alone; the version trigger moves `version` and `updated_at` with it."""
-    await db.execute(_SET_LISTING_STATUS, {"id": listing_id, "status": status})
+async def set_listing_status(
+    db: AsyncSession,
+    listing_id: UUID,
+    status: str,
+    *,
+    now: datetime,
+    online_until: datetime | None = None,
+) -> None:
+    """The status, and when the listing goes online (`online_until`), `published_at = now` and
+    `expires_at`; the version trigger moves `version` and `updated_at` once with it."""
+    await db.execute(
+        _SET_LISTING_STATUS,
+        {"id": listing_id, "status": status, "now": now, "online_until": online_until},
+    )
 
 
 async def record_transition(db: AsyncSession, values: Mapping[str, Any]) -> None:
     """One row of `listing_status_history` (E8): append only."""
     await db.execute(_RECORD_TRANSITION, values)
+
+
+# --- Publication (P2-T04b) --------------------------------------------------------------------
+
+# What a seller put online (Q24): every transition to the shop window they made themselves.
+_PUT_ONLINE_SINCE = text(
+    "SELECT created_at FROM listing_status_history"
+    " WHERE actor_id = :seller_id AND actor_kind = 'user' AND created_at > :since"
+    " AND event IN ('publish', 'submit_for_review', 'republish', 'renew')"
+    " ORDER BY created_at"
+)
+_HAS_READY_PHOTO = text(
+    "SELECT EXISTS (SELECT 1 FROM listing_media lm JOIN media m ON m.id = lm.media_id"
+    " WHERE lm.listing_id = :id AND m.status = 'ready' AND m.deleted_at IS NULL)"
+)
+
+
+async def put_online_since(db: AsyncSession, seller_id: UUID, since: datetime) -> list[datetime]:
+    """When the seller put listings online after `since`, oldest first."""
+    return list(await db.scalars(_PUT_ONLINE_SINCE, {"seller_id": seller_id, "since": since}))
+
+
+async def has_ready_photo(db: AsyncSession, listing_id: UUID) -> bool:
+    return bool(await db.scalar(_HAS_READY_PHOTO, {"id": listing_id}))
+
+
+async def setting_int(db: AsyncSession, key: str) -> int:
+    """A [PARAM] of `platform_settings`, seeded by the migrations (missing = a bug)."""
+    value = await db.scalar(
+        text("SELECT value FROM platform_settings WHERE key = :key"), {"key": key}
+    )
+    if value is None:
+        raise LookupError(f"platform setting {key} is missing")
+    return int(value)

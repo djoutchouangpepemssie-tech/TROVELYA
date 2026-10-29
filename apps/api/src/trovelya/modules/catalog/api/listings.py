@@ -14,7 +14,7 @@ from trovelya.modules.catalog.schemas import (
     ListingOut,
     ListingPage,
 )
-from trovelya.modules.catalog.service import listings, reading
+from trovelya.modules.catalog.service import listings, publishing, reading
 from trovelya.modules.identity.service import CurrentUser, get_clock
 from trovelya.modules.identity.service.auth import completed_user, optional_user
 from trovelya.shared.clock import Clock
@@ -100,4 +100,29 @@ async def get_listing(
         listing_id=listing_id,
         viewer_id=me.id if me else None,
         media_public_url=request.app.state.settings.media_public_url,
+    )
+
+
+@router.post(
+    "/{listing_id}/publish",
+    operation_id="listing_publish",
+    responses={
+        403: {"description": "Profile incomplete, under 18, or erasure in progress (Q1)"},
+        404: {"description": "Not the caller's listing"},
+        409: {"description": "Not a draft"},
+        422: {"description": "No ready photo"},
+        429: {"description": "50 listings put online over 24 hours; see Retry-After"},
+    },
+)
+async def publish_listing(
+    listing_id: UUID,
+    request: Request,
+    db: Uow,
+    me: Member,
+    clock: Annotated[Clock, Depends(get_clock)],
+) -> ListingOut:
+    """A draft goes online for `listings.expiry_days` (120) days."""
+    gate: publishing.ModerationGate = request.app.state.moderation_gate
+    return await publishing.publish(
+        db, seller_id=me.id, listing_id=listing_id, gate=gate, clock=clock
     )

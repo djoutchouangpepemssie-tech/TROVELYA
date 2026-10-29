@@ -1325,3 +1325,15 @@ async def create_staff_user(db: AsyncSession, *, user_id: UUID, email: str, now:
 
 async def role_exists(db: AsyncSession, role: str) -> bool:
     return bool(await db.scalar(_ROLE_EXISTS, {"r": role}))
+
+
+# --- Trading eligibility (P2-T04b, plan P2 Q1) -----------------------------------------------
+
+_TRADE_FACTS = text(
+    "SELECT status::text AS status, birth_year, profile_completed_at IS NOT NULL AS completed,"
+    " erasure_requested_at IS NOT NULL AS erasing FROM users WHERE id = :id"
+)
+
+
+async def trade_facts(db: AsyncSession, user_id: UUID) -> Row[Any] | None:
+    return (await db.execute(_TRADE_FACTS, {"id": user_id})).one_or_none()

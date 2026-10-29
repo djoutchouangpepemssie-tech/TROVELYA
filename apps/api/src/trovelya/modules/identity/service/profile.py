@@ -10,7 +10,7 @@ import re
 import unicodedata
 from dataclasses import dataclass
 from datetime import timedelta
-from typing import Any
+from typing import Any, Literal
 from uuid import UUID
 from zoneinfo import ZoneInfo
 
@@ -49,6 +49,23 @@ async def is_minor(db: AsyncSession, birth_year: int | None, *, clock: Clock) ->
         return None
     adult = await repository.setting_int(db, "auth.min_trade_age", default=DEFAULT_MIN_TRADE_AGE)
     return age_in(current_year(clock), birth_year) < adult
+
+
+TradeRefusal = Literal["profile_incomplete", "too_young", "account_restricted"]
+
+
+async def trade_refusal(db: AsyncSession, user_id: UUID, *, clock: Clock) -> TradeRefusal | None:
+    """Why the account may not trade, None when it may (plan P2 Q1): a completed profile,
+    adult by rule E14 (an unknown birth year is not adult), and an account neither suspended
+    nor banned with no erasure in progress. A `restricted` account (reduced visibility) may."""
+    facts = await repository.trade_facts(db, user_id)
+    if facts is None or facts.erasing or facts.status not in ("active", "restricted"):
+        return "account_restricted"
+    if not facts.completed:
+        return "profile_incomplete"
+    if await is_minor(db, facts.birth_year, clock=clock) is not False:
+        return "too_young"
+    return None
 
 
 async def me(
