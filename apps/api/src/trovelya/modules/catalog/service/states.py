@@ -14,6 +14,7 @@ from trovelya.core.errors import AppError, ErrorCode
 from trovelya.modules.catalog import repository
 from trovelya.modules.catalog.models import ListingStatus
 from trovelya.modules.catalog.state_machine import InvalidTransition, ListingEvent, next_status
+from trovelya.modules.media.service import listing_photos
 from trovelya.shared.clock import Clock
 from trovelya.shared.events import emit_event
 from trovelya.shared.ids import new_id
@@ -109,6 +110,11 @@ async def apply_transition(
             "created_at": now,
         },
     )
+    if to_status is ListingStatus.REMOVED:
+        # Q40: whatever removed it (moderation, staff, later a sanction), its photos leave
+        # public view at once, a private copy kept for the appeal.
+        media_ids = await repository.listing_media_ids(db, listing_id)
+        await listing_photos.quarantine_photos(db, media_ids, now=now)
     await emit_event(
         db,
         type=EVENT_TYPES[event],

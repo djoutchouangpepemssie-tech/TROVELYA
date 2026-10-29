@@ -4798,7 +4798,7 @@ export interface operations {
                 };
                 content?: never;
             };
-            /** @description Not in the status the decision applies to */
+            /** @description Not in the status the decision applies to, or no longer publishable */
             409: {
                 headers: {
                     [name: string]: unknown;
@@ -4879,7 +4879,7 @@ export interface operations {
                 };
                 content?: never;
             };
-            /** @description Not in the status the decision applies to */
+            /** @description Not in the status the decision applies to, or no longer publishable */
             409: {
                 headers: {
                     [name: string]: unknown;
@@ -4935,7 +4935,7 @@ export interface operations {
                 };
                 content?: never;
             };
-            /** @description Not in the status the decision applies to */
+            /** @description Not in the status the decision applies to, or no longer publishable */
             409: {
                 headers: {
                     [name: string]: unknown;

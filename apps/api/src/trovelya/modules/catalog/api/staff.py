@@ -6,6 +6,7 @@ from uuid import UUID
 from fastapi import APIRouter, Depends, Query, Request
 
 from trovelya.core.db import Uow
+from trovelya.core.errors import AppError, ErrorCode
 from trovelya.modules.catalog.schemas import (
     ReviewQueue,
     StaffDecisionIn,
@@ -20,10 +21,20 @@ router = APIRouter(prefix="/v1/staff", tags=["staff"])
 ClockDep = Annotated[Clock, Depends(get_clock)]
 Reviewer = Annotated[access.Authorised, Depends(access.require_permission("moderation.review"))]
 Remover = Annotated[access.Authorised, Depends(access.require_permission("listing.remove_any"))]
+
+
+def _direct(staff: access.Authorised) -> UUID:
+    """No dual approval for the moderation yet: a role granting it only with one is refused
+    rather than deciding alone."""
+    if staff.grant.requires_approval:
+        raise AppError(ErrorCode.FORBIDDEN, 403)
+    return staff.user.id
+
+
 _DECISION_ERRORS: dict[int | str, dict[str, str]] = {
     403: {"description": "Not a staff session with the permission, or the reviewer's own"},
     404: {"description": "No such listing"},
-    409: {"description": "Not in the status the decision applies to"},
+    409: {"description": "Not in the status the decision applies to, or no longer publishable"},
 }
 
 
@@ -47,7 +58,7 @@ async def approve_listing(
     listing_id: UUID, db: Uow, staff: Reviewer, clock: ClockDep
 ) -> StaffDecisionOut:
     """The listing goes online for `listings.expiry_days` days."""
-    status = await review.approve(db, listing_id=listing_id, staff_id=staff.user.id, clock=clock)
+    status = await review.approve(db, listing_id=listing_id, staff_id=_direct(staff), clock=clock)
     return StaffDecisionOut.model_validate({"id": listing_id, "status": status})
 
 
@@ -63,7 +74,7 @@ async def reject_listing(
     status = await review.reject(
         db,
         listing_id=listing_id,
-        staff_id=staff.user.id,
+        staff_id=_direct(staff),
         reason_code=body.reason_code,
         reason_text=body.reason_text,
         clock=clock,
@@ -83,7 +94,7 @@ async def remove_listing(
     status = await review.reject(
         db,
         listing_id=listing_id,
-        staff_id=staff.user.id,
+        staff_id=_direct(staff),
         reason_code=body.reason_code,
         reason_text=body.reason_text,
         clock=clock,

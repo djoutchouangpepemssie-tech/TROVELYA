@@ -48,6 +48,13 @@ async def discard_photos(db: AsyncSession, media_ids: Sequence[UUID], *, now: da
         await repository.mark_deleted(db, media_id, now)
 
 
+async def quarantine_photos(db: AsyncSession, media_ids: Sequence[UUID], *, now: datetime) -> None:
+    """Q40: the photos of a listing removed by the moderation are never shown again; the
+    hourly purge moves their variants to a private copy, kept for the appeal."""
+    if media_ids:
+        await repository.quarantine(db, media_ids, now)
+
+
 def _public(variants: list[dict[str, Any]], base: str) -> list[dict[str, Any]]:
     return [
         {

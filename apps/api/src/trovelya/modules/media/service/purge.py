@@ -5,6 +5,8 @@
    and committed, so a worker finishing late (`mark_ready` needs a media not deleted) cannot
    race with the deletion of its files; a photo a member is choosing as their avatar or
    attaching to a listing is skipped (`mark_for_purge`).
+1b. Quarantined photos (plan Q40): their variants move from the public bucket to a private
+   copy (same keys, `originals` bucket), kept for the appeal; deleted with the photo.
 2. Files of every deleted media: original and variants leave storage at the next run, an
    hour at most after the photo was withdrawn or the account erased (ADR-0019: a withdrawn
    photo's public URL must stop working). A failure is recorded on the row; the media is
@@ -31,6 +33,8 @@ ABANDONED_AFTER = timedelta(hours=24)  # plan P2, T02c
 # completed when the database is anonymised; its files follow within the hour).
 FILES_OVERDUE_AFTER = timedelta(hours=48)
 BATCH = 200
+# A photo removed by the moderation still public after this is reported (moved within the hour).
+QUARANTINE_OVERDUE_AFTER = timedelta(hours=2)
 # Storage down: the run stops rather than failing on every row until its timeout (at least 1).
 MAX_CONSECUTIVE_FAILURES = 20
 
@@ -66,6 +70,8 @@ async def _delete_files(
                 await storage.delete("originals", row.storage_key)
                 for variant in row.variants:
                     await storage.delete("variants", variant["key"])
+                    if row.quarantined_at is not None:  # its private copy, even half-made (Q40)
+                        await storage.delete("originals", variant["key"])
             except Exception:
                 logger.exception("media.purge_failed", media_id=str(row.id))
                 async with sessionmaker() as db:
@@ -83,6 +89,46 @@ async def _delete_files(
             run.deleted += 1
 
 
+async def _move_quarantined(sessionmaker: Session, storage: ObjectStorage, *, clock: Clock) -> None:
+    """Q40: a quarantined photo's variants move to a private copy (copied before deleted). Each
+    photo is tried at every run, a failing one holding back no other; failures in a row stop
+    this step, not the purge. Photos still public QUARANTINE_OVERDUE_AFTER on are reported."""
+    after = None
+    failures = 0
+    while failures < MAX_CONSECUTIVE_FAILURES:
+        async with sessionmaker() as db:
+            rows = await repository.quarantined_to_move(db, after=after, limit=BATCH)
+        if not rows:
+            break
+        for row in rows:
+            after = row.id
+            try:
+                for variant in row.variants:
+                    if await storage.size("variants", variant["key"]) is None:
+                        continue
+                    data = await storage.get("variants", variant["key"])
+                    kind = f"image/{variant['format']}"
+                    await storage.put("originals", variant["key"], data, content_type=kind)
+                    await storage.delete("variants", variant["key"])
+            except Exception:
+                logger.exception("media.quarantine_failed", media_id=str(row.id))
+                failures += 1
+                if failures >= MAX_CONSECUTIVE_FAILURES:
+                    logger.error("media.quarantine_stopped", failures=failures)
+                    break
+                continue
+            failures = 0
+            async with sessionmaker() as db:
+                await repository.mark_quarantine_moved(db, row.id, clock.now())
+                await commit(db)
+    async with sessionmaker() as db:
+        overdue = await repository.quarantine_overdue(
+            db, quarantined_before=clock.now() - QUARANTINE_OVERDUE_AFTER
+        )
+    if overdue:
+        logger.error("media.quarantine_overdue", count=overdue)
+
+
 async def purge_media(sessionmaker: Session, storage: ObjectStorage, *, clock: Clock) -> int:
     """Returns the number of media whose files were deleted."""
     now = clock.now()
@@ -93,6 +139,7 @@ async def purge_media(sessionmaker: Session, storage: ObjectStorage, *, clock: C
         )
         await commit(db)
     run = _Run(now)
+    await _move_quarantined(sessionmaker, storage, clock=clock)
     await _delete_files(sessionmaker, storage, run, clock=clock, retry=False)
     await _delete_files(sessionmaker, storage, run, clock=clock, retry=True)
     files = run.deleted

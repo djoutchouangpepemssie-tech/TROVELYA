@@ -102,8 +102,8 @@ async def start_processing(db: AsyncSession, media_id: UUID, owner_id: UUID) -> 
 
 
 _OWNED_MEDIA = text(
-    "SELECT id, purpose, mime_type, status, width, height, variants, rejection_reason"
-    " FROM media WHERE id = :id AND owner_id = :owner AND deleted_at IS NULL"
+    "SELECT id, purpose, mime_type, status, width, height, variants, rejection_reason,"
+    " quarantined_at FROM media WHERE id = :id AND owner_id = :owner AND deleted_at IS NULL"
 )
 _OWNED_MEDIA_FOR_SHARE = text(
     "SELECT id, purpose, mime_type, status, width, height, variants, rejection_reason"
@@ -241,8 +241,8 @@ async def ready_variants_of(
     """The variants of each ready, not deleted media among `media_ids`, in one query."""
     rows = await db.execute(
         text(
-            "SELECT id, variants FROM media"
-            " WHERE id = ANY(:ids) AND status = 'ready' AND deleted_at IS NULL"
+            "SELECT id, variants FROM media WHERE id = ANY(:ids) AND status = 'ready'"
+            " AND deleted_at IS NULL AND quarantined_at IS NULL"
         ),
         {"ids": list(media_ids)},
     )
@@ -334,13 +334,13 @@ async def mark_for_purge(
 
 
 _FILES_TO_DELETE = text(
-    "SELECT id, storage_key, variants FROM media"
+    "SELECT id, storage_key, variants, quarantined_at FROM media"
     " WHERE deleted_at IS NOT NULL AND files_deleted_at IS NULL"
     " AND files_purge_failed_at IS NULL"
     " AND (CAST(:after AS uuid) IS NULL OR id > :after) ORDER BY id LIMIT :limit"
 )
 _FILES_TO_RETRY = text(
-    "SELECT id, storage_key, variants FROM media"
+    "SELECT id, storage_key, variants, quarantined_at FROM media"
     " WHERE deleted_at IS NOT NULL AND files_deleted_at IS NULL"
     " AND files_purge_failed_at < :failed_before"
     " AND (CAST(:after AS uuid) IS NULL OR id > :after) ORDER BY id LIMIT :limit"
@@ -423,3 +423,47 @@ async def ready_moderation_of(
         {"ids": list(media_ids)},
     )
     return {row.id: row.moderation for row in rows}
+
+
+async def quarantine(db: AsyncSession, media_ids: Sequence[UUID], now: datetime) -> None:
+    """Plan Q40, P2-T05c1b: photos of a listing removed by the moderation, never shown again."""
+    await db.execute(
+        text(
+            "UPDATE media SET quarantined_at = :now WHERE id = ANY(:ids)"
+            " AND quarantined_at IS NULL AND deleted_at IS NULL"
+        ),
+        {"ids": list(media_ids), "now": now},
+    )
+
+
+_TO_MOVE = text(
+    "SELECT id, variants FROM media WHERE quarantined_at IS NOT NULL"
+    " AND quarantine_moved_at IS NULL AND deleted_at IS NULL"
+    " AND (CAST(:after AS uuid) IS NULL OR id > :after) ORDER BY id LIMIT :limit"
+)
+_QUARANTINE_OVERDUE = text(
+    "SELECT count(*) FROM media WHERE quarantined_at IS NOT NULL"
+    " AND quarantine_moved_at IS NULL AND deleted_at IS NULL AND quarantined_at < :before"
+)
+
+
+async def quarantined_to_move(
+    db: AsyncSession, *, after: UUID | None, limit: int
+) -> list[Row[Any]]:
+    """Quarantined photos whose variants are still public: (id, variants), after `after`."""
+    return list(await db.execute(_TO_MOVE, {"after": after, "limit": limit}))
+
+
+async def quarantine_overdue(db: AsyncSession, *, quarantined_before: datetime) -> int:
+    return int(await db.scalar(_QUARANTINE_OVERDUE, {"before": quarantined_before}) or 0)
+
+
+async def mark_quarantine_moved(db: AsyncSession, media_id: UUID, now: datetime) -> None:
+    """Only while still quarantined and kept (a photo restored or deleted meanwhile stays so)."""
+    await db.execute(
+        text(
+            "UPDATE media SET quarantine_moved_at = :now WHERE id = :id"
+            " AND quarantined_at IS NOT NULL AND deleted_at IS NULL"
+        ),
+        {"id": media_id, "now": now},
+    )

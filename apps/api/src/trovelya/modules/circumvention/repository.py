@@ -64,15 +64,19 @@ async def setting_int(db: AsyncSession, key: str) -> int:
 
 
 async def detections_of(
-    db: AsyncSession, source_type: str, source_id: UUID
-) -> list[dict[str, Any]]:
-    """What was found in a source, never the original: signals, action, part, review."""
+    db: AsyncSession, source_type: str, source_ids: list[UUID]
+) -> dict[UUID, list[dict[str, Any]]]:
+    """What was found in each source, never the original: signals, action, part, review."""
     rows = await db.execute(
         text(
-            "SELECT signals, action_taken, review_status, matched_spans -> 0 ->> 'part' AS part"
-            " FROM circumvention_detections WHERE source_type = :t AND source_id = :s"
-            " ORDER BY created_at, id"
+            "SELECT source_id, signals, action_taken, review_status,"
+            " matched_spans -> 0 ->> 'part' AS part FROM circumvention_detections"
+            " WHERE source_type = :t AND source_id = ANY(:s) ORDER BY created_at, id"
         ),
-        {"t": source_type, "s": source_id},
+        {"t": source_type, "s": source_ids},
     )
-    return [dict(row) for row in rows.mappings()]
+    found: dict[UUID, list[dict[str, Any]]] = {}
+    for row in rows.mappings():
+        detection = dict(row)
+        found.setdefault(detection.pop("source_id"), []).append(detection)
+    return found

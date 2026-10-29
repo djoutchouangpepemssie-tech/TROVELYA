@@ -61,12 +61,13 @@ async def _audit(sessionmaker: Session, listing_id: str) -> list[tuple[Any, ...]
 
 
 async def _photos_kept(sessionmaker: Session, listing_id: str) -> bool:
-    """Q40: kept for the appeal (until their private copy, T05c1b), never destroyed."""
+    """Q40: quarantined for the appeal (never shown, a private copy kept), never destroyed."""
     async with sessionmaker() as db:
         return bool(
             await db.scalar(
                 text(
-                    "SELECT bool_and(m.deleted_at IS NULL) FROM listing_media lm"
+                    "SELECT bool_and(m.deleted_at IS NULL AND m.quarantined_at IS NOT NULL)"
+                    " FROM listing_media lm"
                     " JOIN media m ON m.id = lm.media_id WHERE lm.listing_id = :l"
                 ),
                 {"l": listing_id},
