@@ -22,19 +22,29 @@ class Embedder(Protocol):
         ...
 
 
+FLOAT32_MAX = 3.4e38
+
+
 def checked_vector(vector: list[float]) -> list[float]:
-    """The vector as a model must give it, or ValueError (never a wrong one stored)."""
-    if len(vector) != DIMENSION or not all(
-        isinstance(x, float) and math.isfinite(x) for x in vector
-    ):
+    """The vector as a model must give it, or ValueError (never a wrong one stored): `DIMENSION`
+    numbers within float32, not all zero (a zero vector has no cosine distance)."""
+    try:
+        numbers = [float(x) for x in vector if not isinstance(x, bool)]
+    except (TypeError, ValueError) as exc:
+        raise ValueError(f"an embedding has {DIMENSION} numbers") from exc
+    if len(numbers) != len(vector) or len(numbers) != DIMENSION:
         raise ValueError(f"an embedding has {DIMENSION} finite numbers")
-    return vector
+    if not all(math.isfinite(x) and abs(x) < FLOAT32_MAX for x in numbers):
+        raise ValueError(f"an embedding has {DIMENSION} finite numbers")
+    if math.sqrt(sum(x * x for x in numbers)) < 1e-6:
+        raise ValueError(f"an embedding of {DIMENSION} zeros has no direction")
+    return numbers
 
 
 def _words(text: str) -> list[str]:
     plain = unicodedata.normalize("NFKD", text.casefold())
     plain = "".join(c for c in plain if not unicodedata.combining(c))
-    return re.findall(r"[a-z0-9]+", plain)
+    return re.findall(r"\w+", plain)
 
 
 class FakeEmbedder:

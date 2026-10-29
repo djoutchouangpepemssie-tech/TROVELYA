@@ -1108,17 +1108,18 @@ async def price_facts(
 # --- Embeddings (P2-T11, ADR-0020) -------------------------------------------------------------
 
 _EMBEDDING_SOURCE = text(
-    "SELECT l.version, l.title, l.description, l.category_id, l.attributes,"
+    "SELECT l.seller_id, l.title, l.description, l.category_id, l.attributes,"
     " b.name::text AS brand"
     " FROM listings l LEFT JOIN brands b ON b.id = l.brand_id"
-    " WHERE l.id = :id AND l.deleted_at IS NULL"
+    " WHERE l.id = :id AND l.status = 'active' AND l.deleted_at IS NULL"
 )
-# Only while the text is the one embedded (`version`): a listing edited meanwhile is embedded
-# again by its own event.
 _SET_EMBEDDING = text(
     "UPDATE listings SET embedding = CAST(:vector AS vector), embedding_model = :model"
-    " WHERE id = :id AND deleted_at IS NULL AND version = :version"
+    " WHERE id = :id AND status = 'active' AND deleted_at IS NULL"
 )
+# A similarity query uses `listings_embedding_hnsw_idx` only when it repeats its predicate as
+# literals (`status = 'active' AND embedding IS NOT NULL`), and compares vectors of the current
+# `embedding_model` only (two models may coexist while reindexing).
 _STALE_EMBEDDINGS = text(
     "SELECT id FROM listings WHERE status = 'active' AND deleted_at IS NULL"
     " AND embedding_model IS DISTINCT FROM :model"
@@ -1127,16 +1128,24 @@ _STALE_EMBEDDINGS = text(
 
 
 async def embedding_source(db: AsyncSession, listing_id: UUID) -> Row[Any] | None:
-    """What a listing's embedding is made of, with its version; None once deleted."""
+    """What a listing's embedding is made of, and its seller; None unless online."""
     return (await db.execute(_EMBEDDING_SOURCE, {"id": listing_id})).one_or_none()
 
 
 async def set_embedding(
-    db: AsyncSession, listing_id: UUID, *, vector: list[float], model: str, version: int
+    db: AsyncSession, listing_id: UUID, *, vector: list[float], model: str
 ) -> bool:
-    params = {"id": listing_id, "vector": str(vector), "model": model, "version": version}
+    params = {"id": listing_id, "vector": str(vector), "model": model}
     result = await db.execute(_SET_EMBEDDING, params)
     return int(result.rowcount) == 1  # pyright: ignore[reportAttributeAccessIssue, reportUnknownArgumentType, reportUnknownMemberType]
+
+
+async def drop_embedding(db: AsyncSession, listing_id: UUID) -> None:
+    """Out of the shop window, a listing keeps no vector (recomputed when back online)."""
+    await db.execute(
+        text("UPDATE listings SET embedding = NULL, embedding_model = NULL WHERE id = :id"),
+        {"id": listing_id},
+    )
 
 
 async def stale_embeddings(

@@ -29,6 +29,7 @@ from trovelya.core.redis import make_redis
 from trovelya.modules.catalog.adapters.embedder import embedder_from_settings
 from trovelya.modules.catalog.service.embeddings import EMBED_JOB, catalog_subscriptions
 from trovelya.modules.catalog.tasks import (
+    EMBED_MAX_TRIES,
     embed_listing_job,
     expire_listings_job,
     purge_ended_listings_job,
@@ -91,7 +92,7 @@ async def startup(ctx: Context) -> None:
     ctx["email_sender"] = make_email_sender(settings, ctx["http"])
     # Handlers enqueue their e-mails on arq's own pool (ctx["redis"]).
     ctx["subscriptions"] = identity_subscriptions(ctx["redis"], settings) + catalog_subscriptions(
-        ctx["redis"]
+        ctx["redis"], ctx["embedder"]
     )
     ctx["consumer_name"] = socket.gethostname()
     await ensure_group(ctx["redis_client"])
@@ -165,7 +166,7 @@ class WorkerSettings:
     functions: ClassVar[list[Any]] = [
         func(deliver_email, max_tries=MAX_TRIES, timeout=60),
         func(build_data_export_job, name=EXPORT_JOB, max_tries=3, timeout=300),
-        func(embed_listing_job, name=EMBED_JOB, max_tries=5, timeout=60),
+        func(embed_listing_job, name=EMBED_JOB, max_tries=EMBED_MAX_TRIES, timeout=60),
         func(
             process_media_job,
             name=PROCESS_JOB,

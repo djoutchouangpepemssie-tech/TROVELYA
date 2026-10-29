@@ -27,7 +27,7 @@ _AAD = b"trovelya:email-job:v1"
 
 
 class JobQueue(Protocol):
-    async def enqueue_job(self, function: str, *args: Any) -> Any: ...
+    async def enqueue_job(self, function: str, *args: Any, **kwargs: Any) -> Any: ...
 
 
 def _key(settings: Settings) -> bytes:

@@ -3,6 +3,8 @@
 from typing import Any
 from uuid import UUID
 
+from arq import Retry
+
 from trovelya.modules.catalog.service.embeddings import embed_listing, reindex
 from trovelya.modules.catalog.service.expiry import expire_listings
 from trovelya.modules.catalog.service.retention import purge_ended_listings
@@ -16,12 +18,24 @@ async def purge_ended_listings_job(ctx: dict[str, Any]) -> int:
     return await purge_ended_listings(ctx["sessionmaker"], clock=ctx["clock"])
 
 
+EMBED_MAX_TRIES = 5
+
+
 async def embed_listing_job(ctx: dict[str, Any], listing_id: str) -> bool:
-    """ADR-0020: enqueued when a listing goes online; nothing without an embedder."""
+    """ADR-0020: enqueued when a listing goes online; nothing without an embedder. A provider
+    failure is tried again (30 s, 2 min, 8 min, 32 min), a wrong vector is not."""
     embedder = ctx.get("embedder")
     if embedder is None:
         return False
-    return await embed_listing(ctx["sessionmaker"], embedder, UUID(listing_id))
+    try:
+        return await embed_listing(ctx["sessionmaker"], embedder, UUID(listing_id))
+    except ValueError:
+        raise
+    except Exception as exc:
+        attempt: int = ctx["job_try"]
+        if attempt >= EMBED_MAX_TRIES:
+            raise  # the daily reindexing catches it
+        raise Retry(defer=30 * 4 ** (attempt - 1)) from exc
 
 
 async def reindex_embeddings_job(ctx: dict[str, Any]) -> int:
