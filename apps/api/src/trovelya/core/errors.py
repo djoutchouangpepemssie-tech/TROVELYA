@@ -73,6 +73,7 @@ class ErrorCode(StrEnum):
     PUBLISH_FORBIDDEN = "publish_forbidden"
     PUBLICATION_LIMIT = "publication_limit"
     PHOTO_REQUIRED = "photo_required"
+    OWN_LISTING = "own_listing"
 
 
 # French titles by default (section 2); translation by Accept-Language arrives with P1.
@@ -133,6 +134,7 @@ _TITLES: dict[ErrorCode, str] = {
     ErrorCode.PUBLISH_FORBIDDEN: "Ton compte ne peut pas publier d'annonce pour l'instant",
     ErrorCode.PUBLICATION_LIMIT: "Limite de mises en ligne sur 24 heures atteinte",
     ErrorCode.PHOTO_REQUIRED: "Il faut au moins une photo prête pour publier",
+    ErrorCode.OWN_LISTING: "C'est ta propre annonce",
 }
 
 _STATUS_CODES: dict[int, ErrorCode] = {

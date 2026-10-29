@@ -553,6 +553,11 @@ _PUBLIC_SELLER = text(
     " OR (u.status IN ('active', 'restricted') AND u.erasure_requested_at IS NULL"
     " AND u.profile_completed_at IS NOT NULL))"
 )
+# The same rule as _PUBLIC_SELLER, for many sellers at once.
+_SHOWN_SELLERS = text(
+    "SELECT u.id FROM users u WHERE u.id = ANY(:ids) AND u.status IN ('active', 'restricted')"
+    " AND u.erasure_requested_at IS NULL AND u.profile_completed_at IS NOT NULL"
+)
 _DEFAULT_ZONE_CENTER = text(
     "SELECT ST_Y(center::geometry) AS lat, ST_X(center::geometry) AS lon FROM search_zones"
     " WHERE user_id = :user_id AND is_default"
@@ -564,6 +569,10 @@ async def public_seller(
 ) -> Row[Any] | None:
     params = {"id": user_id, "hidden_too": hidden_too}
     return (await db.execute(_PUBLIC_SELLER, params)).one_or_none()
+
+
+async def shown_sellers(db: AsyncSession, user_ids: list[UUID]) -> set[UUID]:
+    return set(await db.scalars(_SHOWN_SELLERS, {"ids": user_ids}))
 
 
 async def default_zone_center(db: AsyncSession, user_id: UUID) -> Row[Any] | None:

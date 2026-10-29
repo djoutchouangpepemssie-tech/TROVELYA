@@ -333,6 +333,47 @@ class ListingSummary(BaseModel):
     expires_at: datetime | None
 
 
+class PriceWatch(BaseModel):
+    target_minor: int | None  # None: any drop
+
+
+class PriceWatchIn(BaseModel):
+    """Q43: from 1 € to below the current price; none to be told of any drop."""
+
+    target_minor: int | None = Field(default=None, strict=True)
+
+
+class FavoriteItem(BaseModel):
+    """A listing in the member's favorites; `available` False once it left (sold, withdrawn,
+    expired, removed, or its seller is not shown)."""
+
+    id: UUID
+    short_id: str
+    title: str
+    price: Money
+    cover: list[PhotoVariant] | None
+    available: bool
+    favorited_at: datetime
+    price_watch: PriceWatch | None
+
+
+class FavoritePage(BaseModel):
+    data: list[FavoriteItem]
+    next_cursor: str | None
+    has_more: bool
+
+
+class PricePoint(BaseModel):
+    at: datetime
+    price: Money
+
+
+class PriceHistory(BaseModel):
+    """The prices shown online, from the first time online (Q43), oldest first."""
+
+    prices: list[PricePoint]
+
+
 class ListingSummaryPage(BaseModel):
     """Section 11.3: a page and the cursor of the next one."""
 

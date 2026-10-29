@@ -980,3 +980,93 @@ async def review_queue(db: AsyncSession, *, staff_id: UUID, limit: int) -> list[
     the reviewer's own (they may not decide on them)."""
     rows = (await db.execute(_REVIEW_QUEUE, {"staff": staff_id, "limit": limit})).mappings()
     return [dict(row) for row in rows]
+
+
+# --- Favorites, price watches, price history (P2-T08) -----------------------------------------
+
+_FAVORITE_TARGET = text(
+    "SELECT status::text AS status, seller_id, price_minor, currency FROM listings"
+    " WHERE id = :id AND deleted_at IS NULL"
+)
+_ADD_FAVORITE = text(
+    "WITH added AS (INSERT INTO favorites (user_id, listing_id, created_at)"
+    " VALUES (:user_id, :listing_id, :now) ON CONFLICT DO NOTHING RETURNING listing_id)"
+    " UPDATE listings SET favorite_count = favorite_count + 1"
+    " WHERE id IN (SELECT listing_id FROM added)"
+)
+_REMOVE_FAVORITE = text(
+    "WITH gone AS (DELETE FROM favorites WHERE user_id = :user_id AND listing_id = :listing_id"
+    " RETURNING listing_id)"
+    " UPDATE listings SET favorite_count = GREATEST(favorite_count - 1, 0)"
+    " WHERE id IN (SELECT listing_id FROM gone)"
+)
+_UPSERT_WATCH = text(
+    "INSERT INTO price_watches (user_id, listing_id, target_minor, created_at)"
+    " VALUES (:user_id, :listing_id, :target_minor, :now)"
+    " ON CONFLICT (user_id, listing_id) DO UPDATE SET target_minor = EXCLUDED.target_minor"
+)
+_MY_FAVORITES = text(
+    "SELECT l.id, l.short_id, l.status::text AS status, l.seller_id, l.title, l.price_minor,"
+    " l.currency, f.created_at AS favorited_at, w.target_minor, w.user_id AS watching,"
+    " ARRAY(SELECT m.media_id FROM listing_media m WHERE m.listing_id = l.id"
+    " ORDER BY m.position) AS media_ids"
+    " FROM favorites f JOIN listings l ON l.id = f.listing_id"
+    " LEFT JOIN price_watches w ON w.user_id = f.user_id AND w.listing_id = f.listing_id"
+    " WHERE f.user_id = :user_id AND l.deleted_at IS NULL"
+    " AND (CAST(:at AS timestamptz) IS NULL OR (f.created_at, f.listing_id)"
+    " < (CAST(:at AS timestamptz), CAST(:after_id AS uuid)))"
+    " ORDER BY f.created_at DESC, f.listing_id DESC LIMIT :limit"
+)
+_PRICE_CHANGES = text(
+    "SELECT changed_at, price_minor FROM listing_price_history WHERE listing_id = :id"
+    " ORDER BY changed_at, id"
+)
+_FIRST_ONLINE = text(
+    "SELECT min(created_at) FROM listing_status_history"
+    " WHERE listing_id = :id AND to_status = 'active'"
+)
+
+
+async def favorite_target(db: AsyncSession, listing_id: UUID) -> Row[Any] | None:
+    return (await db.execute(_FAVORITE_TARGET, {"id": listing_id})).one_or_none()
+
+
+async def add_favorite(db: AsyncSession, user_id: UUID, listing_id: UUID, now: datetime) -> None:
+    """Idempotent; the count moves only for a favorite actually added (same statement)."""
+    await db.execute(_ADD_FAVORITE, {"user_id": user_id, "listing_id": listing_id, "now": now})
+
+
+async def remove_favorite(db: AsyncSession, user_id: UUID, listing_id: UUID) -> None:
+    await db.execute(_REMOVE_FAVORITE, {"user_id": user_id, "listing_id": listing_id})
+
+
+async def set_price_watch(
+    db: AsyncSession, user_id: UUID, listing_id: UUID, target_minor: int | None, now: datetime
+) -> None:
+    params = {"user_id": user_id, "listing_id": listing_id, "target_minor": target_minor}
+    await db.execute(_UPSERT_WATCH, params | {"now": now})
+
+
+async def remove_price_watch(db: AsyncSession, user_id: UUID, listing_id: UUID) -> None:
+    await db.execute(
+        text("DELETE FROM price_watches WHERE user_id = :user_id AND listing_id = :listing_id"),
+        {"user_id": user_id, "listing_id": listing_id},
+    )
+
+
+async def my_favorites(
+    db: AsyncSession, *, user_id: UUID, after: tuple[datetime, UUID] | None, limit: int
+) -> list[dict[str, Any]]:
+    """The member's favorites, the latest first, after `after` (favorited at, listing id)."""
+    at, after_id = after or (None, None)
+    params = {"user_id": user_id, "at": at, "after_id": after_id, "limit": limit}
+    return [dict(row) for row in (await db.execute(_MY_FAVORITES, params)).mappings()]
+
+
+async def price_changes(
+    db: AsyncSession, listing_id: UUID
+) -> tuple[list[tuple[datetime, int]], datetime | None]:
+    """Every recorded price of the listing, and when it first went online (None: never)."""
+    rows = await db.execute(_PRICE_CHANGES, {"id": listing_id})
+    changes = [(row.changed_at, row.price_minor) for row in rows]
+    return changes, await db.scalar(_FIRST_ONLINE, {"id": listing_id})

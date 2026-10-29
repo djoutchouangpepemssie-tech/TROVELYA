@@ -35,6 +35,7 @@ from trovelya.modules.identity.service.places import (
 from trovelya.modules.identity.service.profile import (
     default_zone_center,
     public_seller,
+    shown_sellers,
     trade_refusal,
 )
 from trovelya.modules.identity.service.sessions import (
@@ -84,6 +85,7 @@ __all__ = [
     "revoke_session",
     "rotate_session",
     "set_session_cookie",
+    "shown_sellers",
     "trade_refusal",
     "verify_magic_link",
 ]

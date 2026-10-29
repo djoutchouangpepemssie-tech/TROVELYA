@@ -1279,6 +1279,105 @@
         "title": "ErasureAccepted",
         "type": "object"
       },
+      "FavoriteItem": {
+        "description": "A listing in the member's favorites; `available` False once it left (sold, withdrawn,\nexpired, removed, or its seller is not shown).",
+        "properties": {
+          "available": {
+            "title": "Available",
+            "type": "boolean"
+          },
+          "cover": {
+            "anyOf": [
+              {
+                "items": {
+                  "$ref": "#/components/schemas/PhotoVariant"
+                },
+                "type": "array"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Cover"
+          },
+          "favorited_at": {
+            "format": "date-time",
+            "title": "Favorited At",
+            "type": "string"
+          },
+          "id": {
+            "format": "uuid",
+            "title": "Id",
+            "type": "string"
+          },
+          "price": {
+            "$ref": "#/components/schemas/Money"
+          },
+          "price_watch": {
+            "anyOf": [
+              {
+                "$ref": "#/components/schemas/PriceWatch"
+              },
+              {
+                "type": "null"
+              }
+            ]
+          },
+          "short_id": {
+            "title": "Short Id",
+            "type": "string"
+          },
+          "title": {
+            "title": "Title",
+            "type": "string"
+          }
+        },
+        "required": [
+          "id",
+          "short_id",
+          "title",
+          "price",
+          "cover",
+          "available",
+          "favorited_at",
+          "price_watch"
+        ],
+        "title": "FavoriteItem",
+        "type": "object"
+      },
+      "FavoritePage": {
+        "properties": {
+          "data": {
+            "items": {
+              "$ref": "#/components/schemas/FavoriteItem"
+            },
+            "title": "Data",
+            "type": "array"
+          },
+          "has_more": {
+            "title": "Has More",
+            "type": "boolean"
+          },
+          "next_cursor": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Next Cursor"
+          }
+        },
+        "required": [
+          "data",
+          "next_cursor",
+          "has_more"
+        ],
+        "title": "FavoritePage",
+        "type": "object"
+      },
       "HTTPValidationError": {
         "properties": {
           "detail": {
@@ -2687,6 +2786,79 @@
           }
         },
         "title": "Preferences",
+        "type": "object"
+      },
+      "PriceHistory": {
+        "description": "The prices shown online, from the first time online (Q43), oldest first.",
+        "properties": {
+          "prices": {
+            "items": {
+              "$ref": "#/components/schemas/PricePoint"
+            },
+            "title": "Prices",
+            "type": "array"
+          }
+        },
+        "required": [
+          "prices"
+        ],
+        "title": "PriceHistory",
+        "type": "object"
+      },
+      "PricePoint": {
+        "properties": {
+          "at": {
+            "format": "date-time",
+            "title": "At",
+            "type": "string"
+          },
+          "price": {
+            "$ref": "#/components/schemas/Money"
+          }
+        },
+        "required": [
+          "at",
+          "price"
+        ],
+        "title": "PricePoint",
+        "type": "object"
+      },
+      "PriceWatch": {
+        "properties": {
+          "target_minor": {
+            "anyOf": [
+              {
+                "type": "integer"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Target Minor"
+          }
+        },
+        "required": [
+          "target_minor"
+        ],
+        "title": "PriceWatch",
+        "type": "object"
+      },
+      "PriceWatchIn": {
+        "description": "Q43: from 1 € to below the current price; none to be told of any drop.",
+        "properties": {
+          "target_minor": {
+            "anyOf": [
+              {
+                "type": "integer"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Target Minor"
+          }
+        },
+        "title": "PriceWatchIn",
         "type": "object"
       },
       "ProfilePatch": {
@@ -5046,6 +5218,211 @@
         ]
       }
     },
+    "/v1/listings/{listing_id}/favorite": {
+      "delete": {
+        "description": "Always possible, the listing online or not; idempotent.",
+        "operationId": "favorite_remove",
+        "parameters": [
+          {
+            "in": "path",
+            "name": "listing_id",
+            "required": true,
+            "schema": {
+              "format": "uuid",
+              "title": "Listing Id",
+              "type": "string"
+            }
+          }
+        ],
+        "responses": {
+          "204": {
+            "description": "Successful Response"
+          },
+          "422": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/HTTPValidationError"
+                }
+              }
+            },
+            "description": "Validation Error"
+          }
+        },
+        "summary": "Remove Favorite",
+        "tags": [
+          "catalog"
+        ]
+      },
+      "post": {
+        "description": "Idempotent: a listing already in favorites stays once.",
+        "operationId": "favorite_add",
+        "parameters": [
+          {
+            "in": "path",
+            "name": "listing_id",
+            "required": true,
+            "schema": {
+              "format": "uuid",
+              "title": "Listing Id",
+              "type": "string"
+            }
+          }
+        ],
+        "responses": {
+          "204": {
+            "description": "Successful Response"
+          },
+          "404": {
+            "description": "No such listing online"
+          },
+          "409": {
+            "description": "The caller's own listing"
+          },
+          "422": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/HTTPValidationError"
+                }
+              }
+            },
+            "description": "Validation Error"
+          }
+        },
+        "summary": "Add Favorite",
+        "tags": [
+          "catalog"
+        ]
+      }
+    },
+    "/v1/listings/{listing_id}/price-history": {
+      "get": {
+        "description": "The prices shown online since the first time online, oldest first; anybody may read.",
+        "operationId": "listing_price_history",
+        "parameters": [
+          {
+            "in": "path",
+            "name": "listing_id",
+            "required": true,
+            "schema": {
+              "format": "uuid",
+              "title": "Listing Id",
+              "type": "string"
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/PriceHistory"
+                }
+              }
+            },
+            "description": "Successful Response"
+          },
+          "404": {
+            "description": "No such listing online"
+          },
+          "422": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/HTTPValidationError"
+                }
+              }
+            },
+            "description": "Validation Error"
+          }
+        },
+        "summary": "Price History",
+        "tags": [
+          "catalog"
+        ]
+      }
+    },
+    "/v1/listings/{listing_id}/price-watch": {
+      "delete": {
+        "operationId": "price_watch_remove",
+        "parameters": [
+          {
+            "in": "path",
+            "name": "listing_id",
+            "required": true,
+            "schema": {
+              "format": "uuid",
+              "title": "Listing Id",
+              "type": "string"
+            }
+          }
+        ],
+        "responses": {
+          "204": {
+            "description": "Successful Response"
+          },
+          "422": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/HTTPValidationError"
+                }
+              }
+            },
+            "description": "Validation Error"
+          }
+        },
+        "summary": "Unwatch Price",
+        "tags": [
+          "catalog"
+        ]
+      },
+      "post": {
+        "description": "Watches the price, to a target or any drop; sent again, the target is replaced.",
+        "operationId": "price_watch_set",
+        "parameters": [
+          {
+            "in": "path",
+            "name": "listing_id",
+            "required": true,
+            "schema": {
+              "format": "uuid",
+              "title": "Listing Id",
+              "type": "string"
+            }
+          }
+        ],
+        "requestBody": {
+          "content": {
+            "application/json": {
+              "schema": {
+                "$ref": "#/components/schemas/PriceWatchIn"
+              }
+            }
+          },
+          "required": true
+        },
+        "responses": {
+          "204": {
+            "description": "Successful Response"
+          },
+          "404": {
+            "description": "No such listing online"
+          },
+          "409": {
+            "description": "The caller's own listing"
+          },
+          "422": {
+            "description": "Target below 1 € or not below the price"
+          }
+        },
+        "summary": "Watch Price",
+        "tags": [
+          "catalog"
+        ]
+      }
+    },
     "/v1/listings/{listing_id}/publish": {
       "post": {
         "description": "A draft goes online for `listings.expiry_days` (120) days, to review or is refused, as\nthe moderation decides (the answer says which and why).",
@@ -5706,6 +6083,79 @@
         "summary": "Post Erasure Cancel",
         "tags": [
           "me"
+        ]
+      }
+    },
+    "/v1/me/favorites": {
+      "get": {
+        "description": "The caller's favorites still online (`available`, the default), or the others.",
+        "operationId": "me_favorites",
+        "parameters": [
+          {
+            "in": "query",
+            "name": "available",
+            "required": false,
+            "schema": {
+              "default": true,
+              "title": "Available",
+              "type": "boolean"
+            }
+          },
+          {
+            "in": "query",
+            "name": "cursor",
+            "required": false,
+            "schema": {
+              "anyOf": [
+                {
+                  "maxLength": 200,
+                  "type": "string"
+                },
+                {
+                  "type": "null"
+                }
+              ],
+              "title": "Cursor"
+            }
+          },
+          {
+            "in": "query",
+            "name": "limit",
+            "required": false,
+            "schema": {
+              "default": 24,
+              "maximum": 100,
+              "minimum": 1,
+              "title": "Limit",
+              "type": "integer"
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/FavoritePage"
+                }
+              }
+            },
+            "description": "Successful Response"
+          },
+          "422": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/HTTPValidationError"
+                }
+              }
+            },
+            "description": "Validation Error"
+          }
+        },
+        "summary": "My Favorites",
+        "tags": [
+          "catalog"
         ]
       }
     },
