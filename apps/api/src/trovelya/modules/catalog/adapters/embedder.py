@@ -65,3 +65,9 @@ class FakeEmbedder:
 
 def embedder_from_settings(settings: Settings) -> Embedder | None:
     return FakeEmbedder() if settings.embedder == "fake" else None
+
+
+def current_model(settings: Settings) -> str | None:
+    """The model whose vectors are compared (ADR-0020); None without an embedder."""
+    embedder = embedder_from_settings(settings)
+    return None if embedder is None else embedder.model

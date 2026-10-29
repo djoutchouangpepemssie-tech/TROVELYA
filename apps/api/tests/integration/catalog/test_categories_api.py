@@ -33,9 +33,13 @@ async def seeded(sessionmaker: async_sessionmaker[AsyncSession]) -> None:
 
 
 async def catalog_client(
-    sessionmaker: async_sessionmaker[AsyncSession], redis_client: Redis, *, verticals: bool
+    sessionmaker: async_sessionmaker[AsyncSession],
+    redis_client: Redis,
+    *,
+    verticals: bool,
+    **settings: object,
 ) -> AsyncClient:
-    app = create_app(make_settings())
+    app = create_app(make_settings(**settings))
     app.state.sessionmaker = sessionmaker
     app.state.redis = redis_client
     app.state.flags = FlagService(sessionmaker, redis_client, {"verticals": verticals})

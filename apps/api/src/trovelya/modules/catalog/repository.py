@@ -1155,3 +1155,55 @@ async def stale_embeddings(
     by id after `after`: one failing again and again holds back no other."""
     params = {"model": model, "after": after, "limit": limit}
     return list(await db.scalars(_STALE_EMBEDDINGS, params))
+
+
+# --- Similar listings (P2-T11b, ADR-0020) ------------------------------------------------------
+
+_SIMILAR_TARGET = text(
+    "SELECT l.seller_id, subpath(c.path, 0, 1)::text AS universe"
+    " FROM listings l JOIN categories c ON c.id = l.category_id"
+    " WHERE l.id = :id AND l.status = 'active' AND l.embedding IS NOT NULL"
+    " AND l.embedding_model = :model AND l.deleted_at IS NULL"
+)
+# The index's predicate as literals and the vector of the listing as a subquery: the nearest are
+# read from `listings_embedding_hnsw_idx`, the other filters applied as the scan goes on.
+_SIMILAR = text(
+    "SELECT l.id, l.short_id, l.title, l.price_minor, l.currency,"
+    " ARRAY(SELECT m.media_id FROM listing_media m WHERE m.listing_id = l.id"
+    " ORDER BY m.position) AS media_ids"
+    " FROM listings l JOIN categories c ON c.id = l.category_id"
+    " WHERE l.status = 'active' AND l.embedding IS NOT NULL AND l.embedding_model = :model"
+    " AND l.deleted_at IS NULL AND l.id <> :id AND l.seller_id <> :seller_id"
+    " AND c.path <@ CAST(:universe AS ltree)"
+    " AND NOT EXISTS (SELECT 1 FROM blocks b WHERE b.blocker_id = CAST(:viewer AS uuid)"
+    " AND b.blocked_id = l.seller_id)"
+    " AND EXISTS (SELECT 1 FROM users u WHERE u.id = l.seller_id"
+    " AND u.status IN ('active', 'restricted') AND u.erasure_requested_at IS NULL"
+    " AND u.profile_completed_at IS NOT NULL)"
+    " ORDER BY l.embedding <=> (SELECT t.embedding FROM listings t WHERE t.id = :id)"
+    " LIMIT :limit"
+)
+# Filtered after the index scan: the scan goes on until `limit` rows pass (pgvector 0.8), in
+# the exact order of distance; for this transaction only.
+_ITERATIVE_SCAN = text("SELECT set_config('hnsw.iterative_scan', 'strict_order', true)")
+
+
+async def similar_target(db: AsyncSession, listing_id: UUID, model: str) -> Row[Any] | None:
+    """Seller and universe of a listing online with an embedding of `model`; None otherwise."""
+    return (await db.execute(_SIMILAR_TARGET, {"id": listing_id, "model": model})).one_or_none()
+
+
+async def similar_listings(
+    db: AsyncSession,
+    *,
+    listing_id: UUID,
+    seller_id: UUID,
+    universe: str,
+    model: str,
+    viewer_id: UUID | None,
+    limit: int,
+) -> list[dict[str, Any]]:
+    await db.execute(_ITERATIVE_SCAN)
+    params = {"id": listing_id, "seller_id": seller_id, "universe": universe, "model": model}
+    params |= {"viewer": viewer_id, "limit": limit}
+    return [dict(row) for row in (await db.execute(_SIMILAR, params)).mappings()]

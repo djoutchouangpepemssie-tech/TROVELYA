@@ -500,8 +500,9 @@ export interface paths {
         };
         /**
          * Get Listing
-         * @description The listing page: anybody for an active listing, its seller only otherwise. Never kept
-         *     by a shared cache: the answer depends on who asks (a draft, a distance).
+         * @description The listing page, with its similar listings: anybody for an active listing, its seller
+         *     only otherwise. Never kept by a shared cache: the answer depends on who asks (a draft, a
+         *     distance, the sellers blocked).
          */
         get: operations["listing_get"];
         put?: never;
@@ -2029,6 +2030,8 @@ export interface components {
             shipping_enabled: boolean;
             /** Short Id */
             short_id: string;
+            /** Similar */
+            similar: components["schemas"]["SimilarListing"][];
             status: components["schemas"]["ListingStatus"];
             /** Title */
             title: string;
@@ -2632,6 +2635,24 @@ export interface components {
              * Format: uuid
              */
             user_id: string;
+        };
+        /**
+         * SimilarListing
+         * @description A similar listing on the listing page (P2-T11b): the first photo still shown only.
+         */
+        SimilarListing: {
+            /** Cover */
+            cover: components["schemas"]["PhotoVariant"][] | null;
+            /**
+             * Id
+             * Format: uuid
+             */
+            id: string;
+            price: components["schemas"]["Money"];
+            /** Short Id */
+            short_id: string;
+            /** Title */
+            title: string;
         };
         /**
          * StaffDecisionIn
