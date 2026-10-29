@@ -4558,6 +4558,105 @@
         ]
       }
     },
+    "/v1/listings/{listing_id}/renew": {
+      "post": {
+        "description": "Back online for 120 days: an expired listing is renewed, a withdrawn one republished.",
+        "operationId": "listing_renew",
+        "parameters": [
+          {
+            "in": "path",
+            "name": "listing_id",
+            "required": true,
+            "schema": {
+              "format": "uuid",
+              "title": "Listing Id",
+              "type": "string"
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ListingOut"
+                }
+              }
+            },
+            "description": "Successful Response"
+          },
+          "403": {
+            "description": "Profile incomplete, under 18, or erasure in progress (Q1)"
+          },
+          "404": {
+            "description": "Not the caller's listing"
+          },
+          "409": {
+            "description": "Neither expired nor withdrawn"
+          },
+          "422": {
+            "description": "No ready photo"
+          },
+          "429": {
+            "description": "50 listings put online over 24 hours; see Retry-After"
+          }
+        },
+        "summary": "Renew Listing",
+        "tags": [
+          "catalog"
+        ]
+      }
+    },
+    "/v1/listings/{listing_id}/withdraw": {
+      "post": {
+        "description": "Take an active listing out of the shop window.",
+        "operationId": "listing_withdraw",
+        "parameters": [
+          {
+            "in": "path",
+            "name": "listing_id",
+            "required": true,
+            "schema": {
+              "format": "uuid",
+              "title": "Listing Id",
+              "type": "string"
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ListingOut"
+                }
+              }
+            },
+            "description": "Successful Response"
+          },
+          "404": {
+            "description": "Not the caller's listing"
+          },
+          "409": {
+            "description": "Not active"
+          },
+          "422": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/HTTPValidationError"
+                }
+              }
+            },
+            "description": "Validation Error"
+          }
+        },
+        "summary": "Withdraw Listing",
+        "tags": [
+          "catalog"
+        ]
+      }
+    },
     "/v1/me": {
       "get": {
         "operationId": "me_get",
