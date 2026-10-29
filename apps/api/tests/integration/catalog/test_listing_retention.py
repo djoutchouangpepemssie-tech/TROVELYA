@@ -7,6 +7,7 @@ public positions (Q20) no listing of the seller stands on any more go too. Sold 
 a minimal record while an order points to them: their content is purged with the orders of P4.
 """
 
+import asyncio
 from datetime import datetime, timedelta
 from uuid import UUID
 
@@ -20,6 +21,7 @@ from tests.integration.catalog.test_listing_gdpr import (
 )
 from tests.integration.catalog.test_states import Session
 from tests.integration.identity.test_profile import make_account
+from trovelya.modules.catalog.repository import erase_catalog
 from trovelya.modules.catalog.service.retention import purge_ended_listings
 from trovelya.shared.clock import FixedClock
 from trovelya.shared.ids import new_id
@@ -225,3 +227,205 @@ async def test_positions_of_a_seller_drawing_are_left_alone(
         await drawing.rollback()
     await _purge(sessionmaker)
     assert await _positions(sessionmaker, member.id) == 0
+
+
+async def _history_row(
+    sessionmaker: Session, listing_id: UUID, status: str, ago: timedelta
+) -> None:
+    async with sessionmaker() as db:
+        await db.execute(
+            text(
+                "INSERT INTO listing_status_history (id, listing_id, to_status, event, actor_kind,"
+                " created_at) VALUES (:id, :l, CAST(:s AS listing_status), 'test', 'system',"
+                " now() - CAST(:ago AS interval))"
+            ),
+            {"id": new_id(), "l": listing_id, "s": status, "ago": ago},
+        )
+        await db.commit()
+
+
+async def test_withdrawn_again_counts_from_the_last_time(
+    sessionmaker: Session,
+    category: UUID,  # noqa: F811
+) -> None:
+    """Withdrawn 400 days ago, republished 10 days ago, withdrawn again 5 days ago: kept."""
+    listing_id = await _ended(sessionmaker, category, "withdrawn", ago=timedelta(days=400))
+    await _history_row(sessionmaker, listing_id, "active", timedelta(days=10))
+    await _history_row(sessionmaker, listing_id, "withdrawn", timedelta(days=5))
+    await _purge(sessionmaker)
+    assert await _exists(sessionmaker, listing_id)
+
+
+async def _delete(sessionmaker: Session, listing_id: UUID, ago: timedelta) -> None:
+    async with sessionmaker() as db:
+        await db.execute(
+            text("UPDATE listings SET deleted_at = now() - CAST(:ago AS interval) WHERE id = :l"),
+            {"ago": ago, "l": listing_id},
+        )
+        await db.commit()
+
+
+async def test_removed_then_deleted_keeps_the_longer_retention(
+    sessionmaker: Session,
+    category: UUID,  # noqa: F811
+) -> None:
+    """Removed by moderation, then deleted by its seller: the 180 days of a removal hold
+    (DSA art. 20); a reserved or sold listing waits for the orders of P4."""
+    recent = await _ended(sessionmaker, category, "removed", ago=timedelta(days=100))
+    old = await _ended(sessionmaker, category, "removed", ago=timedelta(days=200))
+    sold = await _ended(sessionmaker, category, "sold", ago=timedelta(days=400))
+    for listing_id in (recent, old, sold):
+        await _delete(sessionmaker, listing_id, timedelta(days=40))
+    await _purge(sessionmaker)
+    assert await _exists(sessionmaker, recent)
+    assert not await _exists(sessionmaker, old)
+    assert await _exists(sessionmaker, sold)
+
+
+async def _brand(sessionmaker: Session, listing_id: UUID, *, origin: str) -> UUID:
+    brand_id = new_id()
+    async with sessionmaker() as db:
+        seller_id = await db.scalar(
+            text("SELECT seller_id FROM listings WHERE id = :l"), {"l": listing_id}
+        )
+        await db.execute(
+            text(
+                "INSERT INTO brands (id, name, slug, origin, created_by) VALUES (:id, :n, :s, :o,"
+                " CASE WHEN :o = 'member' THEN CAST(:u AS uuid) END)"
+            ),
+            {
+                "id": brand_id,
+                "n": f"Marque {brand_id.hex[-12:]}",
+                "s": f"m-{brand_id.hex[-12:]}",
+                "o": origin,
+                "u": seller_id,
+            },
+        )
+        await db.execute(
+            text("UPDATE listings SET brand_id = :b WHERE id = :l"),
+            {"b": brand_id, "l": listing_id},
+        )
+        await db.commit()
+    return brand_id
+
+
+async def test_member_brand_goes_with_its_last_listing(
+    sessionmaker: Session,
+    category: UUID,  # noqa: F811
+) -> None:
+    """E19, PII.md: a brand a member typed lives as long as a listing carries it."""
+    gone = await _ended(sessionmaker, category, "expired", ago=timedelta(days=400))
+    shared = await _ended(sessionmaker, category, "expired", ago=timedelta(days=400))
+    seeded = await _ended(sessionmaker, category, "expired", ago=timedelta(days=400))
+    lonely = await _brand(sessionmaker, gone, origin="member")
+    kept = await _brand(sessionmaker, shared, origin="member")
+    living = await _ended(sessionmaker, category, "active", ago=timedelta(days=1))
+    async with sessionmaker() as db:
+        await db.execute(
+            text("UPDATE listings SET brand_id = :b WHERE id = :l"), {"b": kept, "l": living}
+        )
+        await db.commit()
+    seed = await _brand(sessionmaker, seeded, origin="seed")
+    await _purge(sessionmaker)
+    async with sessionmaker() as db:
+        left = set(
+            await db.scalars(
+                text("SELECT id FROM brands WHERE id = ANY(:ids)"), {"ids": [lonely, kept, seed]}
+            )
+        )
+    assert left == {kept, seed}
+
+
+async def test_price_watches_go_too(
+    sessionmaker: Session,
+    category: UUID,  # noqa: F811
+) -> None:
+    gone = await _ended(sessionmaker, category, "expired", ago=timedelta(days=400))
+    fan = await make_account(sessionmaker, completed=True)
+    async with sessionmaker() as db:
+        await db.execute(
+            text("INSERT INTO price_watches (user_id, listing_id) VALUES (:u, :l)"),
+            {"u": fan.id, "l": gone},
+        )
+        await db.commit()
+    await _purge(sessionmaker)
+    async with sessionmaker() as db:
+        left = await db.scalar(
+            text("SELECT count(*) FROM price_watches WHERE listing_id = :l"), {"l": gone}
+        )
+    assert left == 0
+
+
+async def test_deleted_listing_still_holds_its_place(
+    sessionmaker: Session,
+    category: UUID,  # noqa: F811
+) -> None:
+    """A deleted listing kept for its 30 days still stands on its place (Q20)."""
+    member = await make_account(sessionmaker, completed=True)
+    listing_id = await _listing(sessionmaker, member.id, category, "Lampe opaline verte")
+    await _delete(sessionmaker, listing_id, timedelta(days=1))
+    await _keep_position(sessionmaker, member.id, 4.8402, 45.7501)
+    await _purge(sessionmaker)
+    assert await _positions(sessionmaker, member.id) == 1
+
+
+async def test_retention_of_zero_days_refused(sessionmaker: Session) -> None:
+    """A broken setting stops the purge instead of erasing every ended listing at once."""
+    async with sessionmaker() as db:
+        await db.execute(
+            text(
+                "UPDATE platform_settings SET value = '0'"
+                " WHERE key = 'retention.ended_listing_days'"
+            )
+        )
+        await db.commit()
+    try:
+        with pytest.raises(ValueError):
+            await _purge(sessionmaker)
+    finally:
+        async with sessionmaker() as db:
+            await db.execute(
+                text(
+                    "UPDATE platform_settings SET value = '365'"
+                    " WHERE key = 'retention.ended_listing_days'"
+                )
+            )
+            await db.commit()
+
+
+async def test_purge_and_account_erasure_never_deadlock(
+    sessionmaker: Session,
+    category: UUID,  # noqa: F811
+) -> None:
+    """A member being erased has favorited a listing due for the purge: the erasure locks the
+    listing first, the purge skips it and finishes; the listing goes at the next run."""
+    gone = await _ended(sessionmaker, category, "expired", ago=timedelta(days=400))
+    fan = await make_account(sessionmaker, completed=True)
+    async with sessionmaker() as db:
+        await db.execute(
+            text("INSERT INTO favorites (user_id, listing_id) VALUES (:u, :l)"),
+            {"u": fan.id, "l": gone},
+        )
+        await db.execute(text("UPDATE listings SET favorite_count = 1 WHERE id = :l"), {"l": gone})
+        await db.commit()
+    async with sessionmaker() as erasing:
+        await erase_catalog(erasing, fan.id)
+        await asyncio.wait_for(_purge(sessionmaker), timeout=10)
+        await erasing.commit()
+    assert await _exists(sessionmaker, gone)
+    await _purge(sessionmaker)
+    assert not await _exists(sessionmaker, gone)
+
+
+async def test_more_than_a_batch(
+    sessionmaker: Session,
+    category: UUID,  # noqa: F811
+) -> None:
+    due = [
+        await _ended(sessionmaker, category, "expired", ago=timedelta(days=400)) for _ in range(5)
+    ]
+    async with sessionmaker() as db:
+        now = await db.scalar(text("SELECT now()"))
+    await purge_ended_listings(sessionmaker, clock=FixedClock(now), batch=2)
+    for listing_id in due:
+        assert not await _exists(sessionmaker, listing_id)

@@ -16,7 +16,7 @@ def test_daily_jobs_scheduled(monkeypatch: pytest.MonkeyPatch) -> None:
     from trovelya.workers.main import WorkerSettings
 
     scheduled = {job.coroutine for job in WorkerSettings.cron_jobs}
-    assert tasks.expire_listings_job in scheduled
+    assert {tasks.expire_listings_job, tasks.purge_ended_listings_job} <= scheduled
 
 
 async def test_expire_job_runs_the_expiry(monkeypatch: pytest.MonkeyPatch) -> None:

@@ -531,7 +531,7 @@ tout ── T12 (parcours 2, démo, porte)
 - Publication : politique Q1, au moins 1 photo `ready`, quota de Q24 compté sur `listing_status_history` (verrou consultatif du vendeur puis `FOR UPDATE` sur l'annonce), `published_at`, `expires_at` (E12) fixés dans la même mise à jour que le statut. Ordre des erreurs : 404, 403 `publish_forbidden` avec sa raison (`profile_incomplete`, `too_young`, `account_restricted` : compte suspendu, banni ou en cours d'effacement ; un compte `restricted` publie), 409, 422 `photo_required`, 429 (le quota n'est pas consommé par une action invalide) ; la modération décide en dernier.
 - Retrait, republication et renouvellement par le propriétaire.
 - Job d'expiration quotidien idempotent : identifiants des annonces `active` dont `expires_at <= now()` (`FOR UPDATE SKIP LOCKED`, par lots), puis `apply_transition` pour chacune (historique et événement), jamais un `UPDATE` du statut en masse.
-- Purge quotidienne des annonces terminées selon Q19 (durées en [PARAM], seuils comptés depuis `deleted_at`, le statut final ou `sold_at` ; photos, historiques, favoris et alertes partent avec l'annonce) ; tests aux bornes avec horloge fixe, une annonce vendue liée à une commande garde sa fiche minimale (P4).
+- Purge quotidienne des annonces terminées selon Q19 (livrée en T04e, à 2 h 30 ; une annonce retirée par la modération puis supprimée garde ses 180 jours ; les marques saisies par un membre partent avec leur dernière annonce ; reporté à P4 avec les commandes : `sold_at` posé par la transition `sell`, fiche minimale d'une annonce vendue et test associé, exclusion des annonces vendues de la branche « supprimée ») (durées en [PARAM], seuils comptés depuis `deleted_at`, le statut final ou `sold_at` ; photos, historiques, favoris et alertes partent avec l'annonce) ; tests aux bornes avec horloge fixe, une annonce vendue liée à une commande garde sa fiche minimale (P4).
 
 **Routes :**
 
@@ -552,7 +552,7 @@ tout ── T12 (parcours 2, démo, porte)
   - `test_expiry_after_120_days` (119 j 23 h → active ; 120 j → expired) ;
   - `test_modification_pushes_expiry` ;
   - `test_expire_job_idempotent` ;
-  - `test_renew_expired`, `test_republish_withdrawn`.
+  - `test_renew_expired`, `test_withdraw_then_republish`.
 - [ ] ÉCHEC → implémenter → vert ; matrice d'accès (3 routes `OWNED_ROUTES`).
 - [ ] Commit `feat(catalogue): machine à états, publication, retrait, renouvellement et expiration`.
 
