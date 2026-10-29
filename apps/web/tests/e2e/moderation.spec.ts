@@ -11,7 +11,7 @@ async function openQueue(page: Page, title: string) {
   await signInAsStaff(page, messages.StaffEnrolment);
   await page.goto("/fr/staff/moderation");
   await expect(page.getByRole("heading", { level: 1, name: t.title })).toBeVisible();
-  const card = page.getByRole("article", { name: title });
+  const card = page.getByRole("article", { name: title, exact: true });
   await expect(card).toBeVisible();
   return card;
 }
@@ -55,6 +55,7 @@ test("staff moderation: a rejection needs a reason, then takes the listing down"
   await expect(page.getByRole("main").getByRole("status")).toHaveText(
     t.done.removed.replace("{title}", listing.title),
   );
+  await expect(card).toHaveCount(0);
   expect((await page.request.get(`/api/v1/listings/${listing.id}`)).status()).toBe(404);
 });
 

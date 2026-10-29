@@ -18,6 +18,7 @@ from sqlalchemy import text
 from trovelya.core.db import Uow
 from trovelya.modules.catalog.service.listings import _short_id  # pyright: ignore[reportPrivateUsage]
 from trovelya.modules.catalog.service.moderation import label
+from trovelya.modules.catalog.service.positions import h3_cells, public_offset
 from trovelya.modules.catalog.service.seed import load_seed
 from trovelya.modules.catalog.service.seed_writer import apply_seed
 from trovelya.modules.catalog.service.states import Actor, apply_transition
@@ -30,6 +31,8 @@ router = APIRouter(prefix="/v1/_test", tags=["test"], include_in_schema=False)
 
 TITLE = "Pistolet ancien de collection"
 _Y2K = datetime(2000, 1, 1, tzinfo=UTC)
+CATEGORY = "mode.femme.robes"
+_LAT, _LON = 48.8566, 2.3522  # Paris; the public position is drawn 200 to 500 m away (Q20)
 _SELLER = text(
     "INSERT INTO users (id, email, username, display_name, birth_year, profile_completed_at)"
     " VALUES (:id, :email, :username, 'Vendeur', 1985, now())"
@@ -43,10 +46,9 @@ _LISTING = text(
     "INSERT INTO listings (id, short_id, seller_id, title, description, category_id, condition,"
     " price_minor, location, location_public, h3_r7, h3_r9, place_name, country_code,"
     " location_source, location_source_id)"
-    " SELECT :id, :short_id, :seller, :title, :description, c.id, 'good', 12000,"
-    " ST_MakePoint(2.35, 48.85)::geography, ST_MakePoint(2.35, 48.85)::geography,"
-    " 608533320520982527, 617540519050084351, 'Paris', 'FR', 'zone', :zone"
-    " FROM categories c WHERE c.key = 'mode.femme.robes'"
+    " VALUES (:id, :short_id, :seller, :title, :description, :category, 'good', 12000,"
+    " ST_MakePoint(:lon, :lat)::geography, ST_MakePoint(:public_lon, :public_lat)::geography,"
+    " :h3_r7, :h3_r9, 'Paris', 'FR', 'zone', :zone)"
 )
 
 
@@ -77,9 +79,19 @@ async def test_listing_in_review(
             "variants": variants,
         },
     )
+    category = await db.scalar(
+        text("SELECT id FROM categories WHERE key = :key"), {"key": CATEGORY}
+    )
+    if category is None:
+        raise LookupError(f"category {CATEGORY} missing from the seed")
+    public_lat, public_lon = public_offset(_LAT, _LON)
+    h3_r7, h3_r9 = h3_cells(_LAT, _LON)
     await db.execute(
         _LISTING,
         {
+            "category": category,
+            **{"lat": _LAT, "lon": _LON, "public_lat": public_lat, "public_lon": public_lon},
+            **{"h3_r7": h3_r7, "h3_r9": h3_r9},
             "id": listing,
             "short_id": short_id,
             "seller": seller,

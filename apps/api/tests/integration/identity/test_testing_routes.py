@@ -204,6 +204,7 @@ async def test_listing_in_review_route_feeds_the_staff_queue(
     """P2-T05c2: the end-to-end tests of the moderation page get a listing awaiting review."""
     async with _client(sessionmaker, redis_client, "test") as client:
         response = await client.post("/v1/_test/listing-in-review")
+        newer = (await client.post("/v1/_test/listing-in-review")).json()
     assert response.status_code == 200, response.text
     listing = response.json()
     async with sessionmaker() as db:
@@ -217,3 +218,16 @@ async def test_listing_in_review_route_feeds_the_staff_queue(
             )
         ).one()
     assert tuple(row) == ("pending_review", "weapons")
+    # Each new one is the oldest of the queue: shown first, whatever earlier runs left.
+    async with sessionmaker() as db:
+        submitted = dict(
+            tuple(r)
+            for r in await db.execute(
+                text(
+                    "SELECT listing_id::text, created_at FROM listing_status_history"
+                    " WHERE listing_id IN (:a, :b) AND to_status = 'pending_review'"
+                ),
+                {"a": listing["id"], "b": newer["id"]},
+            )
+        )
+    assert submitted[newer["id"]] < submitted[listing["id"]]
