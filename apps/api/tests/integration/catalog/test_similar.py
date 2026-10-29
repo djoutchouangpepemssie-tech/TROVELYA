@@ -13,10 +13,14 @@ from tests.integration.catalog.test_categories_api import catalog_client
 from tests.integration.catalog.test_drafts import (
     Session,
     client,  # noqa: F401  # pyright: ignore[reportUnusedImport] (fixture)
+    create,
+    draft,
+    seller,
 )
 from tests.integration.catalog.test_review_queue import _listing  # pyright: ignore[reportPrivateUsage]
 from tests.integration.catalog.test_withdraw_renew import _call  # pyright: ignore[reportPrivateUsage]
 from tests.integration.identity.test_profile import make_account
+from trovelya.modules.catalog import repository
 from trovelya.modules.catalog.adapters.embedder import FakeEmbedder
 from trovelya.modules.catalog.repository import _SIMILAR  # pyright: ignore[reportPrivateUsage]
 from trovelya.modules.catalog.service.embeddings import embed_listing
@@ -54,8 +58,9 @@ async def _similar(
 
 
 async def test_similar_filters(client: AsyncClient, sessionmaker: Session) -> None:  # noqa: F811
-    """Withdrawn, other universe, blocked seller, same seller, seller erasing, other model:
-    left out; the nearest first (the texts make the distances distinct)."""
+    """Withdrawn, deleted, other universe, blocked seller, same seller, seller erasing,
+    suspended or with an incomplete profile, other model: left out; the nearest first (the
+    texts make the distances distinct)."""
     model = f"fake-{new_id()}"  # this test's listings only (the database is shared)
     seller, target = await _embedded(client, sessionmaker, model)
     near = (await _embedded(client, sessionmaker, model))[1]
@@ -78,6 +83,15 @@ async def test_similar_filters(client: AsyncClient, sessionmaker: Session) -> No
         "UPDATE users SET erasure_requested_at = now() WHERE id = :u",
         u=erasing_seller.id,
     )
+    hidden = [(await _embedded(client, sessionmaker, model))[1]["id"] for _ in range(3)]
+    for statement in (
+        "UPDATE users SET status = 'suspended' WHERE id = (SELECT seller_id FROM listings"
+        " WHERE id = :l)",
+        "UPDATE users SET profile_completed_at = NULL WHERE id = (SELECT seller_id FROM listings"
+        " WHERE id = :l)",
+        "UPDATE listings SET deleted_at = now() WHERE id = :l",
+    ):
+        await _sql(sessionmaker, statement, l=hidden.pop())
     await _embedded(client, sessionmaker)  # the same text, another model
     own = (await _listing(client, sessionmaker))[1]
     await _sql(
@@ -101,6 +115,16 @@ async def test_similar_filters(client: AsyncClient, sessionmaker: Session) -> No
     assert await _similar(sessionmaker, target["id"], None) == []  # no embedder
     assert await _similar(sessionmaker, target["id"], MODEL) == []  # not yet reindexed
     assert await _similar(sessionmaker, withdrawn["id"], model) == []
+    async with sessionmaker() as db:  # withdrawn once its seller and universe were read
+        assert not await repository.similar_listings(
+            db,
+            listing_id=UUID(withdrawn["id"]),
+            seller_id=withdrawn_seller.id,
+            universe="mode",
+            model=model,
+            viewer_id=None,
+            limit=8,
+        )
 
 
 async def test_similar_on_listing_page(sessionmaker: Session, redis_client: Redis) -> None:
@@ -112,6 +136,10 @@ async def test_similar_on_listing_page(sessionmaker: Session, redis_client: Redi
         _, target = await _embedded(fake, sessionmaker, title=title)
         _, near = await _embedded(fake, sessionmaker, title=title)
         page = (await fake.get(f"/v1/listings/{target['id']}")).json()
+        account, zone, media = await seller(sessionmaker)
+        mine = (await create(fake, account, draft(zone, [media], title=title))).json()
+        own = await fake.get(f"/v1/listings/{mine['id']}", headers=account.headers)
+    assert own.json()["similar"] == []  # the seller's own draft
     item = page["similar"][0]
     assert target["id"] not in {i["id"] for i in page["similar"]}
     assert (item["id"], item["title"], item["price"]["amount_minor"]) == (
@@ -135,4 +163,6 @@ async def test_similar_uses_hnsw_index(client: AsyncClient, sessionmaker: Sessio
     async with sessionmaker() as db:
         await db.execute(sql("SET LOCAL enable_seqscan = off"))  # a tiny table: force the choice
         plan = "\n".join(await db.scalars(sql("EXPLAIN " + _SIMILAR.text), params))
-    assert "listings_embedding_hnsw_idx" in plan, plan
+    main = plan.split("SubPlan")[0]  # the media's subquery sorts by position
+    assert "Index Scan using listings_embedding_hnsw_idx" in main, plan
+    assert "Order By: (embedding <=>" in main and "Sort" not in main, plan

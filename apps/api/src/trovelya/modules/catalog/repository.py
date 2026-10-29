@@ -1166,7 +1166,10 @@ _SIMILAR_TARGET = text(
     " AND l.embedding_model = :model AND l.deleted_at IS NULL"
 )
 # The index's predicate as literals and the vector of the listing as a subquery: the nearest are
-# read from `listings_embedding_hnsw_idx`, the other filters applied as the scan goes on.
+# read from `listings_embedding_hnsw_idx`, the other filters applied as the scan goes on. The
+# subquery repeats the target's conditions: a listing withdrawn or reindexed since
+# `similar_target` gives no vector, hence no row (ordering by NULL would give any 8). Equal
+# distances come in no set order (a second sort key would keep the index from sorting).
 _SIMILAR = text(
     "SELECT l.id, l.short_id, l.title, l.price_minor, l.currency,"
     " ARRAY(SELECT m.media_id FROM listing_media m WHERE m.listing_id = l.id"
@@ -1180,12 +1183,20 @@ _SIMILAR = text(
     " AND EXISTS (SELECT 1 FROM users u WHERE u.id = l.seller_id"
     " AND u.status IN ('active', 'restricted') AND u.erasure_requested_at IS NULL"
     " AND u.profile_completed_at IS NOT NULL)"
-    " ORDER BY l.embedding <=> (SELECT t.embedding FROM listings t WHERE t.id = :id)"
+    " AND EXISTS (SELECT 1 FROM listings t WHERE t.id = :id AND t.status = 'active'"
+    " AND t.embedding_model = :model AND t.deleted_at IS NULL)"
+    " ORDER BY l.embedding <=> (SELECT t.embedding FROM listings t WHERE t.id = :id"
+    " AND t.status = 'active' AND t.embedding_model = :model AND t.deleted_at IS NULL)"
     " LIMIT :limit"
 )
 # Filtered after the index scan: the scan goes on until `limit` rows pass (pgvector 0.8), in
-# the exact order of distance; for this transaction only.
-_ITERATIVE_SCAN = text("SELECT set_config('hnsw.iterative_scan', 'strict_order', true)")
+# the exact order of distance, but stops after 2 000 vectors read (a page without similar
+# listings rather than a slow page, e.g. while most vectors are of another model). Set for the
+# rest of the transaction: a later vector search in it gets the same settings.
+_ITERATIVE_SCAN = text(
+    "SELECT set_config('hnsw.iterative_scan', 'strict_order', true),"
+    " set_config('hnsw.max_scan_tuples', '2000', true)"
+)
 
 
 async def similar_target(db: AsyncSession, listing_id: UUID, model: str) -> Row[Any] | None:
