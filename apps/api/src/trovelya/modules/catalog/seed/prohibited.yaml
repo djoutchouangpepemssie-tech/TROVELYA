@@ -1,0 +1,447 @@
+# Interdits à la vente (cahier 8.17, plan P2 Q33, Q34), lus par la modération à la publication.
+#
+# Principe : un refus est définitif (`removed`, recours seul). `refuse` ne contient donc que
+# des expressions qui désignent sans doute possible la vente de l'objet (« bouteille de
+# whisky », « fusil à pompe ») ; un mot seul, souvent innocent (« cognac » est une couleur,
+# « Revolver » un album), va dans `review` ou nulle part.
+#
+# - `refuse` : l'annonce est refusée avec le motif (`label`).
+# - `review` : l'annonce part en revue humaine sans être mise en ligne.
+# - `unless` (en bas, commun à tous les motifs) : un mot qui change l'objet (« étui »,
+#   « vide », « couleur », « livre », « chocolat »…) ailleurs dans le texte fait d'un refus
+#   une mise en revue.
+# - `except` (en bas) : expressions innocentes retirées du texte avant la recherche.
+#
+# Écriture des termes : minuscules sans accents, une apostrophe ou un tiret vaut une espace ;
+# mots entiers ; `*` en fin de mot accepte toute fin (« munition* ») ; `(a|b c)` : l'une des
+# expressions ; `~` : un mot quelconque ; `#` : un nombre ; `?` après un mot ou un groupe : facultatif
+# (« defense d? elephant »). Les chiffres et
+# symboles sosies (« r0lex », « vodk@ ») et les lettres espacées (« g l o c k ») sont lus
+# comme des mots. Ce filtre est un premier filet : la revue humaine et la modération des
+# images (T05b2) prennent le relais. Modifier ce fichier passe par une PR relue.
+
+reasons:
+  weapons:
+    label: Armes et munitions
+    refuse:
+      - fusil* de chasse
+      - fusil* a pompe
+      - arme* a feu
+      - kalachnikov*
+      - ak47
+      - ak 47
+      - poing americain
+      - matraque telescopique
+      - (bombe|gaz) lacrymogene
+      - munition* (9mm|9|22lr|22|calibre*)
+      - balle* (9mm|22lr)
+      - cartouche* calibre 12
+      - glock (17|19|26) (reel|9mm|9)
+    review:
+      - fusil*
+      - pistolet*
+      - revolver*
+      - revolvre*
+      - carabine*
+      - arme
+      - armes
+      - munition*
+      - cartouches de chasse
+      - airsoft
+      - couteau papillon
+      - balisong
+      - arbalete*
+      - baionnette*
+      - glock*
+      - glok*
+      - kalash*
+      - taser*
+      - tazer*
+      - shocker
+      - lacrymo*
+      - calibre 12
+      - shotgun*
+      - rifle*
+      - handgun*
+      - ammo
+      - stun gun
+      - pepper spray
+      - knuckle duster
+
+  counterfeit:
+    label: Contrefaçons
+    refuse:
+      - contrefacon*
+      - contre facon*
+      - contrefait*
+      - copie 1 1
+      - faux (louis|rolex|chanel|gucci|dior|hermes|nike|cartier|prada)
+    review:
+      - replica*
+      - replique*
+      - copie
+      - imitation*
+      - counterfeit
+      - faks
+      - (louis vuitton|rolex|chanel|gucci|dior|hermes|nike|cartier|prada) faux
+      - fake
+
+  medicines:
+    label: Médicaments
+    refuse:
+      - (viagra|cialis|ozempic|xanax|lexomil|valium|tramadol|subutex|methadone)
+      - (boite|boites|plaquette*|lot) de (medicament*|antibiotique*|comprimes|gelules)
+    review:
+      - medicament*
+      - antibio*
+      - codeine
+      - morphine
+      - alprazolam
+      - zolpidem
+      - stilnox
+      - rivotril
+      - lyrica
+      - pregabaline
+      - doliprane
+      - amoxicilline
+      - ozempik
+      - viagr*
+      - xanaxx
+      - gelules
+      - plaquette de comprimes
+
+  drugs:
+    label: Stupéfiants
+    refuse:
+      - (cannabis|haschisch|hashish|marijuana|mdma|ketamine|ganja)
+      - champignons (hallucinogenes|magiques)
+      - (cocaine|coke) pure
+      - herbe a fumer
+    review:
+      - cocaine
+      - coc aine
+      - heroine
+      - heroin
+      - ecstasy
+      - cbd
+      - weed
+      - beuh
+      - shit
+      - kush
+      - lsd
+      - psilocybe*
+
+  tobacco:
+    label: Produits du tabac et vapotage
+    refuse:
+      - (paquet|paquets|cartouche|cartouches) de (cigarettes|clopes|tabac)
+      - tabac a rouler
+      - (eliquide|eliquides)
+      - e (liquide|liquides)
+      - vapoteuse*
+      - cigarette* electronique*
+    review:
+      - cigarettes
+      - clopes
+      - marlboro*
+      - cigare*
+      - tabac
+      - tabac a pipe
+      - chicha
+      - puff
+      - e cig*
+      - juul
+      - ejuice
+      - pod juul
+
+  alcohol:
+    label: Alcool
+    refuse:
+      - (bouteille|bouteilles|caisse|caisses|carton|cartons|pack|packs|lot|magnum) (de|d)? (whisky|whiskey|vodka|rhum|rum|tequila|cognac|armagnac|calvados|pastis|ricard|absinthe|gin|vin|vins|champagne|biere|bieres|liqueur|porto)
+      - (whisky|whiskey|vodka|rhum|rum|tequila|cognac|armagnac|calvados|pastis|ricard|gin|porto) (70cl|70|75cl|75|1l|1|50cl|litre*)
+      - (whisky|whiskey|rhum|cognac|armagnac) (8|10|12|15|18|20|21|25|30) ans
+    review:
+      - whisky
+      - whiskey
+      - wisky
+      - whysky
+      - vodka
+      - vodk*
+      - vod ka
+      - rhum
+      - rum
+      - tequila
+      - armagnac
+      - calvados
+      - pastis
+      - ricard
+      - absinthe
+      - jack daniel*
+      - jagermeister
+      - champagne*
+      - biere*
+      - cidre*
+      - gin
+      - heineken
+      - leffe
+      - (rose|bordeaux|bourgogne|beaujolais|chablis) ~? ~? ~? (bouteille*|caisse*|carton*|magnum*)
+      - havana club
+      - moet
+      - dom perignon
+      - veuve clicquot
+      - ruinart
+      - grand cru*
+      - chateau margaux
+      - vin (rouge|blanc|rose)
+      - vins
+      - liqueur*
+      - alcool*
+
+  animals:
+    label: Animaux vivants
+    refuse:
+      - (chiot|chiots|chaton|chatons|chienne|chien|chat|lapin|lapins) ~? ~? (a|de) (vendre|donner|adopter|reserver)
+      - (animal|animaux) (vivant|vivants)
+      - (puppies|kittens|puppy|kitten) for sale
+    review:
+      - chiot*
+      - chaton*
+      - puppy
+      - puppies
+      - kitten*
+      - chien de race
+      - "(chat|chats|chatte|chienne|chien|chiens|lapin) ~? ~? # mois"
+      - (bebe|bebes) chats
+      - lapin nain
+      - perroquet*
+      - perruche*
+      - hamster*
+      - furet*
+      - cochon d inde
+      - poussin*
+      - poule pondeuse*
+      - reptile*
+      - gecko*
+      - python royal
+      - serpent des bles
+      - mygale*
+      - chevre naine
+
+  protected_species:
+    label: Espèces protégées
+    refuse:
+      - ivoire d? elephant
+      - defense* d? elephant*
+      - corne* de? rhinoceros
+      - corne rhino
+    review:
+      - ivoire veritable
+      - en ivoire
+      - ecaille de tortue
+      - carapace de tortue
+      - corail
+      - taxidermie
+      - naturalise*
+      - empaille*
+      - peau de (tigre|leopard)
+
+  adult:
+    label: Contenus pour adultes
+    refuse:
+      - (sextoy|sextoys)
+      - sex (toy|toys)
+      - godemichet*
+      - vibromasseur*
+      - film* (porno|pornographique*)
+      - culotte* portee*
+      - escort girl*
+    review:
+      - gode
+      - dildo*
+      - vibro
+      - porno*
+      - erotique*
+      - coquin*
+      - fetish*
+      - film x
+      - films x
+
+  digital_accounts:
+    label: Données et comptes numériques
+    refuse:
+      - compte (netflix|spotify|disney|fortnite|steam|playstation|psn|xbox|instagram|tiktok|facebook|snapchat|valorant)
+      - (netflix|spotify|fortnite|steam|instagram|tiktok) account
+      - abonnes instagram
+      - (fichier|base) de (prospects|clients|donnees clients|emails)
+      - base de donnees (emails|clients|prospects)
+    review:
+      - abonnement netflix
+      - spotify premium
+      - followers
+      - fichier clients
+      - cle d activation
+      - code d activation
+      - cle steam
+      - licence windows
+      - licence office
+
+  transport_tickets:
+    label: Titres de transport et billets nominatifs
+    refuse:
+      - billet* nominatif*
+      - titre* de transport
+    review:
+      - billet* de train
+      - billet* d avion
+      - pass navigo
+      - navigo mensuel
+      - ticket* de? metro
+      - billet
+      - billets
+      - place* de concert
+      - e billet*
+
+  recalled:
+    label: Produits rappelés (sécurité des produits)
+    refuse:
+      - produit* rappele*
+      - rappele* par le fabricant
+      - rappel conso
+    review: []
+
+  stolen:
+    label: Objets volés
+    refuse:
+      - objet* vole*
+      - marchandise* volee*
+      - (telephone|iphone|velo|scooter|voiture) vole
+      - tombe* du camion
+    review:
+      - sans facture
+      - provenance inconnue
+      - icloud bloque
+      - bloque icloud
+      - imei bloque
+      - blacklist*
+
+  identity_documents:
+    label: Documents d'identité
+    refuse:
+      - faux papiers
+      - (passeport|carte d identite|permis de conduire|carte vitale) (vierge|a vendre)
+      - carte grise vierge
+      - titre de sejour
+    review:
+      - passeport*
+      - passport
+      - carte d identite
+      - permis de conduire
+      - permis b
+      - carte vitale
+
+# Mots qui changent l'objet : présents ailleurs dans le texte, un refus devient une revue.
+unless:
+  - vide*
+  - etui*
+  - housse*
+  - coque*
+  - pochette*
+  - porte
+  - couverture*
+  - couleur*
+  - coloris
+  - motif*
+  - imprime*
+  - facon
+  - style
+  - livre*
+  - roman*
+  - bd
+  - dvd
+  - blu
+  - vinyle*
+  - album*
+  - cd
+  - poster*
+  - affiche*
+  - collection*
+  - collectionneur*
+  - ancien*
+  - vintage
+  - decoratif*
+  - decorative*
+  - deco
+  - decoration*
+  - chocolat*
+  - bonbon*
+  - gateau*
+  - sirop*
+  - parfum*
+  - bougie*
+  - jouet*
+  - figurine*
+  - peluche*
+  - miniature*
+  - maquette*
+  - deguisement*
+  - costume*
+  - lego
+  - playmobil
+  - ceramique*
+  - statue*
+  - statuette*
+  - calendrier*
+  - puzzle*
+  - panier*
+  - gamelle*
+  - collier*
+  - harnais*
+  - croquette*
+  - laisse*
+  - niche*
+  - griffoir*
+  - jeu
+  - jeux
+  - airsoft
+  - replique*
+  - billes
+
+# Expressions innocentes retirées du texte avant la recherche.
+except:
+  - pistolet (a|de|d|pour)? (colle|peinture|silicone|calfeutrer|arrosage|eau|thermique|massage|clous|mastic|karcher|graisse|agrafe*|agrafeur|souder|soudure|gonflage|carburant|pneumatique|nettoyage|douche|decapeur|lavage|doseur|distributeur|pompe|air)
+  - pistolet a air (chaud|comprime)
+  - fusil a aiguiser
+  - fusil de chasse sous marine
+  - chasse sous marine
+  - (cave|caves|verre|verres|carafe|seau|flute|flutes|tireuse|pierres|service|cuillere|fontaine) (a|de|pour)? (vin|whisky|champagne|biere|bieres|liqueur|absinthe)
+  - (porte|range|casier) (a|de)? bouteille*
+  - baba au rhum
+  - raisin* au rhum
+  - rhum raisin
+  - au (cognac|whisky|rhum|armagnac)
+  - a l (armagnac|absinthe)
+  - a la liqueur
+  - sans alcool
+  - (couleur|cuir|ton) (cognac|champagne|ivoire|tabac)
+  - (etui|porte|protege|pochette|housse|coque|couverture|bloc) (a|pour|de)? (passeport|carte d identite|carte vitale|permis|navigo|pass navigo|cigarettes)
+  - code de la route
+  - (preparation|livre|code) (au|du)? permis de conduire
+  - billet* de banque
+  - ticket* de caisse
+  - (boite|boites|coupe) a? cigare*
+  - (motif|imprime|imitation|facon) peau de (tigre|leopard)
+  - biscuit* cigarette*
+  - cigarettes russes
+  - cigarettes en chocolat
+  - blague a tabac
+  - (armoire|boite|pilulier) a medicaments
+  - boite a munitions
+  - sur ordonnance
+  - (panier|gamelle|collier|harnais|croquettes|lait|litiere|jouet|coussin|cage) (pour|de|a)? (chiot|chaton|chien|chat|lapin|hamster|perruche|furet)
+  - touche* de piano
+  - ford escort
+  - x men
+  - x files
+  - fake (leather|fur|cuir)
+  - imitation cuir
+  - (reproduction|replique) de la tour eiffel

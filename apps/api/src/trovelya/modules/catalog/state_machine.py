@@ -1,5 +1,5 @@
-"""The listing state machine (section 9.1): an explicit table of transitions, tested
-exhaustively. Applying a transition (history, event) is service/states.py's job.
+"""The listing state machine (section 9.1, with plan Q29 and Q32): an explicit table of
+transitions, tested exhaustively. Applying a transition (history, event) is service/states.py's job.
 
 Publishing has two events: `publish` puts a low-risk listing online at once, `submit_for_review`
 sends it to moderation (P2-T05b decides which). Reserving, releasing and selling are in the
@@ -46,6 +46,11 @@ TRANSITIONS: Mapping[tuple[ListingStatus, ListingEvent], ListingStatus] = Mappin
         (_S.REMOVED, _E.APPEAL_ACCEPTED): _S.ACTIVE,
         (_S.ACTIVE, _E.EXPIRE): _S.EXPIRED,
         (_S.EXPIRED, _E.RENEW): _S.ACTIVE,
+        # Q29: the seller takes back a listing awaiting moderation.
+        (_S.PENDING_REVIEW, _E.WITHDRAW): _S.WITHDRAWN,
+        # Q32: putting a listing back online goes through the moderation too.
+        (_S.WITHDRAWN, _E.SUBMIT_FOR_REVIEW): _S.PENDING_REVIEW,
+        (_S.EXPIRED, _E.SUBMIT_FOR_REVIEW): _S.PENDING_REVIEW,
     }
 )
 

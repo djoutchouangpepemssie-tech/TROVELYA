@@ -88,7 +88,7 @@ async def test_renew_only_withdrawn_or_expired(client: AsyncClient, sessionmaker
             await db.commit()
         renewed = await _call(client, account, listing["id"], "renew")
         assert (renewed.status_code, renewed.json()["code"]) == (409, "invalid_transition"), status
-        if status != "active":
+        if status not in ("active", "pending_review"):  # Q29: awaiting moderation, it may
             withdrawn = await _call(client, account, listing["id"], "withdraw")
             assert withdrawn.status_code == 409, status
 
