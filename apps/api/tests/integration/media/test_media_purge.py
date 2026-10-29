@@ -351,6 +351,54 @@ async def test_listing_photo_never_attached_purged_after_24h(
         assert all(_stored(storage, keys))
 
 
+async def test_refused_avatar_kept_for_the_refusal_retention(
+    sessionmaker: Session, storage: MemoryStorage
+) -> None:
+    """A refused file, avatar or listing photo, stays the 30 days of a refusal (PII.md)."""
+    member = await make_account(sessionmaker, completed=True)
+    media_id, _ = await _media(
+        sessionmaker,
+        storage,
+        member.id,
+        status="rejected",
+        age=timedelta(hours=25),
+        purpose="avatar",
+    )
+    await _purge(sessionmaker, storage)
+    assert (await _row(sessionmaker, media_id)).deleted_at is None
+
+
+async def test_photo_attached_after_the_lock_is_kept(
+    sessionmaker: Session,
+    storage: MemoryStorage,
+    category: UUID,  # noqa: F811
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    """Attached once the purge has locked its candidates (a foreign key takes only FOR KEY
+    SHARE, which does not wait): the update, with a new snapshot, sees the listing and spares
+    the photo."""
+    member = await make_account(sessionmaker, completed=True)
+    media_id, keys = await _media(sessionmaker, storage, member.id, age=timedelta(hours=25))
+    listing_id = await _listing(sessionmaker, member.id, category, "Lampe opaline verte")
+    scalars = AsyncSession.scalars
+    attached: list[bool] = []
+
+    async def lock_then_attach(self: AsyncSession, *args: Any, **kwargs: Any) -> Any:
+        result = await scalars(self, *args, **kwargs)
+        if not attached and "FOR NO KEY UPDATE" in str(args[0]):
+            locked = list(result)
+            if media_id in locked:
+                attached.append(True)
+                await _attach(sessionmaker, listing_id, media_id)
+            return locked
+        return result
+
+    monkeypatch.setattr(AsyncSession, "scalars", lock_then_attach)
+    await _purge(sessionmaker, storage)
+    assert attached == [True]
+    assert (await _row(sessionmaker, media_id)).deleted_at is None and all(_stored(storage, keys))
+
+
 async def test_photo_being_attached_to_a_listing_is_not_purged(
     sessionmaker: Session,
     storage: MemoryStorage,

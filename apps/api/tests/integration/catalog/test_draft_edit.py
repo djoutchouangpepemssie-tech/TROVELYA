@@ -26,6 +26,9 @@ from tests.integration.catalog.test_drafts import (
 )
 from tests.integration.identity.test_member_location import make_address
 from tests.integration.identity.test_profile import Account, make_account
+from trovelya.modules.media.adapters.storage import MemoryStorage
+from trovelya.modules.media.service.purge import purge_media
+from trovelya.shared.clock import FixedClock
 
 
 async def _patch(
@@ -152,6 +155,41 @@ async def test_photos_and_place_replaced(client: AsyncClient, sessionmaker: Sess
     body = draft(zone, listing["media_ids"]) | {"location": edited["location"]}
     elsewhere = await create(client, account, body)
     assert elsewhere.status_code == 201, elsewhere.text
+
+
+async def test_photo_taken_off_a_draft_kept_24_hours(
+    client: AsyncClient,  # noqa: F811
+    sessionmaker: Session,
+) -> None:
+    """A photo sent days ago and taken off a draft is a listing photo in no listing: the purge
+    counts its 24 hours from the moment it was taken off, so it can still go back or move to
+    another draft (PII.md)."""
+    account, listing = await _draft(client, sessionmaker)
+    [old] = listing["media_ids"]
+    async with sessionmaker() as db:
+        await db.execute(
+            text("UPDATE media SET created_at = now() - interval '3 days' WHERE id = :m"),
+            {"m": old},
+        )
+        await db.commit()
+    new = str(await photo(sessionmaker, account.id))
+    assert (await _patch(client, account, listing, {"media_ids": [new]})).status_code == 200
+
+    async def purge_and_read() -> object:
+        async with sessionmaker() as db:
+            now = await db.scalar(text("SELECT now()"))
+        await purge_media(sessionmaker, MemoryStorage(), clock=FixedClock(now))
+        async with sessionmaker() as db:
+            return await db.scalar(text("SELECT deleted_at FROM media WHERE id = :m"), {"m": old})
+
+    assert await purge_and_read() is None
+    async with sessionmaker() as db:  # 25 hours later
+        await db.execute(
+            text("UPDATE media SET detached_at = now() - interval '25 hours' WHERE id = :m"),
+            {"m": old},
+        )
+        await db.commit()
+    assert await purge_and_read() is not None
 
 
 async def test_photos_alone_move_the_version(client: AsyncClient, sessionmaker: Session) -> None:  # noqa: F811

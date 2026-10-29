@@ -482,7 +482,7 @@ tout ── T12 (parcours 2, démo, porte)
 | GET | `/v1/me/listings` | 🔑 | — |
 
 - Suites des revues de T03a :
-  - Purge des photos d'annonce jamais rattachées (24 h, comme les avatars non choisis) : `purpose = 'listing'`, sans ligne dans `listing_media` ; même verrou que pour les avatars (`FOR NO KEY UPDATE SKIP LOCKED` dans la purge, `FOR SHARE` sur la photo au rattachement), test `test_attached_photo_never_purged`.
+  - Purge des photos d'annonce jamais rattachées (24 h, comme les avatars non choisis) : `purpose = 'listing'`, sans ligne dans `listing_media` ; même verrou que pour les avatars (`FOR NO KEY UPDATE SKIP LOCKED` dans la purge, `FOR SHARE` sur la photo au rattachement), tests `test_listing_photo_never_attached_purged_after_24h` et suivants. Livrée en T03b3c : une photo retirée d'un brouillon (et rattachée à aucune autre annonce) a ses 24 h comptées depuis son retrait (`media.detached_at`, migration 0017, index `media_listing_idx`), pour pouvoir la remettre ou la déplacer ; un fichier refusé garde sa durée de 30 jours, avatar compris.
   - Au rattachement, le service vérifie que la photo appartient au vendeur et a `purpose = 'listing'` (la base ne le garantit pas).
   - Cohérence statut et dates (`sold_at` d'une annonce vendue, `published_at` d'une annonce active) : portée par la machine à états (T04), pas par des contraintes (E17).
 - [ ] Tests d'abord :

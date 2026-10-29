@@ -6,6 +6,7 @@ never deletes a photo being attached.
 """
 
 from collections.abc import Sequence
+from datetime import datetime
 from typing import Any
 from uuid import UUID
 
@@ -30,6 +31,13 @@ async def check_listing_photos(
             raise AppError(ErrorCode.MEDIA_REJECTED, 422)
         if row.status != "ready":
             raise AppError(ErrorCode.MEDIA_NOT_READY, 409)
+
+
+async def photos_taken_off(db: AsyncSession, media_ids: Sequence[UUID], *, at: datetime) -> None:
+    """Photos a seller took off a draft: the purge gives them 24 hours from `at` to go back on
+    a listing (`mark_for_purge`)."""
+    if media_ids:
+        await repository.mark_detached(db, media_ids, at)
 
 
 def _public(variants: list[dict[str, Any]], base: str) -> list[dict[str, Any]]:

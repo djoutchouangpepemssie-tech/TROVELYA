@@ -189,6 +189,8 @@ async def update_draft(
     if photos_changed:
         await repository.detach_photos(db, listing_id)
         await _attach(db, listing_id, body.media_ids)
+        taken_off = [m for m in current.media_ids if m not in body.media_ids]
+        await listing_photos.photos_taken_off(db, taken_off, at=values["now"])
         # Photos are not content to the triggers: the version moves here, once.
         await repository.bump_version_if(db, listing_id, unchanged_from=locked.version)
     if "brand" in changes and locked.brand_id not in (None, values["brand_id"]):

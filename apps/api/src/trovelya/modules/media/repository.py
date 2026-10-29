@@ -115,7 +115,7 @@ async def owned_media(
     db: AsyncSession, media_id: UUID, owner_id: UUID, *, lock: bool = False
 ) -> Row[Any] | None:
     """`lock`: held FOR SHARE until the transaction ends, so the purge cannot delete a photo
-    being chosen as an avatar (see `mark_for_purge`)."""
+    being chosen as an avatar or attached to a listing (see `mark_for_purge`)."""
     query = _OWNED_MEDIA_FOR_SHARE if lock else _OWNED_MEDIA
     return (await db.execute(query, {"id": media_id, "owner": owner_id})).one_or_none()
 
@@ -265,9 +265,17 @@ def _rowcount(result: Any) -> int:
     return result.rowcount
 
 
+async def mark_detached(db: AsyncSession, media_ids: Sequence[UUID], at: datetime) -> None:
+    await db.execute(
+        text("UPDATE media SET detached_at = :at WHERE id = ANY(:ids)"),
+        {"at": at, "ids": list(media_ids)},
+    )
+
+
 # Photos nobody uses: an avatar nobody chose, a listing photo in no listing (never attached, or
-# taken off a draft). A refusal follows its own retention (`refused_before`). Each: the photos
-# to lock, then the update, which checks again with a new snapshot.
+# taken off a draft: its 24 hours count from then). A refusal follows its own retention
+# (`refused_before`). Each: the photos to lock, then the update, which checks again with a new
+# snapshot.
 _UNUSED = (
     (
         text(
@@ -284,7 +292,7 @@ _UNUSED = (
     (
         text(
             "SELECT id FROM media WHERE purpose = 'listing' AND deleted_at IS NULL"
-            " AND status <> 'rejected' AND created_at < :abandoned_before"
+            " AND status <> 'rejected' AND GREATEST(created_at, detached_at) < :abandoned_before"
             " AND NOT EXISTS (SELECT 1 FROM listing_media lm WHERE lm.media_id = media.id)"
             " FOR NO KEY UPDATE SKIP LOCKED"
         ),
