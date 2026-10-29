@@ -313,6 +313,9 @@ async def erase_catalog(db: AsyncSession, user_id: UUID) -> None:
     )
     await db.execute(text("DELETE FROM price_watches WHERE user_id = :u"), params)
     await db.execute(text("DELETE FROM listings WHERE seller_id = :u"), params)
+    # The lock of the seller's places, as a draft and the daily purge take it: the purge, which
+    # only tries it, leaves this seller alone instead of waiting for the erasure.
+    await db.execute(_LOCK_SELLER_PLACES, {"seller_id": str(user_id)})
     await db.execute(text("DELETE FROM listing_public_positions WHERE seller_id = :u"), params)
     # Brands the member typed: gone when no listing carries them, else kept and unlinked.
     await db.execute(
@@ -816,9 +819,11 @@ _DROP_UNUSED_MEMBER_BRANDS = text(
 )
 # Q20, E18: a kept place is used while a listing of its seller stands within REUSE_M of it.
 _SELLERS_WITH_UNUSED_PLACES = text(
-    "SELECT DISTINCT p.seller_id FROM listing_public_positions p WHERE NOT EXISTS"
+    "SELECT DISTINCT p.seller_id FROM listing_public_positions p"
+    " WHERE (CAST(:after AS uuid) IS NULL OR p.seller_id > :after) AND NOT EXISTS"
     " (SELECT 1 FROM listings l WHERE l.seller_id = p.seller_id"
     " AND ST_DWithin(l.location, p.location, :reuse_m))"
+    " ORDER BY p.seller_id LIMIT :limit"
 )
 _TRY_LOCK_SELLER_PLACES = text(
     "SELECT pg_try_advisory_xact_lock("
@@ -864,8 +869,12 @@ async def drop_unused_member_brands(db: AsyncSession, brand_ids: Sequence[UUID])
         pass
 
 
-async def sellers_with_unused_places(db: AsyncSession, *, reuse_m: float) -> list[UUID]:
-    return list(await db.scalars(_SELLERS_WITH_UNUSED_PLACES, {"reuse_m": reuse_m}))
+async def sellers_with_unused_places(
+    db: AsyncSession, *, reuse_m: float, after: UUID | None, limit: int
+) -> list[UUID]:
+    """A page of sellers with a kept place no listing of theirs stands on, by id."""
+    params = {"reuse_m": reuse_m, "after": after, "limit": limit}
+    return list(await db.scalars(_SELLERS_WITH_UNUSED_PLACES, params))
 
 
 async def try_lock_seller_places(db: AsyncSession, seller_id: UUID) -> bool:
@@ -881,4 +890,5 @@ async def unused_places(db: AsyncSession, seller_id: UUID, *, reuse_m: float) ->
 
 
 async def delete_places(db: AsyncSession, place_ids: Sequence[UUID]) -> None:
-    await db.execute(_DELETE_PLACES, {"ids": list(place_ids)})
+    if place_ids:
+        await db.execute(_DELETE_PLACES, {"ids": list(place_ids)})

@@ -10,6 +10,7 @@
 """
 
 import re
+from collections.abc import Sequence
 from dataclasses import dataclass
 from typing import Any, Literal
 from uuid import UUID
@@ -176,9 +177,10 @@ async def member_place(
     )
 
 
-async def has_place_near(
-    db: AsyncSession, user_id: UUID, *, lat: float, lon: float, radius_m: float
-) -> bool:
-    """Whether an address (not deleted) or a zone of the member lies within `radius_m` of the
-    point: a public position drawn there is still theirs to use (plan P2 Q28)."""
-    return await repository.has_place_near(db, user_id, lat=lat, lon=lon, radius_m=radius_m)
+async def places_near(
+    db: AsyncSession, user_id: UUID, points: Sequence[tuple[float, float]], *, radius_m: float
+) -> set[int]:
+    """The indexes of the `(lat, lon)` points near which an address (not deleted) or a zone of
+    the member lies within `radius_m`: a public position drawn there is still theirs to use
+    (plan P2 Q28)."""
+    return await repository.places_near(db, user_id, points, radius_m=radius_m)

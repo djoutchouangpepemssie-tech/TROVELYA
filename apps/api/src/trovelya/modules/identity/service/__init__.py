@@ -29,8 +29,8 @@ from trovelya.modules.identity.service.magic_links import (
 from trovelya.modules.identity.service.places import (
     MemberPlace,
     PlaceSource,
-    has_place_near,
     member_place,
+    places_near,
 )
 from trovelya.modules.identity.service.profile import (
     default_zone_center,
@@ -67,13 +67,13 @@ __all__ = [
     "expire_approvals",
     "get_clock",
     "get_session_policy",
-    "has_place_near",
     "identity_subscriptions",
     "limit_magic_link_requests",
     "list_sessions",
     "magic_link_ttl_min",
     "member_place",
     "optional_user",
+    "places_near",
     "process_erasures",
     "public_seller",
     "purge_expired_exports",

@@ -453,3 +453,36 @@ async def test_place_kept_while_the_seller_still_has_it(
         await db.commit()
     await _purge(sessionmaker)
     assert await _positions(sessionmaker, member.id) == 1  # the zone's place stays
+
+
+async def test_only_the_sellers_own_places_keep_a_position(
+    sessionmaker: Session,
+    category: UUID,  # noqa: F811
+) -> None:
+    """Another member's address, zone or listing next door keeps nothing; an address of the
+    seller 60 m away neither (beyond the 50 m of Q20); the three unused places go in one run."""
+    seller = await make_account(sessionmaker, completed=True)
+    neighbour = await make_account(sessionmaker, completed=True)
+    await _keep_position(sessionmaker, seller.id, 4.85, 45.75)
+    await _keep_position(sessionmaker, seller.id, 4.90, 45.80)
+    await _keep_position(sessionmaker, seller.id, 4.8401, 45.7501)  # ~14 m from that listing
+    await make_address(sessionmaker, neighbour.id, at=(45.7501, 4.8501))
+    await make_zone(sessionmaker, neighbour.id, at=(45.80, 4.90))
+    await _listing(sessionmaker, neighbour.id, category, "Lampe opaline verte")  # at 4.84, 45.75
+    await make_address(sessionmaker, seller.id, at=(45.75054, 4.85))  # ~60 m north
+    await _purge(sessionmaker)
+    assert await _positions(sessionmaker, seller.id) == 0
+
+
+async def test_purge_leaves_a_seller_being_erased_alone(
+    sessionmaker: Session,
+) -> None:
+    """The account's erasure takes the lock of the seller's places: the purge, which only tries
+    it, moves on instead of waiting for the erasure."""
+    member = await make_account(sessionmaker, completed=True)
+    await _keep_position(sessionmaker, member.id, 4.85, 45.75)
+    async with sessionmaker() as erasing:
+        await erase_catalog(erasing, member.id)
+        await asyncio.wait_for(_purge(sessionmaker), timeout=10)
+        await erasing.commit()
+    assert await _positions(sessionmaker, member.id) == 0

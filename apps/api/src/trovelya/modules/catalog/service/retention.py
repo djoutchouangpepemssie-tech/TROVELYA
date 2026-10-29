@@ -25,7 +25,7 @@ from sqlalchemy.ext.asyncio import AsyncSession, async_sessionmaker
 from trovelya.core.db import commit
 from trovelya.modules.catalog import repository
 from trovelya.modules.catalog.service.locations import REUSE_M
-from trovelya.modules.identity.service import has_place_near
+from trovelya.modules.identity.service import places_near
 from trovelya.modules.media.service import listing_photos
 from trovelya.shared.clock import Clock
 
@@ -73,6 +73,35 @@ async def _purge_batch(
     return due, erased
 
 
+async def _purge_unused_places(
+    sessionmaker: async_sessionmaker[AsyncSession], *, batch: int
+) -> int:
+    """Q20, Q28: the kept places no listing of their seller stands on and no address or zone
+    of theirs lies near go; a seller drawing a position right now is left for the next run.
+    Sellers by pages, one transaction each, one query for all the places of a seller."""
+    deleted = 0
+    after: UUID | None = None
+    while True:
+        async with sessionmaker() as db:
+            sellers = await repository.sellers_with_unused_places(
+                db, reuse_m=REUSE_M, after=after, limit=batch
+            )
+        for seller_id in sellers:
+            async with sessionmaker() as db:
+                if await repository.try_lock_seller_places(db, seller_id):
+                    unused = await repository.unused_places(db, seller_id, reuse_m=REUSE_M)
+                    kept = await places_near(
+                        db, seller_id, [(p.lat, p.lon) for p in unused], radius_m=REUSE_M
+                    )
+                    gone = [p.id for i, p in enumerate(unused) if i not in kept]
+                    await repository.delete_places(db, gone)
+                    deleted += len(gone)
+                await commit(db)
+        if len(sellers) < batch:
+            return deleted
+        after = sellers[-1]
+
+
 async def purge_ended_listings(
     sessionmaker: async_sessionmaker[AsyncSession], *, clock: Clock, batch: int = BATCH
 ) -> int:
@@ -99,22 +128,6 @@ async def purge_ended_listings(
         if len(locked) < batch:
             break
         after = max(locked)
-    places = 0
-    async with sessionmaker() as db:
-        sellers = await repository.sellers_with_unused_places(db, reuse_m=REUSE_M)
-    for seller_id in sellers:
-        async with sessionmaker() as db:
-            if await repository.try_lock_seller_places(db, seller_id):
-                gone = [
-                    place.id
-                    for place in await repository.unused_places(db, seller_id, reuse_m=REUSE_M)
-                    # Q28: kept while an address or a zone of the seller is still there.
-                    if not await has_place_near(
-                        db, seller_id, lat=place.lat, lon=place.lon, radius_m=REUSE_M
-                    )
-                ]
-                await repository.delete_places(db, gone)
-                places += len(gone)
-            await commit(db)
+    places = await _purge_unused_places(sessionmaker, batch=batch)
     logger.info("listings.purged", listings=erased, sellers_places=places)
     return erased
