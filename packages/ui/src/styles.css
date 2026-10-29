@@ -100,6 +100,8 @@
 }
 .trv-menu {
   min-width: var(--radix-select-trigger-width);
+  /* A long list scrolls inside the room left on screen, never past it (WCAG 1.4.10). */
+  max-height: var(--radix-select-content-available-height);
   padding: var(--trv-space-1);
   border: 1px solid var(--trv-color-line);
   border-radius: var(--trv-radius-md);

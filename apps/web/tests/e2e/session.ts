@@ -47,3 +47,37 @@ export function sitePath(link: string): string {
   const url = new URL(link);
   return url.pathname + url.hash;
 }
+
+/**
+ * Sign the browser in as a new staff superadmin, as the creation script and the enrolment page
+ * do: a real WebAuthn ceremony on Chromium's virtual authenticator.
+ */
+export async function signInAsStaff(
+  page: Page,
+  text: { create: string; done: string },
+): Promise<void> {
+  const cdp = await page.context().newCDPSession(page);
+  await cdp.send("WebAuthn.enable");
+  await cdp.send("WebAuthn.addVirtualAuthenticator", {
+    options: {
+      protocol: "ctap2",
+      transport: "internal",
+      hasResidentKey: true,
+      hasUserVerification: true,
+      isUserVerified: true,
+    },
+  });
+  const created = await page.request.post("/api/v1/_test/staff-enrolment", { data: {} });
+  if (!created.ok()) throw new Error(`staff enrolment failed: ${String(created.status())}`);
+  const { link } = (await created.json()) as { link: string };
+  await page.goto(sitePath(link));
+  await page.getByRole("button", { name: text.create }).click();
+  await page.getByRole("status").filter({ hasText: text.done }).waitFor();
+}
+
+/** A listing awaiting moderation (reason `weapons`), from the test-only catalog route. */
+export async function listingInReview(page: Page): Promise<{ id: string; title: string }> {
+  const response = await page.request.post("/api/v1/_test/listing-in-review", { data: {} });
+  if (!response.ok()) throw new Error(`listing in review failed: ${String(response.status())}`);
+  return (await response.json()) as { id: string; title: string };
+}

@@ -72,6 +72,7 @@ async def test_session_route_absent_outside_test_and_local(
                 "/v1/_test/email-change-link",
                 "/v1/_test/flag-allow",
                 "/v1/_test/build-export",
+                "/v1/_test/listing-in-review",
             ):
                 answer = await client.post(path, json={"new_email": "b@example.org"})
                 assert answer.status_code == 404, (env, path)
@@ -195,3 +196,38 @@ async def test_build_export_route_builds_the_pending_export(
         archive = await client.get(f"/v1/me/data-export/{export['id']}/download")
         assert archive.status_code == 200
         assert archive.headers["content-type"] == "application/zip"
+
+
+async def test_listing_in_review_route_feeds_the_staff_queue(
+    sessionmaker: async_sessionmaker[AsyncSession], redis_client: Redis
+) -> None:
+    """P2-T05c2: the end-to-end tests of the moderation page get a listing awaiting review."""
+    async with _client(sessionmaker, redis_client, "test") as client:
+        response = await client.post("/v1/_test/listing-in-review")
+        newer = (await client.post("/v1/_test/listing-in-review")).json()
+    assert response.status_code == 200, response.text
+    listing = response.json()
+    async with sessionmaker() as db:
+        row = (
+            await db.execute(
+                text(
+                    "SELECT l.status::text, h.reason_code FROM listings l"
+                    " JOIN listing_status_history h ON h.listing_id = l.id WHERE l.id = :l"
+                ),
+                {"l": listing["id"]},
+            )
+        ).one()
+    assert tuple(row) == ("pending_review", "weapons")
+    # Each new one is the oldest of the queue: shown first, whatever earlier runs left.
+    async with sessionmaker() as db:
+        submitted = dict(
+            tuple(r)
+            for r in await db.execute(
+                text(
+                    "SELECT listing_id::text, created_at FROM listing_status_history"
+                    " WHERE listing_id IN (:a, :b) AND to_status = 'pending_review'"
+                ),
+                {"a": listing["id"], "b": newer["id"]},
+            )
+        )
+    assert submitted[newer["id"]] < submitted[listing["id"]]

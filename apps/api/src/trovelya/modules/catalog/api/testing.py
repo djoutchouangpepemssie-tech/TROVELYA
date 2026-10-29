@@ -1,0 +1,116 @@
+"""Test-only catalog route: mounted when ENV is "local" or "test", never elsewhere.
+
+`POST /v1/_test/listing-in-review` creates a seller and their listing awaiting moderation (a
+photo as the worker leaves it, the reason `weapons`), so the end-to-end tests of the staff's
+queue need neither the upload nor the worker. The catalog is seeded first when empty. Its title
+ends with its short id, and its submission is dated as far before 2000 as now is after: each new
+one is the oldest of the queue (shown first), whatever the earlier runs left behind.
+Nothing here exists on staging or in production.
+"""
+
+from datetime import UTC, datetime
+from typing import Annotated
+
+from fastapi import APIRouter, Depends
+from pydantic import BaseModel
+from sqlalchemy import text
+
+from trovelya.core.db import Uow
+from trovelya.modules.catalog.service.listings import _short_id  # pyright: ignore[reportPrivateUsage]
+from trovelya.modules.catalog.service.moderation import label
+from trovelya.modules.catalog.service.positions import h3_cells, public_offset
+from trovelya.modules.catalog.service.seed import load_seed
+from trovelya.modules.catalog.service.seed_writer import apply_seed
+from trovelya.modules.catalog.service.states import Actor, apply_transition
+from trovelya.modules.catalog.state_machine import ListingEvent
+from trovelya.modules.identity.service import get_clock
+from trovelya.shared.clock import Clock, FixedClock
+from trovelya.shared.ids import new_id
+
+router = APIRouter(prefix="/v1/_test", tags=["test"], include_in_schema=False)
+
+TITLE = "Pistolet ancien de collection"
+_Y2K = datetime(2000, 1, 1, tzinfo=UTC)
+CATEGORY = "mode.femme.robes"
+_LAT, _LON = 48.8566, 2.3522  # Paris; the public position is drawn 200 to 500 m away (Q20)
+_SELLER = text(
+    "INSERT INTO users (id, email, username, display_name, birth_year, profile_completed_at)"
+    " VALUES (:id, :email, :username, 'Vendeur', 1985, now())"
+)
+_PHOTO = text(
+    "INSERT INTO media (id, owner_id, kind, purpose, storage_key, mime_type, bytes, status,"
+    " sha256, exif_stripped, variants, moderation) VALUES (:id, :owner, 'image', 'listing',"
+    " :key, 'image/jpeg', 1000, 'ready', :sha, true, CAST(:variants AS jsonb), '{}')"
+)
+_LISTING = text(
+    "INSERT INTO listings (id, short_id, seller_id, title, description, category_id, condition,"
+    " price_minor, location, location_public, h3_r7, h3_r9, place_name, country_code,"
+    " location_source, location_source_id)"
+    " VALUES (:id, :short_id, :seller, :title, :description, :category, 'good', 12000,"
+    " ST_MakePoint(:lon, :lat)::geography, ST_MakePoint(:public_lon, :public_lat)::geography,"
+    " :h3_r7, :h3_r9, 'Paris', 'FR', 'zone', :zone)"
+)
+
+
+class ListingInReview(BaseModel):
+    id: str
+    seller_id: str
+    title: str
+
+
+@router.post("/listing-in-review", operation_id="test_listing_in_review")
+async def test_listing_in_review(
+    db: Uow, clock: Annotated[Clock, Depends(get_clock)]
+) -> ListingInReview:
+    if await db.scalar(text("SELECT count(*) FROM categories")) == 0:
+        await apply_seed(db, load_seed())
+    seller, media, listing, short_id = new_id(), new_id(), new_id(), _short_id()
+    title = f"{TITLE} {short_id}"
+    names = {"id": seller, "email": f"e2e-seller-{seller.hex}@example.org"}
+    await db.execute(_SELLER, names | {"username": f"v_{seller.hex[-12:]}"})
+    variants = f'[{{"format": "webp", "width": 640, "height": 480, "key": "{new_id().hex}"}}]'
+    await db.execute(
+        _PHOTO,
+        {
+            "id": media,
+            "owner": seller,
+            "key": new_id().hex,
+            "sha": b"\x01" * 32,
+            "variants": variants,
+        },
+    )
+    category = await db.scalar(
+        text("SELECT id FROM categories WHERE key = :key"), {"key": CATEGORY}
+    )
+    if category is None:
+        raise LookupError(f"category {CATEGORY} missing from the seed")
+    public_lat, public_lon = public_offset(_LAT, _LON)
+    h3_r7, h3_r9 = h3_cells(_LAT, _LON)
+    await db.execute(
+        _LISTING,
+        {
+            "category": category,
+            **{"lat": _LAT, "lon": _LON, "public_lat": public_lat, "public_lon": public_lon},
+            **{"h3_r7": h3_r7, "h3_r9": h3_r9},
+            "id": listing,
+            "short_id": short_id,
+            "seller": seller,
+            "title": title,
+            "description": "Belle patine, mécanisme complet, vendu en l'état.",
+            "zone": new_id(),
+        },
+    )
+    await db.execute(
+        text("INSERT INTO listing_media (listing_id, media_id, position) VALUES (:l, :m, 0)"),
+        {"l": listing, "m": media},
+    )
+    await apply_transition(
+        db,
+        listing_id=listing,
+        event=ListingEvent.SUBMIT_FOR_REVIEW,
+        actor=Actor("user", seller),
+        clock=FixedClock(_Y2K - (clock.now() - _Y2K)),
+        reason_code="weapons",
+        reason_text=label("weapons"),
+    )
+    return ListingInReview(id=str(listing), seller_id=str(seller), title=title)
