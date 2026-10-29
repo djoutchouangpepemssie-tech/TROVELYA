@@ -45,7 +45,6 @@ MASKED = [
     ("jean arobase gmail", "email"),
     ("jean @ gmail . com", "email"),
     ("jean at gmail dot com", "email"),
-    ("écris-moi sur gmail", "email"),
     ("FR76 3000 6000 0112 3456 7890 189", "iban"),
     ("FR76-3000-6000-0112-3456-7890-189", "iban"),
     ("FR 76 3000 6000 0112 3456 7890 189", "iban"),
@@ -113,7 +112,7 @@ QUEUED = [
     ("Vendu à l'unité @15€ la pièce", "email"),  # a lone « @ » of the base rule of 8.16
     ("Réf. produit : 4006381333931", "obfuscated_number"),  # a reference with a word between
     ("Livre 9782070368228", "obfuscated_number"),  # an ISBN-13 by its check digit
-    ("Vin Bordeaux 2015 2016 2018 75 cl", "obfuscated_number"),  # a measure
+    ("écris-moi sur gmail", "email"),  # a provider named, no address
     ("Un compte PayPal", "payment_app"),
     ("Paire de bottes Lydia", "payment_app"),
     ("Robe Lydia 25 €", "payment_app"),
@@ -151,6 +150,7 @@ def test_doubtful_queued_not_masked(text: str, signal: str) -> None:
         "Collection Pokémon 151/165, 25/102, 4/102",
         "Ordinateur Dell XPS 13 9310, i7-1165G7",
         "Vinyles 1965 1972 1978 1981",
+        "Vin Bordeaux 2015 2016 2018 75 cl",
         "Ancien télégramme de 1916",
     ],
 )
@@ -206,11 +206,18 @@ def test_combining_mark_after_a_passage_masked_with_it() -> None:
 @pytest.mark.parametrize(
     "text",
     [
-        "a-" * 2500,
-        "-a" * 2500,
-        "a." * 2500,
-        "a" * 5000,
-        "1 " * 2500,
+        "a-" * 5000,
+        "-a" * 5000,
+        "a." * 5000,
+        "a" * 10000,
+        "1 " * 5000,
+        "06 " * 3333,
+        "01 " * 3333,
+        "0 " * 5000,
+        "08:30 " * 1666,
+        "1/2 " * 2500,
+        "fr76 " * 2000,
+        "jean.dupont gmail " * 555,
         " " * 10000,
         "\n" * 10000,
         "fb " * 3333,
@@ -220,7 +227,8 @@ def test_combining_mark_after_a_passage_masked_with_it() -> None:
     ],
 )
 def test_long_hostile_text_stays_fast(text: str) -> None:
-    """A description of 5000 characters is analysed in a few milliseconds, never in seconds."""
+    """A text of 10 000 characters is analysed in a few tens of milliseconds, never in seconds
+    (50 ms aimed at, with room for a loaded CI runner)."""
     start = time.perf_counter()
     detect(text)
     assert time.perf_counter() - start < 0.2

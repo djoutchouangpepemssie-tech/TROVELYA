@@ -50,7 +50,9 @@ def _chars(text: str) -> tuple[list[str], list[Span]]:
     origin: list[Span] = []
     for i, char in enumerate(text):
         decomposed = unicodedata.normalize("NFKD", char.lower())
-        if len(decomposed) > 4:  # a ligature of a whole phrase (« ﷺ »): not worth expanding
+        if char in _POWERS and i and text[i - 1].isalpha():
+            decomposed = "§"  # « m² », « cm³ »: a unit, not a digit
+        elif len(decomposed) > 4:  # a ligature of a whole phrase (« ﷺ »): not worth expanding
             decomposed = char.lower()
         for part in decomposed:
             if invisible(part):
@@ -62,6 +64,7 @@ def _chars(text: str) -> tuple[list[str], list[Span]]:
     return chars, origin
 
 
+_POWERS = "\u00b2\u00b3"
 _UNITS = ["zero", "un", "deux", "trois", "quatre", "cinq", "six", "sept", "huit", "neuf"]
 _TEENS = ["dix", "onze", "douze", "treize", "quatorze", "quinze", "seize"]
 _TENS = {20: "vingt", 30: "trente", 40: "quarante", 50: "cinquante", 60: "soixante"}
@@ -100,21 +103,26 @@ _ONE_NUMBER_RE = re.compile(_NUMBER_WORD)
 _DATE_RE = re.compile(
     r"(?<!\d)(?<!\d[/.\-])\d{1,2}[/.\-]\d{1,2}[/.\-](?:\d{4}|\d{2})(?!\d)(?![/.\-]\d)"
 )
+# A month of a year (« MEC 07/2016 ») stands alone too.
+_MONTH_YEAR_RE = re.compile(r"(?<![\d/.\-])(?:0?[1-9]|1[0-2])/(?:19|20)\d\d(?![\d/.\-])")
 # « O6 l2 »: a letter o or l right before a digit reads as one (never « i7 » or « 4l »).
 _DIGIT_LETTERS_RE = re.compile(r"(?<![a-z])[ol](?=\d)|(?<=\d)[ol](?=\d)")
 # « j e a n », « 0 6 1 2 »: single characters spaced out are put back together.
 _SPACED_RE = re.compile(r"(?<![a-z0-9])[a-z0-9](?:[ .][a-z0-9]){3,}+(?![a-z0-9])")
 _TLD = r"(?:com|fr|net|org|eu|be|de|it|es|lu|ch|io|info)\b"
-_PROVIDERS = r"(?:gmail|hotmail|outlook|yahoo|icloud|orange|free|laposte|sfr|protonmail)\b"
+# Mail providers only: « chez Orange », « chez Free » is where a phone or a box was bought.
+_PROVIDERS = r"(?:gmail|hotmail|outlook|yahoo|icloud|protonmail)\b"
 # Each starts where no white space precedes, so a long run of spaces is read once.
 _AT_RE = re.compile(
     r"(?<!\s)\s*(?:[\[(]\s*(?:at|a|@|arobase)\s*[\])]|(?<![a-z])arobase(?![a-z])"
     rf"|(?<![a-z])at(?=\s+[a-z0-9-]+\s*(?:\.|dot\b|point\b)\s*{_TLD})"
     rf"|(?<![a-z])chez(?=\s+{_PROVIDERS}))\s*"
 )
+# A plain « . » between spaces ends a sentence (« état. de plus »), but before a common
+# extension: then only it reads as the dot of a domain.
 _DOT_RE = re.compile(
-    r"(?<!\s)\s*(?:[\[(]\s*(?:dot|\.|point)\s*[\])]|(?<![a-z])(?:dot|point)(?![a-z])|\.)"
-    rf"\s*(?={_TLD})"
+    r"(?<!\s)(?:\s*(?:[\[(]\s*(?:dot|\.|point)\s*[\])]|(?<![a-z])(?:dot|point)(?![a-z]))"
+    rf"\s*(?={_TLD})|\s*\.\s*(?=(?:com|fr|net|org)\b))"
 )
 _NAME_DOT_RE = re.compile(r"(?<!\s)\s+(?:point|dot)\s+(?=[a-z0-9-]+\s*@)")
 
@@ -145,6 +153,7 @@ def normalize(text: str) -> Normalized:
     chars, origin = _chars(text)
     norm = Normalized("".join(chars), origin)
     norm = _sub(norm, _DATE_RE, lambda _: "§")
+    norm = _sub(norm, _MONTH_YEAR_RE, lambda _: "§")
     norm = _sub(norm, _NUMBERS_RE, _numbers)
     norm = _sub(norm, _DIGIT_LETTERS_RE, lambda c: "0" if c == "o" else "1")
     norm = _sub(norm, _SPACED_RE, lambda run: re.sub(r"[ .]", "", run))
