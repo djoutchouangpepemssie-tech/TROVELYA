@@ -17,6 +17,7 @@ StorageProvider = Literal["s3", "memory"]
 # P2-T05b2, Q38, Q39: no classifier until an EU provider is chosen; the fake one for tests.
 ImageClassifierProvider = Literal["none", "fake"]
 EmbedderProvider = Literal["none", "fake"]  # ADR-0020: Bedrock when opened (Q18)
+AIProviderName = Literal["none", "fake"]  # P2-T06a: Bedrock with T06b (Q18)
 
 
 def asyncpg_url(url: str) -> str:
@@ -68,6 +69,7 @@ class Settings(BaseSettings):
     storage_provider: StorageProvider = "memory"
     image_classifier: ImageClassifierProvider = "none"
     embedder: EmbedderProvider = "none"
+    ai_provider: AIProviderName = "none"  # P2-T06a; Claude on Bedrock (EU) with T06b
     storage_endpoint: str | None = None
     storage_region: str = "auto"  # R2 takes "auto"; Garage "garage"
     storage_access_key_id: SecretStr | None = None
@@ -120,6 +122,9 @@ class Settings(BaseSettings):
         # ADR-0020: the fake embedder's "similar" listings share words, nothing more.
         if self.embedder == "fake" and self.env not in ("local", "test"):
             raise ValueError("EMBEDDER=fake is for local development and tests only")
+        # P2-T06a: the fake provider sees a linen dress in every photo.
+        if self.ai_provider == "fake" and self.env not in ("local", "test"):
+            raise ValueError("AI_PROVIDER=fake is for local development and tests only")
         return self
 
     @model_validator(mode="after")

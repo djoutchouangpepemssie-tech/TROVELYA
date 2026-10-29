@@ -9,9 +9,8 @@ first or not): online at once, to review (`submit_for_review`), or refused (`sub
 then `reject` by the platform, the reason in the history).
 """
 
-import math
 from collections.abc import Callable, Collection
-from datetime import datetime, timedelta
+from datetime import timedelta
 from typing import Protocol
 from uuid import UUID
 
@@ -31,8 +30,9 @@ from trovelya.modules.catalog.service.moderation import Moderated, label
 from trovelya.modules.catalog.service.states import SYSTEM, Actor, apply_transition
 from trovelya.modules.catalog.state_machine import ListingEvent
 from trovelya.shared.clock import Clock, FixedClock
+from trovelya.shared.quota import DAY, retry_after
 
-QUOTA_WINDOW = timedelta(hours=24)
+QUOTA_WINDOW = DAY
 
 
 class ModerationGate(Protocol):
@@ -41,18 +41,6 @@ class ModerationGate(Protocol):
     async def moderate(
         self, db: AsyncSession, *, listing_id: UUID, seller_id: UUID, clock: Clock
     ) -> Moderated: ...
-
-
-def retry_after(put_online: list[datetime], limit: int, now: datetime) -> int | None:
-    """Q24: None while fewer than `limit` puttings online fall in the last 24 hours; else the
-    seconds until enough of them leave the window for one more (the whole window when the
-    limit is 0: publications frozen)."""
-    if limit <= 0:
-        return int(QUOTA_WINDOW.total_seconds())
-    if len(put_online) < limit:
-        return None
-    leaving = put_online[len(put_online) - limit]  # the oldest that must leave
-    return max(1, math.ceil((leaving + QUOTA_WINDOW - now).total_seconds()))
 
 
 async def check_publication_quota(db: AsyncSession, seller_id: UUID, *, clock: Clock) -> None:
