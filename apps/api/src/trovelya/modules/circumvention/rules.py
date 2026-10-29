@@ -25,9 +25,7 @@ OWN_DOMAINS = ("trovelya.com", "trovelya.fr")
 
 _DIGITS_RE = re.compile(r"(?:\+|\b00)?\d(?:[\s.\-/]{0,3}\d){7,}")
 _PHONE_RE = re.compile(r"(?:0[1-9]\d{8}|(?:33|0033)[1-9]\d{8})")
-_EMAIL_RE = re.compile(
-    r"[a-z0-9._%+-]+\s*@\s*[a-z0-9-]+(?:\.[a-z0-9-]+)*\.[a-z]{2,}\b"
-)
+_EMAIL_RE = re.compile(r"[a-z0-9._%+-]+\s*@\s*[a-z0-9-]+(?:\.[a-z0-9-]+)*\.[a-z]{2,}\b")
 _HANDLE_RE = re.compile(r"(?<![a-z0-9._%+-])@[a-z0-9_.]{2,30}")
 _LINK_RE = re.compile(
     r"https?://\S+|www\.\S+"

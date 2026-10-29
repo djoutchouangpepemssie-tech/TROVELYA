@@ -52,13 +52,13 @@ def _number_words() -> dict[str, int]:
 _NUMBERS = _number_words()
 _NUMBER_RE = re.compile(
     r"\b(?:"
-    + "|".join(
-        name.replace("-", r"[\s-]+") for name in sorted(_NUMBERS, key=len, reverse=True)
-    )
+    + "|".join(name.replace("-", r"[\s-]+") for name in sorted(_NUMBERS, key=len, reverse=True))
     + r")\b"
 )
 _AT_RE = re.compile(r"\s*(?:\[\s*at\s*\]|\(\s*at\s*\)|\barobase\b)\s*")
-_DOT_RE = re.compile(r"\s*(?:\[\s*dot\s*\]|\(\s*dot\s*\)|\bpoint\b)\s*(?=(?:com|fr|net|org|eu|be)\b)")
+_DOT_RE = re.compile(
+    r"\s*(?:\[\s*dot\s*\]|\(\s*dot\s*\)|\bpoint\b)\s*(?=(?:com|fr|net|org|eu|be)\b)"
+)
 
 
 def _sub(norm: Normalized, pattern: re.Pattern[str], repl: Callable[[str], str]) -> Normalized:
