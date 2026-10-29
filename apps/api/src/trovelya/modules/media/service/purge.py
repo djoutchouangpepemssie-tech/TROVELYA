@@ -33,6 +33,8 @@ ABANDONED_AFTER = timedelta(hours=24)  # plan P2, T02c
 # completed when the database is anonymised; its files follow within the hour).
 FILES_OVERDUE_AFTER = timedelta(hours=48)
 BATCH = 200
+# A photo removed by the moderation still public after this is reported (moved within the hour).
+QUARANTINE_OVERDUE_AFTER = timedelta(hours=2)
 # Storage down: the run stops rather than failing on every row until its timeout (at least 1).
 MAX_CONSECUTIVE_FAILURES = 20
 
@@ -68,7 +70,7 @@ async def _delete_files(
                 await storage.delete("originals", row.storage_key)
                 for variant in row.variants:
                     await storage.delete("variants", variant["key"])
-                    if row.quarantine_moved_at is not None:  # its private copy (Q40)
+                    if row.quarantined_at is not None:  # its private copy, even half-made (Q40)
                         await storage.delete("originals", variant["key"])
             except Exception:
                 logger.exception("media.purge_failed", media_id=str(row.id))
@@ -88,30 +90,43 @@ async def _delete_files(
 
 
 async def _move_quarantined(sessionmaker: Session, storage: ObjectStorage, *, clock: Clock) -> None:
-    """Q40: a quarantined photo's variants leave the public bucket for a private copy (copied
-    before deleted: never lost; a variant already gone has nothing to move). A failure leaves
-    the photo for the next run; failures in a row stop this step, not the purge."""
-    async with sessionmaker() as db:
-        rows = await repository.quarantined_to_move(db, limit=BATCH)
+    """Q40: a quarantined photo's variants move to a private copy (copied before deleted). Each
+    photo is tried at every run, a failing one holding back no other; failures in a row stop
+    this step, not the purge. Photos still public QUARANTINE_OVERDUE_AFTER on are reported."""
+    after = None
     failures = 0
-    for row in rows:
-        try:
-            for variant in row.variants:
-                if await storage.size("variants", variant["key"]) is None:
-                    continue
-                data = await storage.get("variants", variant["key"])
-                await storage.put("originals", variant["key"], data, content_type="image/webp")
-                await storage.delete("variants", variant["key"])
-        except Exception:
-            logger.exception("media.quarantine_failed", media_id=str(row.id))
-            failures += 1
-            if failures >= MAX_CONSECUTIVE_FAILURES:
-                return
-            continue
-        failures = 0
+    while failures < MAX_CONSECUTIVE_FAILURES:
         async with sessionmaker() as db:
-            await repository.mark_quarantine_moved(db, row.id, clock.now())
-            await commit(db)
+            rows = await repository.quarantined_to_move(db, after=after, limit=BATCH)
+        if not rows:
+            break
+        for row in rows:
+            after = row.id
+            try:
+                for variant in row.variants:
+                    if await storage.size("variants", variant["key"]) is None:
+                        continue
+                    data = await storage.get("variants", variant["key"])
+                    kind = f"image/{variant['format']}"
+                    await storage.put("originals", variant["key"], data, content_type=kind)
+                    await storage.delete("variants", variant["key"])
+            except Exception:
+                logger.exception("media.quarantine_failed", media_id=str(row.id))
+                failures += 1
+                if failures >= MAX_CONSECUTIVE_FAILURES:
+                    logger.error("media.quarantine_stopped", failures=failures)
+                    break
+                continue
+            failures = 0
+            async with sessionmaker() as db:
+                await repository.mark_quarantine_moved(db, row.id, clock.now())
+                await commit(db)
+    async with sessionmaker() as db:
+        overdue = await repository.quarantine_overdue(
+            db, quarantined_before=clock.now() - QUARANTINE_OVERDUE_AFTER
+        )
+    if overdue:
+        logger.error("media.quarantine_overdue", count=overdue)
 
 
 async def purge_media(sessionmaker: Session, storage: ObjectStorage, *, clock: Clock) -> int:

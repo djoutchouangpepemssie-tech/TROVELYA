@@ -1,5 +1,7 @@
 """Index of the staff's review queue (P2-T05c1, plan Q16): the few listings awaiting moderation
-among all of them, read without scanning the table.
+among all of them, read without scanning the table. The photos of the listings removed before
+the quarantine (0024, plan Q40) are quarantined now: the next purge moves them out of public
+view (nothing to undo going down).
 
 Revision ID: 0025
 Revises: 0024
@@ -16,6 +18,10 @@ depends_on = None
 UPGRADE = r"""
 CREATE INDEX listings_pending_review_idx ON listings (id)
   WHERE status = 'pending_review' AND deleted_at IS NULL;
+UPDATE media SET quarantined_at = now()
+  WHERE quarantined_at IS NULL AND deleted_at IS NULL AND id IN (
+    SELECT lm.media_id FROM listing_media lm JOIN listings l ON l.id = lm.listing_id
+    WHERE l.status = 'removed');
 """
 
 DOWNGRADE = r"""

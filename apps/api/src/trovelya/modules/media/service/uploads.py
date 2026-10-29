@@ -114,6 +114,9 @@ async def get_media(
         status=row.status,
         width=row.width,
         height=row.height,
-        variants=_variants(row.variants, public_url) if row.status == "ready" else [],
+        # Q40: a photo removed by the moderation is no longer served, even to its owner.
+        variants=_variants(row.variants, public_url)
+        if row.status == "ready" and row.quarantined_at is None
+        else [],
         rejection_reason=row.rejection_reason,
     )

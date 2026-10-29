@@ -82,3 +82,56 @@ async def test_quarantine_is_idempotent(sessionmaker: Session) -> None:
             text("SELECT quarantined_at FROM media WHERE id = :m"), {"m": media_id}
         )
     assert again == first
+
+
+async def _sql(sessionmaker: Session, sql: str, media_id: object) -> object:
+    async with sessionmaker() as db:
+        value = (await db.execute(text(sql), {"m": media_id})).scalar()  # UPDATE: RETURNING id
+        await db.commit()
+        return value
+
+
+async def test_half_made_copy_goes_with_the_photo(sessionmaker: Session) -> None:
+    """A move cut short (copy made, public variant left) then the photo deleted: no copy stays."""
+    storage = MemoryStorage()
+    media_id, keys = await _media(sessionmaker, storage, (await make_account(sessionmaker)).id)
+    await _quarantine(sessionmaker, [media_id])
+    await storage.put("originals", keys[1], b"copy", content_type="image/webp")
+    await _sql(
+        sessionmaker, "UPDATE media SET deleted_at = now() WHERE id = :m RETURNING id", media_id
+    )
+    await _purge(sessionmaker, storage)
+    assert not any(_in(storage, "originals", keys) + _in(storage, "variants", keys))
+
+
+async def test_private_copy_keeps_its_type(sessionmaker: Session) -> None:
+    storage = MemoryStorage()
+    media_id, keys = await _media(sessionmaker, storage, (await make_account(sessionmaker)).id)
+    avif = "UPDATE media SET variants = jsonb_set(variants, '{0,format}', '\"avif\"')"
+    await _sql(sessionmaker, avif + " WHERE id = :m RETURNING id", media_id)
+    await _quarantine(sessionmaker, [media_id])
+    await _purge(sessionmaker, storage)
+    kinds = [storage.objects[("originals", key)][1] for key in keys[1:]]
+    assert kinds == ["image/avif", "image/webp"]
+
+
+class _Failing(MemoryStorage):
+    failing = ""
+
+    async def get(self, bucket: str, key: str) -> bytes:  # type: ignore[override]
+        if key == self.failing:
+            raise OSError("storage error")
+        return await super().get(bucket, key)  # type: ignore[arg-type]
+
+
+async def test_failing_photo_holds_back_no_other(sessionmaker: Session) -> None:
+    storage, owner = _Failing(), (await make_account(sessionmaker)).id
+    stuck, stuck_keys = await _media(sessionmaker, storage, owner)
+    moved, moved_keys = await _media(sessionmaker, storage, owner)
+    storage.failing = stuck_keys[1]
+    await _quarantine(sessionmaker, [stuck, moved])
+    await _purge(sessionmaker, storage)
+    assert all(_in(storage, "originals", moved_keys[1:]))
+    assert not any(_in(storage, "variants", moved_keys[1:]))
+    sql = "SELECT quarantine_moved_at FROM media WHERE id = :m"
+    assert await _sql(sessionmaker, sql, stuck) is None  # tried again at the next run

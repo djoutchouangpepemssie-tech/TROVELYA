@@ -28,7 +28,6 @@ from trovelya.modules.catalog.schemas import (
 )
 from trovelya.modules.catalog.service.listings import own_listing
 from trovelya.modules.catalog.service.moderation import Moderated, label
-from trovelya.modules.catalog.service.review import quarantine_listing_photos
 from trovelya.modules.catalog.service.states import SYSTEM, Actor, apply_transition
 from trovelya.modules.catalog.state_machine import ListingEvent
 from trovelya.shared.clock import Clock, FixedClock
@@ -129,8 +128,6 @@ async def _put_online(
                 # Every reason, for the statement of reasons (DSA art. 17).
                 reason_text=", ".join(label(c) for c in verdict.reasons),
             )
-        if verdict.outcome == "refused":
-            await quarantine_listing_photos(db, listing_id, clock=now)  # Q40
     listing = await own_listing(db, seller_id=seller_id, listing_id=listing_id)
     return PublishedOut(
         **listing.model_dump(),
