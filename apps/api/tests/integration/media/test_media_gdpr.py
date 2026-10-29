@@ -3,6 +3,7 @@
 from sqlalchemy import text
 from sqlalchemy.ext.asyncio import AsyncSession, async_sessionmaker
 
+from tests.conftest import make_settings
 from tests.integration.identity.test_profile import T0, make_account
 from trovelya.core.gdpr import registered_exporters
 from trovelya.shared.ids import new_id
@@ -37,7 +38,7 @@ async def test_media_exported_without_keys_or_hashes(
                 },
             )
         await db.commit()
-        export = await registered_exporters()["media"](db, owner.id)
+        export = await registered_exporters()["media"](db, owner.id, make_settings())
     kept, deleted_media = export["media"]
     assert (kept["purpose"], kept["mime_type"], kept["bytes"]) == ("listing", "image/jpeg", 1234)
     assert (kept["variants"], kept["deleted_at"]) == ([], None)

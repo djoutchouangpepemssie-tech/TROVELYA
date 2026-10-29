@@ -62,7 +62,7 @@ Pour toute question : la politique de confidentialité, sur le site.
 """
 
 
-async def export_identity(db: AsyncSession, user_id: UUID) -> dict[str, Any]:
+async def export_identity(db: AsyncSession, user_id: UUID, _: Settings) -> dict[str, Any]:
     data: dict[str, Any] = {
         name: await repository.export_rows(db, query, user_id)
         for name, query in repository.EXPORT_QUERIES.items()
@@ -153,7 +153,10 @@ async def build_data_export(
         request = await repository.export_request_for_build(db, request_id)
         if request is None or request.status not in ("received", "processing"):
             return False
-        data = {name: await fn(db, request.user_id) for name, fn in registered_exporters().items()}
+        data = {
+            name: await fn(db, request.user_id, settings)
+            for name, fn in registered_exporters().items()
+        }
         buffer = io.BytesIO()
         with zipfile.ZipFile(buffer, "w", zipfile.ZIP_DEFLATED) as archive:
             archive.writestr(

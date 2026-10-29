@@ -7,10 +7,11 @@ import pytest
 from sqlalchemy.ext.asyncio import AsyncSession
 
 import trovelya.modules.identity.service  # noqa: F401  # pyright: ignore[reportUnusedImport]  registers the exporter
+from trovelya.core.config import Settings
 from trovelya.core.gdpr import register_exporter, registered_exporters
 
 
-async def _other(db: AsyncSession, user_id: UUID) -> dict[str, Any]:
+async def _other(db: AsyncSession, user_id: UUID, settings: Settings) -> dict[str, Any]:
     return {}
 
 

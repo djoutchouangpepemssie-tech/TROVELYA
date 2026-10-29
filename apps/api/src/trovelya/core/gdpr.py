@@ -1,7 +1,8 @@
 """Registries of GDPR exporters (ADR-0016) and erasers (P1-T09b).
 
 Each module registers a function returning the person's data it holds (the export archive has
-one key per exporter) and one deleting or anonymising it when the account is erased. A new
+one key per exporter; the settings open what a module keeps sealed) and one deleting or
+anonymising it when the account is erased. A new
 phase that stores personal data registers both.
 """
 
@@ -12,7 +13,9 @@ from uuid import UUID
 
 from sqlalchemy.ext.asyncio import AsyncSession
 
-Exporter = Callable[[AsyncSession, UUID], Awaitable[dict[str, Any]]]
+from trovelya.core.config import Settings
+
+Exporter = Callable[[AsyncSession, UUID, Settings], Awaitable[dict[str, Any]]]
 Eraser = Callable[[AsyncSession, UUID], Awaitable[None]]
 
 _EXPORTERS: dict[str, Exporter] = {}
