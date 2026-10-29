@@ -721,7 +721,7 @@ Recalculé à chaque création ou modification. La réponse au propriétaire don
 
 ### P2-T11 — Embeddings des annonces (ADR-0020)
 
-**Branche :** `feat/P2-T11-embeddings`. Exécutée avant T06a et T10 (section 4).
+**Branche :** `feat/P2-T11-embeddings`. Exécutée avant T06a et T10 (section 4). Découpée : T11 (adaptateur `Embedder` dans `modules/catalog/adapters`, faute de module `ai` à ce stade, comme le classifieur d'images ; calcul par le worker sur `listing.published`, version vérifiée à l'écriture ; ré-indexation quotidienne ; index HNSW, migration 0028 ; ADR-0020), puis T11b (`similar_listings` et son test `EXPLAIN`). `BedrockEmbedder` arrive avec l'accès Bedrock (Q18) ; d'ici là `EMBEDDER=none` (pas d'embedding) ou `fake` (local et tests).
 
 **Fichiers :** `modules/ai/adapters/embedder.py` (`Embedder`, `FakeEmbedder` déterministe, `BedrockEmbedder`), `modules/catalog/{tasks,service/similar}.py`, migration `0012_catalog_ai` (index HNSW), `docs/adr/0020-embeddings.md`, `tests/integration/catalog/test_embeddings.py`.
 

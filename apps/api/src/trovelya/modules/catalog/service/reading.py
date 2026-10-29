@@ -27,7 +27,7 @@ def _not_found() -> AppError:
     return AppError(ErrorCode.NOT_FOUND, 404)
 
 
-async def _attributes_shown(
+async def attributes_shown(
     db: AsyncSession, category_id: UUID, values: dict[str, Any]
 ) -> list[dict[str, Any]]:
     """The listing's attributes in the category's order, with their labels."""
@@ -79,7 +79,7 @@ async def listing_page(
         {
             **row,
             "category": {"key": row["category_key"], "name": row["category_name"]},
-            "attributes": await _attributes_shown(db, row["category_id"], row["attributes"]),
+            "attributes": await attributes_shown(db, row["category_id"], row["attributes"]),
             "price": {"amount_minor": row["price_minor"], "currency": row["currency"]},
             "distance": None if row["distance_m"] is None else round_distance(row["distance_m"]),
             "photos": await listing_photos.photo_variants(

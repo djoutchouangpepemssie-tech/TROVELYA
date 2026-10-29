@@ -26,7 +26,14 @@ from trovelya.core.observability import (
     trace_engine,
 )
 from trovelya.core.redis import make_redis
-from trovelya.modules.catalog.tasks import expire_listings_job, purge_ended_listings_job
+from trovelya.modules.catalog.adapters.embedder import embedder_from_settings
+from trovelya.modules.catalog.service.embeddings import EMBED_JOB, catalog_subscriptions
+from trovelya.modules.catalog.tasks import (
+    embed_listing_job,
+    expire_listings_job,
+    purge_ended_listings_job,
+    reindex_embeddings_job,
+)
 from trovelya.modules.circumvention.tasks import purge_old_detections_job
 from trovelya.modules.identity.service import (
     EXPORT_JOB,
@@ -79,10 +86,13 @@ async def startup(ctx: Context) -> None:
     # 60 s given to each image.
     ctx["image_slot"] = asyncio.Semaphore(1)
     ctx["classifier"] = classifier_from_settings(settings)
+    ctx["embedder"] = embedder_from_settings(settings)
     ctx["http"] = httpx.AsyncClient()
     ctx["email_sender"] = make_email_sender(settings, ctx["http"])
     # Handlers enqueue their e-mails on arq's own pool (ctx["redis"]).
-    ctx["subscriptions"] = identity_subscriptions(ctx["redis"], settings)
+    ctx["subscriptions"] = identity_subscriptions(ctx["redis"], settings) + catalog_subscriptions(
+        ctx["redis"]
+    )
     ctx["consumer_name"] = socket.gethostname()
     await ensure_group(ctx["redis_client"])
 
@@ -155,6 +165,7 @@ class WorkerSettings:
     functions: ClassVar[list[Any]] = [
         func(deliver_email, max_tries=MAX_TRIES, timeout=60),
         func(build_data_export_job, name=EXPORT_JOB, max_tries=3, timeout=300),
+        func(embed_listing_job, name=EMBED_JOB, max_tries=5, timeout=60),
         func(
             process_media_job,
             name=PROCESS_JOB,
@@ -182,6 +193,8 @@ class WorkerSettings:
         cron(purge_ended_listings_job, hour=2, minute=30, unique=True, timeout=3600),
         # Daily (Q36): reviewed anti-circumvention detections past 180 days are erased.
         cron(purge_old_detections_job, hour=5, minute=15, unique=True, timeout=600),
+        # Daily (ADR-0020): listings never embedded, or by another model, are embedded.
+        cron(reindex_embeddings_job, hour=1, minute=40, unique=True, timeout=3600),
     ]
     on_startup = startup
     on_shutdown = shutdown

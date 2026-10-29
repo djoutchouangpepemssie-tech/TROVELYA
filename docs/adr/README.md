@@ -23,3 +23,4 @@ Format : contexte, décision, conséquences. Une décision qui change donne un n
 | [0017](0017-resend-provisoire.md) | E-mails par Resend, écart temporaire à la résidence UE | Acceptée, provisoire (décision Q6) |
 | [0018](0018-comptes-staff.md) | Comptes staff : passkey seule, création et enrôlement par script | Acceptée (Q18, E9) |
 | [0019](0019-medias.md) | Médias : stockage R2 en juridiction UE, envoi direct, variantes précalculées | Acceptée (Q4 à Q7, E2 à E4, E6, E11 du plan P2) |
+| [0020](0020-embeddings.md) | Embeddings des annonces : modèle AWS en région UE, `VECTOR(1024)`, version, ré-indexation, HNSW | Acceptée (Q9, E5 du plan P2) |
