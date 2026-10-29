@@ -14,6 +14,8 @@ from tests.integration.catalog.test_drafts import (
     Session,
     client,  # noqa: F401  # pyright: ignore[reportUnusedImport] (fixture)
 )
+from tests.integration.catalog.test_withdraw_renew import _call  # pyright: ignore[reportPrivateUsage]
+from trovelya.modules.catalog.service.listings import recompute_quality
 
 
 async def _stored(sessionmaker: Session, listing_id: str) -> int:
@@ -50,3 +52,31 @@ async def test_quality_recomputed_on_patch(client: AsyncClient, sessionmaker: Se
     assert after["score"] == before + gain
     assert "description" not in [tip["code"] for tip in after["tips"]]
     assert after["score"] == await _stored(sessionmaker, listing["id"])
+
+
+async def test_stored_score_follows_the_masked_text(
+    client: AsyncClient,  # noqa: F811
+    sessionmaker: Session,
+) -> None:
+    """Contact details masked at publication (Q12) shorten the text: the score follows."""
+    account, listing = await _draft(client, sessionmaker)
+    long = "Robe portée deux fois, appelez-moi au 06 12 34 56 78. " + "Très bon état. " * 6
+    edited = await _patch(client, account, listing, {"description": long})
+    assert edited.status_code == 200, edited.text
+    published = await _call(client, account, listing["id"], "publish")
+    assert published.status_code == 200, published.text
+    assert published.json()["quality"]["score"] == await _stored(sessionmaker, listing["id"])
+
+
+async def test_recompute_quality_mends_a_stale_score(
+    client: AsyncClient,  # noqa: F811
+    sessionmaker: Session,
+) -> None:
+    _, listing = await _draft(client, sessionmaker)
+    async with sessionmaker() as db:
+        await db.execute(
+            text("UPDATE listings SET quality_score = 0 WHERE id = :l"), {"l": listing["id"]}
+        )
+        assert await recompute_quality(db) >= 1
+        await db.commit()
+    assert await _stored(sessionmaker, listing["id"]) == listing["quality"]["score"]

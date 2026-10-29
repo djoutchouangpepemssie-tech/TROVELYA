@@ -433,6 +433,27 @@ async def listing_category(db: AsyncSession, key: str) -> Row[Any] | None:
     return (await db.execute(_LISTING_CATEGORY, {"key": key})).one_or_none()
 
 
+async def listings_after(
+    db: AsyncSession, *, after: UUID | None, limit: int
+) -> list[tuple[UUID, UUID, int]]:
+    """(id, seller, stored score) of the listings not deleted, by id, after `after`."""
+    rows = await db.execute(
+        text(
+            "SELECT id, seller_id, quality_score FROM listings WHERE deleted_at IS NULL"
+            " AND (CAST(:after AS uuid) IS NULL OR id > :after) ORDER BY id LIMIT :limit"
+        ),
+        {"after": after, "limit": limit},
+    )
+    return [(row.id, row.seller_id, row.quality_score) for row in rows]
+
+
+async def set_quality_score(db: AsyncSession, listing_id: UUID, score: int) -> None:
+    await db.execute(
+        text("UPDATE listings SET quality_score = :score WHERE id = :id"),
+        {"id": listing_id, "score": score},
+    )
+
+
 async def attribute_rules(db: AsyncSession, category_id: UUID) -> Sequence[Row[Any]]:
     return (await db.execute(_ATTRIBUTE_RULES, {"category_id": category_id})).all()
 
@@ -480,7 +501,8 @@ async def record_price(db: AsyncSession, listing_id: UUID, price_minor: int, now
 
 _OWN_LISTING = text(
     "SELECT l.id, l.short_id, l.status::text AS status, l.version, l.title, l.description,"
-    " c.key AS category, c.id AS category_id, c.brand_policy, b.name::text AS brand,"
+    " c.key AS category, c.id AS category_id, c.brand_policy, c.max_photos,"
+    " b.name::text AS brand,"
     " l.condition::text AS condition, l.attributes, l.price_minor, l.currency, l.accepts_offers,"
     " l.handover_enabled, l.shipping_enabled,"
     " l.parcel_size, l.weight_g, l.place_name, l.country_code, l.location_source,"

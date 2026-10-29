@@ -4,7 +4,8 @@ Run after the migrations, at every deployment (Railway pre-deploy command) and l
     uv run python -m trovelya.scripts.seed_catalog
 
 Idempotent: the files of `modules/catalog/seed` are the source of truth. An invalid file
-stops the deployment with the reason and changes nothing.
+stops the deployment with the reason and changes nothing. The listings' quality scores are then
+computed again (P2-T07): the seed or the formula may have changed what they are worth.
 """
 
 import asyncio
@@ -15,6 +16,7 @@ from sqlalchemy.exc import IntegrityError
 from trovelya.core.config import get_settings
 from trovelya.core.db import make_engine, make_sessionmaker
 from trovelya.modules.catalog.service.brand_seed import parse_brands
+from trovelya.modules.catalog.service.listings import recompute_quality
 from trovelya.modules.catalog.service.seed import (
     SeedError,
     load_seed,
@@ -37,6 +39,8 @@ async def _run() -> int:
                 await apply_seed(db, seed)
                 await apply_brands(db, brands)
                 await db.commit()
+                rescored = await recompute_quality(db)
+                await db.commit()
             except SeedError as exc:
                 await db.rollback()
                 sys.stderr.write(f"Graine refusée : {exc}\n")
@@ -53,7 +57,7 @@ async def _run() -> int:
         await engine.dispose()
     sys.stdout.write(
         f"Catalogue chargé : {len(seed.categories)} catégories, {len(seed.attributes)}"
-        f" attributs, {len(brands)} marques courantes.\n"
+        f" attributs, {len(brands)} marques courantes ; {rescored} scores de qualité recalculés.\n"
     )
     return 0
 

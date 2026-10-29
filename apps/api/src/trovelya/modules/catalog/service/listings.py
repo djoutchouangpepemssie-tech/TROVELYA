@@ -77,6 +77,7 @@ async def _checked_values(
         db,
         category_id=category.id,
         brand_policy=category.brand_policy,
+        max_photos=category.max_photos,
         photos=len(body.media_ids),
         description=body.description,
         attributes=attributes,
@@ -131,19 +132,19 @@ async def _quality(
     *,
     category_id: UUID,
     brand_policy: str,
+    max_photos: int,
     photos: int,
     description: str,
     attributes: dict[str, Any],
     has_brand: bool,
 ) -> Quality:
-    optional = [r for r in await repository.attribute_rules(db, category_id) if not r.is_required]
+    rules = await repository.attribute_rules(db, category_id)
     facts = Facts(
         photos=photos,
-        description_length=len(description.strip()),
-        missing_attributes=tuple(
-            (r.key, r.label) for r in optional if attributes.get(r.key) in (None, "", [])
-        ),
-        optional_attributes=len(optional),
+        max_photos=max_photos,
+        description=description,
+        attributes=attributes,
+        optional_attributes=tuple((r.key, r.label) for r in rules if not r.is_required),
         brand_expected=brand_policy != "none",
         has_brand=has_brand,
     )
@@ -241,6 +242,21 @@ async def update_draft(
     return await own_listing(db, seller_id=seller_id, listing_id=listing_id)
 
 
+async def recompute_quality(db: AsyncSession, *, batch: int = 200) -> int:
+    """Every listing's stored score computed again (the formula, a category's attributes or
+    brand policy may have changed): run at each deployment after the seed. Returns how many
+    changed."""
+    changed, after = 0, None
+    while rows := await repository.listings_after(db, after=after, limit=batch):
+        for listing_id, seller_id, stored in rows:
+            listing = await own_listing(db, seller_id=seller_id, listing_id=listing_id)
+            if listing.quality.score != stored:
+                await repository.set_quality_score(db, listing_id, listing.quality.score)
+                changed += 1
+        after = rows[-1][0]
+    return changed
+
+
 async def own_listing(db: AsyncSession, *, seller_id: UUID, listing_id: UUID) -> ListingOut:
     """The seller's listing; 404 for anyone else's (or a deleted one)."""
     row = await repository.own_listing(db, listing_id=listing_id, seller_id=seller_id)
@@ -250,6 +266,7 @@ async def own_listing(db: AsyncSession, *, seller_id: UUID, listing_id: UUID) ->
         db,
         category_id=row["category_id"],
         brand_policy=row["brand_policy"],
+        max_photos=row["max_photos"],
         photos=len(row["media_ids"]),
         description=row["description"],
         attributes=row["attributes"],
