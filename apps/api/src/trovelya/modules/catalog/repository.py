@@ -741,3 +741,16 @@ async def setting_int(db: AsyncSession, key: str) -> int:
     if value is None:
         raise LookupError(f"platform setting {key} is missing")
     return int(value)
+
+
+# --- Expiry (P2-T04d) -------------------------------------------------------------------------
+
+_LOCK_DUE_LISTINGS = text(
+    "SELECT id FROM listings WHERE status = 'active' AND deleted_at IS NULL"
+    " AND expires_at <= :now ORDER BY expires_at, id LIMIT :limit FOR UPDATE SKIP LOCKED"
+)
+
+
+async def lock_due_listings(db: AsyncSession, *, now: datetime, limit: int) -> list[UUID]:
+    """Active listings whose time is up, locked; the ones locked elsewhere are skipped."""
+    return list(await db.scalars(_LOCK_DUE_LISTINGS, {"now": now, "limit": limit}))
