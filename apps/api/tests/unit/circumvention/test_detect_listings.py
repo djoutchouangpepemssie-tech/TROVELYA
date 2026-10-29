@@ -207,3 +207,33 @@ def test_very_long_number_does_not_crash(text: str) -> None:
 def test_bare_de_or_eu_site_queued() -> None:
     found = detect("visitez monsite.eu")
     assert [(d.signal, d.confidence) for d in found] == [("external_link", 0.6)], found
+
+
+@pytest.mark.parametrize(
+    "text",
+    [
+        "FR1420041010050500013M02606",
+        "FR7630006000011234567890189",
+        "BE68539007547034",
+        "GB29NWBK60161331926819",
+        "NL91ABNA0417164300",
+    ],
+)
+def test_iban_without_spaces_masked_whole(text: str) -> None:
+    assert _shown(text) == MASK, detect(text)
+    assert max(d.confidence for d in detect(text) if d.signal == "iban") == 0.99
+
+
+@pytest.mark.parametrize(
+    ("text", "shown"),
+    [
+        ("06/2019 06 12 34 56 78", MASK),  # a month before a mobile number
+        ("Taille 06 = 36 €, 08 = 38 €, 10 = 40 €", None),  # prices, not a number
+        ("Note: 1,5 sur gmail", None),
+        ("adresse : outlook", MASK),
+    ],
+)
+def test_fourth_review_cases(text: str, shown: str | None) -> None:
+    assert MASK not in _shown(text) if shown is None else _shown(text).endswith(shown)
+    if shown == MASK:  # the date may stay, never a digit of the number
+        assert not re.search(r"\d\d", _shown(text).replace("06/2019", "").replace(MASK, ""))

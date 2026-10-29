@@ -131,10 +131,11 @@ _NETWORKS_RE = re.compile(
 # A mail provider after a word that reads as an address (« jean.dupont gmail », « jean75
 # hotmail »): masked. Named alone (« écris-moi sur gmail », « Mug Gmail »): queued.
 _PROVIDERS_RE = re.compile(
-    r"(?<![a-z0-9._%+-])(?=[a-z0-9._%+-]{0,63}[0-9._])[a-z0-9._%+-]{1,64}+"
+    r"(?<![a-z0-9._%+-])(?=[a-z0-9._%+-]{0,63}[0-9._])(?=[a-z0-9._%+-]{0,63}[a-z])"
+    r"[a-z0-9._%+-]{3,64}+"
     r"(?:\s*,\s*|\s+(?:sur\s+)?)(?:" + "|".join(MAIL_PROVIDERS) + r")(?![a-z])"
 )
-_PROVIDER_NAMED_RE = _words(PROVIDERS_NAMED_ALONE)
+_PROVIDER_NAMED_RE = _words(MAIL_PROVIDERS)
 _MAIL_WORD_RE = re.compile(r"(?<![a-z])(?:e-?mail|mail|adresse|ecri[rsv]\w*)(?![a-z])")
 
 
@@ -222,6 +223,19 @@ class _Finder:
                 if end is None:
                     i += 1
                     continue
+                # « 06/2019 06 12 34 56 78 »: a month and its year before a number.
+                year = next(
+                    (
+                        k
+                        for k in range(i + 1, end)
+                        if _LONE_YEAR_RE.fullmatch(text[slice(*groups[k])])
+                    ),
+                    None,
+                )
+                if year is not None:
+                    after = self._phone(run, groups, year + 1)
+                    if after is not None and after > end:
+                        i, end = year + 1, after
                 start = run.start() if i == 0 else groups[i][0]
                 found += self._items(rest, start)
                 found.append(self.at("phone", start, groups[end - 1][1], 0.95))
@@ -257,6 +271,9 @@ class _Finder:
         passage = text[start : groups[-1][1]]
         values = [text[a:b] for a, b in groups]
         digits = "".join(values)
+        between = [text[a[1] : b[0]] for a, b in pairwise(groups)]
+        if len(set(between)) > 1 and any(c in "€=%\u00d7" for sep in between for c in sep):
+            return False  # « 06 = 36 €, 08 = 38 € »: prices, not a number
         mobile = bool(_MOBILE_RE.fullmatch(digits))
         years = any(_LONE_YEAR_RE.fullmatch(v) for v in values[1:])
         unit = bool(_UNIT_RE.search(text[run.end() : run.end() + 12]))
@@ -308,7 +325,7 @@ class _Finder:
             # The word after an IBAN may be read as its last group (« … 606 merci »): the
             # groups are dropped from the right until the IBAN holds.
             ends = [m.start() + g.end() for g in re.finditer(r"[a-z0-9]+", m.group())]
-            for end in reversed(ends[1:]):
+            for end in reversed(ends):
                 confidence = _iban_confidence(self.norm.text[m.start() : end])
                 if confidence:
                     found.append(self.at("iban", m.start(), end, confidence))
@@ -332,11 +349,14 @@ class _Finder:
 
     def providers(self) -> list[Detection]:
         """A provider named alone: masked after « écris-moi », « mon adresse »…, else queued
-        (« Mug Gmail »)."""
+        (« Mug Gmail »), or let go for software (« compte iCloud »)."""
         found: list[Detection] = []
         for m in _PROVIDER_NAMED_RE.finditer(self.norm.text):
             asked = _MAIL_WORD_RE.search(self.norm.text[max(0, m.start() - 30) : m.start()])
-            found.append(self.at("email", m.start(), m.end(), 0.9 if asked else 0.6))
+            if asked:
+                found.append(self.at("email", m.start(), m.end(), 0.9))
+            elif m.group() in PROVIDERS_NAMED_ALONE:
+                found.append(self.at("email", m.start(), m.end(), 0.6))
         return found
 
     def links(self) -> list[Detection]:
