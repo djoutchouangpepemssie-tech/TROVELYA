@@ -10,7 +10,8 @@ A listing goes with its photo links, favorites, price watches and histories; its
 deleted and leave storage at the media purge's next run, the brands its seller typed with
 their last listing (E19). A listing removed by moderation then deleted by its seller keeps
 the longer retention; reserved and sold ones wait for the orders of P4. Then the public
-positions (Q20) no listing of their seller stands on. A batch per transaction; a listing or a
+positions (Q20) no listing of their seller stands on, unless an address or a zone of the
+seller is still there (Q28). A batch per transaction; a listing or a
 seller busy right now is left for the next run. This job is a boundary: it commits.
 """
 
@@ -24,6 +25,7 @@ from sqlalchemy.ext.asyncio import AsyncSession, async_sessionmaker
 from trovelya.core.db import commit
 from trovelya.modules.catalog import repository
 from trovelya.modules.catalog.service.locations import REUSE_M
+from trovelya.modules.identity.service import has_place_near
 from trovelya.modules.media.service import listing_photos
 from trovelya.shared.clock import Clock
 
@@ -102,7 +104,17 @@ async def purge_ended_listings(
         sellers = await repository.sellers_with_unused_places(db, reuse_m=REUSE_M)
     for seller_id in sellers:
         async with sessionmaker() as db:
-            places += await repository.delete_unused_places(db, seller_id, reuse_m=REUSE_M)
+            if await repository.try_lock_seller_places(db, seller_id):
+                gone = [
+                    place.id
+                    for place in await repository.unused_places(db, seller_id, reuse_m=REUSE_M)
+                    # Q28: kept while an address or a zone of the seller is still there.
+                    if not await has_place_near(
+                        db, seller_id, lat=place.lat, lon=place.lon, radius_m=REUSE_M
+                    )
+                ]
+                await repository.delete_places(db, gone)
+                places += len(gone)
             await commit(db)
     logger.info("listings.purged", listings=erased, sellers_places=places)
     return erased

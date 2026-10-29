@@ -174,3 +174,11 @@ async def member_place(
         or code,
         country_code=address.country_code,
     )
+
+
+async def has_place_near(
+    db: AsyncSession, user_id: UUID, *, lat: float, lon: float, radius_m: float
+) -> bool:
+    """Whether an address (not deleted) or a zone of the member lies within `radius_m` of the
+    point: a public position drawn there is still theirs to use (plan P2 Q28)."""
+    return await repository.has_place_near(db, user_id, lat=lat, lon=lon, radius_m=radius_m)

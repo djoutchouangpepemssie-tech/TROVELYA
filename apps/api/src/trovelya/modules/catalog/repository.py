@@ -824,11 +824,13 @@ _TRY_LOCK_SELLER_PLACES = text(
     "SELECT pg_try_advisory_xact_lock("
     "hashtextextended('trovelya.public_position:' || :seller_id, 0))"
 )
-_DELETE_UNUSED_PLACES = text(
-    "DELETE FROM listing_public_positions p WHERE p.seller_id = :seller_id AND NOT EXISTS"
+_UNUSED_PLACES = text(
+    "SELECT p.id, ST_Y(p.location::geometry) AS lat, ST_X(p.location::geometry) AS lon"
+    " FROM listing_public_positions p WHERE p.seller_id = :seller_id AND NOT EXISTS"
     " (SELECT 1 FROM listings l WHERE l.seller_id = p.seller_id"
     " AND ST_DWithin(l.location, p.location, :reuse_m))"
 )
+_DELETE_PLACES = text("DELETE FROM listing_public_positions WHERE id = ANY(:ids)")
 
 
 async def lock_listings_to_purge(
@@ -866,9 +868,17 @@ async def sellers_with_unused_places(db: AsyncSession, *, reuse_m: float) -> lis
     return list(await db.scalars(_SELLERS_WITH_UNUSED_PLACES, {"reuse_m": reuse_m}))
 
 
-async def delete_unused_places(db: AsyncSession, seller_id: UUID, *, reuse_m: float) -> bool:
-    """False, and nothing deleted, while the seller is drawing a position (their lock)."""
-    if not await db.scalar(_TRY_LOCK_SELLER_PLACES, {"seller_id": str(seller_id)}):
-        return False
-    await db.execute(_DELETE_UNUSED_PLACES, {"seller_id": seller_id, "reuse_m": reuse_m})
-    return True
+async def try_lock_seller_places(db: AsyncSession, seller_id: UUID) -> bool:
+    """False while the seller is drawing a position (their lock): their places wait."""
+    return bool(await db.scalar(_TRY_LOCK_SELLER_PLACES, {"seller_id": str(seller_id)}))
+
+
+async def unused_places(db: AsyncSession, seller_id: UUID, *, reuse_m: float) -> list[Row[Any]]:
+    """The seller's kept places no listing of theirs stands on (id, lat, lon)."""
+    return list(
+        (await db.execute(_UNUSED_PLACES, {"seller_id": seller_id, "reuse_m": reuse_m})).all()
+    )
+
+
+async def delete_places(db: AsyncSession, place_ids: Sequence[UUID]) -> None:
+    await db.execute(_DELETE_PLACES, {"ids": list(place_ids)})

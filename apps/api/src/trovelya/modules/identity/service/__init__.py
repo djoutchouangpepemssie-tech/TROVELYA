@@ -26,7 +26,12 @@ from trovelya.modules.identity.service.magic_links import (
 from trovelya.modules.identity.service.magic_links import (
     limit_requests as limit_magic_link_requests,
 )
-from trovelya.modules.identity.service.places import MemberPlace, PlaceSource, member_place
+from trovelya.modules.identity.service.places import (
+    MemberPlace,
+    PlaceSource,
+    has_place_near,
+    member_place,
+)
 from trovelya.modules.identity.service.profile import (
     default_zone_center,
     public_seller,
@@ -62,6 +67,7 @@ __all__ = [
     "expire_approvals",
     "get_clock",
     "get_session_policy",
+    "has_place_near",
     "identity_subscriptions",
     "limit_magic_link_requests",
     "list_sessions",

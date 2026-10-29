@@ -20,6 +20,7 @@ from tests.integration.catalog.test_listing_gdpr import (
     category,  # noqa: F401  # pyright: ignore[reportUnusedImport] (fixture)
 )
 from tests.integration.catalog.test_states import Session
+from tests.integration.identity.test_member_location import make_address, make_zone
 from tests.integration.identity.test_profile import make_account
 from trovelya.modules.catalog.repository import erase_catalog
 from trovelya.modules.catalog.service.retention import purge_ended_listings
@@ -429,3 +430,26 @@ async def test_more_than_a_batch(
     await purge_ended_listings(sessionmaker, clock=FixedClock(now), batch=2)
     for listing_id in due:
         assert not await _exists(sessionmaker, listing_id)
+
+
+async def test_place_kept_while_the_seller_still_has_it(
+    sessionmaker: Session,
+    category: UUID,  # noqa: F811
+) -> None:
+    """Plan Q28: a place no listing stands on is kept while an address or a zone of the seller
+    lies within 50 m of it, so their next listing from home gets the same offset; it goes once
+    that address is deleted."""
+    member = await make_account(sessionmaker, completed=True)
+    await _keep_position(sessionmaker, member.id, 4.85, 45.75)  # home, no listing
+    await _keep_position(sessionmaker, member.id, 4.87, 45.76)  # a zone's centre
+    address = await make_address(sessionmaker, member.id, at=(45.7501, 4.8501))  # ~14 m
+    await make_zone(sessionmaker, member.id, at=(45.76, 4.87))
+    await _purge(sessionmaker)
+    assert await _positions(sessionmaker, member.id) == 2
+    async with sessionmaker() as db:
+        await db.execute(
+            text("UPDATE addresses SET deleted_at = now() WHERE id = :a"), {"a": address}
+        )
+        await db.commit()
+    await _purge(sessionmaker)
+    assert await _positions(sessionmaker, member.id) == 1  # the zone's place stays

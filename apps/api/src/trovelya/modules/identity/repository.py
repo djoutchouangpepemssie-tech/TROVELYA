@@ -1337,3 +1337,21 @@ _TRADE_FACTS = text(
 
 async def trade_facts(db: AsyncSession, user_id: UUID) -> Row[Any] | None:
     return (await db.execute(_TRADE_FACTS, {"id": user_id})).one_or_none()
+
+
+# --- Places of a member near a point (P2-T04f, plan P2 Q28) ---------------------------------
+
+_PLACE_NEAR = text(
+    "SELECT EXISTS (SELECT 1 FROM addresses a WHERE a.user_id = :u AND a.deleted_at IS NULL"
+    " AND a.location IS NOT NULL"
+    " AND ST_DWithin(a.location, ST_MakePoint(:lon, :lat)::geography, :radius_m))"
+    " OR EXISTS (SELECT 1 FROM search_zones z WHERE z.user_id = :u"
+    " AND ST_DWithin(z.center, ST_MakePoint(:lon, :lat)::geography, :radius_m))"
+)
+
+
+async def has_place_near(
+    db: AsyncSession, user_id: UUID, *, lat: float, lon: float, radius_m: float
+) -> bool:
+    params = {"u": user_id, "lat": lat, "lon": lon, "radius_m": radius_m}
+    return bool(await db.scalar(_PLACE_NEAR, params))
