@@ -88,7 +88,11 @@ OWNED_ROUTES = {
     "GET /v1/media/{media_id}",
     "PATCH /v1/listings/{listing_id}",
     "POST /v1/listings/{listing_id}/publish",
+    "POST /v1/listings/{listing_id}/withdraw",
+    "POST /v1/listings/{listing_id}/renew",
 }
+# The order a listing lives in: edited as a draft, published, withdrawn, put back online.
+LIFECYCLE = ["/publish", "/withdraw", "/renew"]
 STAFF_ROUTES = {
     "GET /v1/staff/approvals",
     "POST /v1/staff/approvals/{approval_id}/approve",
@@ -351,8 +355,12 @@ async def test_someone_elses_resources_answer_404(
     assert consents["consents"] == []
 
     # Nothing was touched, and the routes do work for the owner (a 404 for all proves nothing).
-    # Changes of state last: a draft is edited before it is published, deleted at the very end.
-    for key in sorted(OWNED_ROUTES, key=lambda k: (k.startswith("DELETE"), k.endswith("/publish"))):
+    # Changes of state last, in the listing's own order; deletions at the very end.
+    def order(key: str) -> tuple[bool, int]:
+        step = next((i + 1 for i, end in enumerate(LIFECYCLE) if key.endswith(end)), 0)
+        return key.startswith("DELETE"), step
+
+    for key in sorted(OWNED_ROUTES, key=order):
         assert await _call(client, key, ids, owner.headers) in {200, 202, 204}, key
 
 

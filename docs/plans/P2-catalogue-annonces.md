@@ -50,6 +50,7 @@ Stockage objet Cloudflare R2 en juridiction UE (MinIO en local et en CI), deux b
 | Q23 | Blocage et fiche d'annonce | **Fiche visible** par le membre bloqué, comme le profil public (Q14) : une annonce active est publique. La protection porte sur le contact : messages, offres et achat refusés en P4 et P6, sans jamais révéler le blocage (validée par Arcel le 29 octobre 2026). |
 | Q24 | Quota de publication (Q1) | **24 heures glissantes** : au plus 50 mises en ligne par le vendeur sur les 24 dernières heures (pas de remise à zéro à minuit), 429 `publication_limit` avec `Retry-After`. **Toute mise en ligne faite par le vendeur compte** : première publication (ou envoi en revue), republication d'une annonce retirée, renouvellement d'une annonce expirée ; une décision du staff ou du système ne compte pas (validée par Arcel le 29 octobre 2026). |
 | Q25 | Événements de l'annonce (section 5.6) | **Nommés par leur effet sur la vitrine** : toute entrée en ligne émet `listing.published` (publication, validation, republication, renouvellement, recours accepté, fin de réservation) ; toute sortie émet `listing.withdrawn` (retrait par le vendeur ou la modération, refus, expiration) ; `listing.sold`, `listing.submitted_for_review`, `listing.reserved` pour le reste. Le contenu garde le détail : transition, statuts avant et après, vendeur, type d'acteur, motif (validée par Arcel le 29 octobre 2026). |
+| Q26 | Compte `restricted` et publication | Un compte **`restricted`** (sanction qui réduit la visibilité, sans suspension) **peut publier** ; la raison `account_restricted` du 403 vise un compte suspendu, banni ou en cours d'effacement (validée par Arcel le 29 octobre 2026). |
 
 ### 0.2 Écarts et précisions par rapport au cahier
 
@@ -530,7 +531,7 @@ tout ── T12 (parcours 2, démo, porte)
 - Publication : politique Q1, au moins 1 photo `ready`, quota de Q24 compté sur `listing_status_history` (verrou consultatif du vendeur puis `FOR UPDATE` sur l'annonce), `published_at`, `expires_at` (E12) fixés dans la même mise à jour que le statut. Ordre des erreurs : 404, 403 `publish_forbidden` avec sa raison (`profile_incomplete`, `too_young`, `account_restricted` : compte suspendu, banni ou en cours d'effacement ; un compte `restricted` publie), 409, 422 `photo_required`, 429 (le quota n'est pas consommé par une action invalide) ; la modération décide en dernier.
 - Retrait, republication et renouvellement par le propriétaire.
 - Job d'expiration quotidien idempotent : identifiants des annonces `active` dont `expires_at <= now()` (`FOR UPDATE SKIP LOCKED`, par lots), puis `apply_transition` pour chacune (historique et événement), jamais un `UPDATE` du statut en masse.
-- Purge quotidienne des annonces terminées selon Q19 (durées en [PARAM], seuils comptés depuis `deleted_at`, le statut final ou `sold_at` ; photos, historiques, favoris et alertes partent avec l'annonce) ; tests aux bornes avec horloge fixe, une annonce vendue liée à une commande garde sa fiche minimale (P4).
+- Purge quotidienne des annonces terminées selon Q19 (livrée en T04e, à 2 h 30 ; une annonce retirée par la modération puis supprimée garde ses 180 jours ; les marques saisies par un membre partent avec leur dernière annonce ; reporté à P4 avec les commandes : `sold_at` posé par la transition `sell`, fiche minimale d'une annonce vendue et test associé, exclusion des annonces vendues de la branche « supprimée ») (durées en [PARAM], seuils comptés depuis `deleted_at`, le statut final ou `sold_at` ; photos, historiques, favoris et alertes partent avec l'annonce) ; tests aux bornes avec horloge fixe, une annonce vendue liée à une commande garde sa fiche minimale (P4).
 
 **Routes :**
 
@@ -551,7 +552,7 @@ tout ── T12 (parcours 2, démo, porte)
   - `test_expiry_after_120_days` (119 j 23 h → active ; 120 j → expired) ;
   - `test_modification_pushes_expiry` ;
   - `test_expire_job_idempotent` ;
-  - `test_renew_expired`, `test_republish_withdrawn`.
+  - `test_renew_expired`, `test_withdraw_then_republish`.
 - [ ] ÉCHEC → implémenter → vert ; matrice d'accès (3 routes `OWNED_ROUTES`).
 - [ ] Commit `feat(catalogue): machine à états, publication, retrait, renouvellement et expiration`.
 
