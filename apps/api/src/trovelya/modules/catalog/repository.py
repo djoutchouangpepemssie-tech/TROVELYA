@@ -399,6 +399,19 @@ _CREATE_BRAND = text(
     "INSERT INTO brands (id, name, slug, origin, created_by)"
     " VALUES (:id, :name, :slug, 'member', :member_id) ON CONFLICT DO NOTHING"
 )
+_INSERT_LISTING = text(
+    "INSERT INTO listings (id, short_id, seller_id, title, description, category_id, brand_id,"
+    " condition, attributes, price_minor, currency, accepts_offers, handover_enabled,"
+    " shipping_enabled, parcel_size, weight_g, location, location_public, h3_r7, h3_r9,"
+    " place_name, country_code, location_source, location_source_id, created_at, updated_at)"
+    " VALUES (:id, :short_id, :seller_id, :title, :description, :category_id, :brand_id,"
+    " CAST(:condition AS item_condition), CAST(:attributes AS jsonb), :price_minor, :currency,"
+    " :accepts_offers, :handover_enabled, :shipping_enabled, :parcel_size, :weight_g,"
+    " ST_MakePoint(:lon, :lat)::geography, ST_MakePoint(:public_lon, :public_lat)::geography,"
+    " :h3_r7, :h3_r9, :place_name, :country_code, :location_source, :location_source_id, :now,"
+    " :now)"
+    " ON CONFLICT (short_id) DO NOTHING RETURNING id"
+)
 
 
 async def listing_category(db: AsyncSession, key: str) -> Row[Any] | None:
@@ -420,3 +433,54 @@ async def brand_id(db: AsyncSession, *, name: str, slug: str, member_id: UUID) -
     if found is None:  # inserted or found by a concurrent writer: never neither
         raise RuntimeError("brand neither found nor created")
     return found
+
+
+async def insert_listing(db: AsyncSession, values: Mapping[str, Any]) -> bool:
+    """False when the short id is already taken (draw another)."""
+    params = {**values, "attributes": json.dumps(values["attributes"])}
+    return (await db.execute(_INSERT_LISTING, params)).one_or_none() is not None
+
+
+async def attach_photos(db: AsyncSession, listing_id: UUID, media_ids: Sequence[UUID]) -> None:
+    """Raises IntegrityError when a photo is already in another listing."""
+    await db.execute(
+        text(
+            "INSERT INTO listing_media (listing_id, media_id, position)"
+            " SELECT :listing_id, m, p - 1"
+            " FROM unnest(CAST(:ids AS uuid[])) WITH ORDINALITY u(m, p)"
+        ),
+        {"listing_id": listing_id, "ids": list(media_ids)},
+    )
+
+
+async def record_price(db: AsyncSession, listing_id: UUID, price_minor: int, now: datetime) -> None:
+    await db.execute(
+        text(
+            "INSERT INTO listing_price_history (listing_id, price_minor, changed_at)"
+            " VALUES (:listing_id, :price_minor, :now)"
+        ),
+        {"listing_id": listing_id, "price_minor": price_minor, "now": now},
+    )
+
+
+_OWN_LISTING = text(
+    "SELECT l.id, l.short_id, l.status::text AS status, l.version, l.title, l.description,"
+    " c.key AS category, b.name::text AS brand, l.condition::text AS condition, l.attributes,"
+    " l.price_minor, l.currency, l.accepts_offers, l.handover_enabled, l.shipping_enabled,"
+    " l.parcel_size, l.weight_g, l.place_name, l.country_code, l.location_source,"
+    " l.location_source_id,"
+    " (SELECT coalesce(array_agg(m.media_id ORDER BY m.position), '{}')"
+    " FROM listing_media m WHERE m.listing_id = l.id) AS media_ids,"
+    " l.created_at, l.updated_at"
+    " FROM listings l JOIN categories c ON c.id = l.category_id"
+    " LEFT JOIN brands b ON b.id = l.brand_id"
+    " WHERE l.id = :id AND l.seller_id = :seller_id AND l.deleted_at IS NULL"
+)
+
+
+async def own_listing(
+    db: AsyncSession, *, listing_id: UUID, seller_id: UUID
+) -> dict[str, Any] | None:
+    params = {"id": listing_id, "seller_id": seller_id}
+    row = (await db.execute(_OWN_LISTING, params)).mappings().one_or_none()
+    return dict(row) if row is not None else None

@@ -1239,6 +1239,319 @@
         "title": "ItemCondition",
         "type": "string"
       },
+      "ListingDraftIn": {
+        "additionalProperties": false,
+        "description": "A new draft (section 11.5): what the seller says about the item.",
+        "properties": {
+          "accepts_offers": {
+            "default": true,
+            "title": "Accepts Offers",
+            "type": "boolean"
+          },
+          "attributes": {
+            "maxProperties": 100,
+            "patternProperties": {
+              "^[a-z][a-z0-9_]*$": {}
+            },
+            "propertyNames": {
+              "maxLength": 64
+            },
+            "title": "Attributes",
+            "type": "object"
+          },
+          "brand": {
+            "anyOf": [
+              {
+                "maxLength": 80,
+                "minLength": 1,
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Brand"
+          },
+          "category": {
+            "maxLength": 200,
+            "pattern": "^[a-z0-9_]+(\\.[a-z0-9_]+)*$",
+            "title": "Category",
+            "type": "string"
+          },
+          "condition": {
+            "$ref": "#/components/schemas/ItemCondition"
+          },
+          "description": {
+            "maxLength": 5000,
+            "minLength": 20,
+            "title": "Description",
+            "type": "string"
+          },
+          "handover_enabled": {
+            "default": true,
+            "title": "Handover Enabled",
+            "type": "boolean"
+          },
+          "location": {
+            "$ref": "#/components/schemas/ListingLocationIn"
+          },
+          "media_ids": {
+            "items": {
+              "format": "uuid",
+              "type": "string"
+            },
+            "maxItems": 50,
+            "minItems": 1,
+            "title": "Media Ids",
+            "type": "array"
+          },
+          "parcel_size": {
+            "anyOf": [
+              {
+                "enum": [
+                  "xs",
+                  "s",
+                  "m",
+                  "l",
+                  "xl"
+                ],
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Parcel Size"
+          },
+          "price": {
+            "$ref": "#/components/schemas/Money"
+          },
+          "shipping_enabled": {
+            "default": true,
+            "title": "Shipping Enabled",
+            "type": "boolean"
+          },
+          "title": {
+            "maxLength": 120,
+            "minLength": 5,
+            "title": "Title",
+            "type": "string"
+          },
+          "weight_g": {
+            "anyOf": [
+              {
+                "exclusiveMinimum": 0.0,
+                "maximum": 1000000.0,
+                "type": "integer"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Weight G"
+          }
+        },
+        "required": [
+          "title",
+          "description",
+          "category",
+          "condition",
+          "price",
+          "location",
+          "media_ids"
+        ],
+        "title": "ListingDraftIn",
+        "type": "object"
+      },
+      "ListingLocationIn": {
+        "description": "One of the seller's addresses or search zones (section 8.11).",
+        "properties": {
+          "id": {
+            "format": "uuid",
+            "title": "Id",
+            "type": "string"
+          },
+          "source": {
+            "enum": [
+              "address",
+              "zone"
+            ],
+            "title": "Source",
+            "type": "string"
+          }
+        },
+        "required": [
+          "source",
+          "id"
+        ],
+        "title": "ListingLocationIn",
+        "type": "object"
+      },
+      "ListingOut": {
+        "description": "The seller's own view of a listing. Never a coordinate: the place name only (8.11).",
+        "properties": {
+          "accepts_offers": {
+            "title": "Accepts Offers",
+            "type": "boolean"
+          },
+          "attributes": {
+            "additionalProperties": true,
+            "title": "Attributes",
+            "type": "object"
+          },
+          "brand": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Brand"
+          },
+          "category": {
+            "title": "Category",
+            "type": "string"
+          },
+          "condition": {
+            "$ref": "#/components/schemas/ItemCondition"
+          },
+          "country_code": {
+            "title": "Country Code",
+            "type": "string"
+          },
+          "created_at": {
+            "format": "date-time",
+            "title": "Created At",
+            "type": "string"
+          },
+          "description": {
+            "title": "Description",
+            "type": "string"
+          },
+          "handover_enabled": {
+            "title": "Handover Enabled",
+            "type": "boolean"
+          },
+          "id": {
+            "format": "uuid",
+            "title": "Id",
+            "type": "string"
+          },
+          "location": {
+            "$ref": "#/components/schemas/ListingLocationIn"
+          },
+          "media_ids": {
+            "items": {
+              "format": "uuid",
+              "type": "string"
+            },
+            "title": "Media Ids",
+            "type": "array"
+          },
+          "parcel_size": {
+            "anyOf": [
+              {
+                "enum": [
+                  "xs",
+                  "s",
+                  "m",
+                  "l",
+                  "xl"
+                ],
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Parcel Size"
+          },
+          "place_name": {
+            "title": "Place Name",
+            "type": "string"
+          },
+          "price": {
+            "$ref": "#/components/schemas/Money"
+          },
+          "shipping_enabled": {
+            "title": "Shipping Enabled",
+            "type": "boolean"
+          },
+          "short_id": {
+            "title": "Short Id",
+            "type": "string"
+          },
+          "status": {
+            "$ref": "#/components/schemas/ListingStatus"
+          },
+          "title": {
+            "title": "Title",
+            "type": "string"
+          },
+          "updated_at": {
+            "format": "date-time",
+            "title": "Updated At",
+            "type": "string"
+          },
+          "version": {
+            "title": "Version",
+            "type": "integer"
+          },
+          "weight_g": {
+            "anyOf": [
+              {
+                "type": "integer"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Weight G"
+          }
+        },
+        "required": [
+          "id",
+          "short_id",
+          "status",
+          "version",
+          "title",
+          "description",
+          "category",
+          "brand",
+          "condition",
+          "attributes",
+          "price",
+          "accepts_offers",
+          "handover_enabled",
+          "shipping_enabled",
+          "parcel_size",
+          "weight_g",
+          "place_name",
+          "country_code",
+          "location",
+          "media_ids",
+          "created_at",
+          "updated_at"
+        ],
+        "title": "ListingOut",
+        "type": "object"
+      },
+      "ListingStatus": {
+        "enum": [
+          "draft",
+          "pending_review",
+          "active",
+          "reserved",
+          "sold",
+          "withdrawn",
+          "removed",
+          "expired"
+        ],
+        "title": "ListingStatus",
+        "type": "string"
+      },
       "MagicLinkRequest": {
         "properties": {
           "captcha_token": {
@@ -1506,6 +1819,28 @@
           "rejection_reason"
         ],
         "title": "MediaOut",
+        "type": "object"
+      },
+      "Money": {
+        "description": "Section 11.1: an amount in minor units and its currency; euros only for now.",
+        "properties": {
+          "amount_minor": {
+            "maximum": 100000000.0,
+            "minimum": 100.0,
+            "title": "Amount Minor",
+            "type": "integer"
+          },
+          "currency": {
+            "const": "EUR",
+            "default": "EUR",
+            "title": "Currency",
+            "type": "string"
+          }
+        },
+        "required": [
+          "amount_minor"
+        ],
+        "title": "Money",
         "type": "object"
       },
       "PasskeyList": {
@@ -3443,6 +3778,65 @@
         "summary": "Search",
         "tags": [
           "geo"
+        ]
+      }
+    },
+    "/v1/listings": {
+      "post": {
+        "description": "A new draft. `Idempotency-Key` required: a retry never makes a second listing.",
+        "operationId": "listing_create",
+        "parameters": [
+          {
+            "in": "header",
+            "name": "Idempotency-Key",
+            "required": false,
+            "schema": {
+              "anyOf": [
+                {
+                  "type": "string"
+                },
+                {
+                  "type": "null"
+                }
+              ],
+              "title": "Idempotency-Key"
+            }
+          }
+        ],
+        "requestBody": {
+          "content": {
+            "application/json": {
+              "schema": {
+                "$ref": "#/components/schemas/ListingDraftIn"
+              }
+            }
+          },
+          "required": true
+        },
+        "responses": {
+          "201": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ListingOut"
+                }
+              }
+            },
+            "description": "Successful Response"
+          },
+          "404": {
+            "description": "A photo that is not the caller's"
+          },
+          "409": {
+            "description": "Photo processing or in another listing: retry with a new key"
+          },
+          "422": {
+            "description": "Category, condition, brand, attributes, photos or place refused"
+          }
+        },
+        "summary": "Post Listing",
+        "tags": [
+          "catalog"
         ]
       }
     },

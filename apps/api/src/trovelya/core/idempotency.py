@@ -60,7 +60,7 @@ def require_idempotency_key(
 def _request_hash(method: str, path: str, body: bytes) -> str:
     try:
         canonical = json.dumps(json.loads(body), sort_keys=True, separators=(",", ":")).encode()
-    except ValueError:
+    except (ValueError, RecursionError):  # not JSON, or nested too deep: hashed as sent
         canonical = body
     return hashlib.sha256(method.encode() + b"\n" + path.encode() + b"\n" + canonical).hexdigest()
 
