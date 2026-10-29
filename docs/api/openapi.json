@@ -3170,10 +3170,18 @@
             },
             "title": "Items",
             "type": "array"
+          },
+          "reject_reasons": {
+            "items": {
+              "$ref": "#/components/schemas/ModerationReason"
+            },
+            "title": "Reject Reasons",
+            "type": "array"
           }
         },
         "required": [
-          "items"
+          "items",
+          "reject_reasons"
         ],
         "title": "ReviewQueue",
         "type": "object"

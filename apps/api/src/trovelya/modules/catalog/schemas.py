@@ -350,6 +350,8 @@ class ReviewItem(BaseModel):
 
 class ReviewQueue(BaseModel):
     items: list[ReviewItem]
+    # The closed list a rejection or a removal takes its reason from (`other` needs a text).
+    reject_reasons: list[ModerationReason]
 
 
 class StaffDecisionIn(BaseModel):

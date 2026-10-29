@@ -46,7 +46,8 @@ async def get_review_queue(
     items = await review.queue(
         db, public_url=request.app.state.settings.media_public_url, limit=limit
     )
-    return ReviewQueue.model_validate({"items": items})
+    reasons = [{"code": code, "label": label} for code, label in review.STAFF_REASONS.items()]
+    return ReviewQueue.model_validate({"items": items, "reject_reasons": reasons})
 
 
 @router.post(

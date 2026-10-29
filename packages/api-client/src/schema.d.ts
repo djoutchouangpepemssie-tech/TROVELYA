@@ -2378,6 +2378,8 @@ export interface components {
         ReviewQueue: {
             /** Items */
             items: components["schemas"]["ReviewItem"][];
+            /** Reject Reasons */
+            reject_reasons: components["schemas"]["ModerationReason"][];
         };
         /**
          * SellerOut
