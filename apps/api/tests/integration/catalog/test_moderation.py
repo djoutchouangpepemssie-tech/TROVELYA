@@ -174,3 +174,24 @@ async def test_refused_listing_masked_too(client: AsyncClient, sessionmaker: Ses
     assert listing["status"] == "removed"
     assert listing["description"] == f"Bouteille de whisky 12 ans, appelez le {MASK}."
     assert listing["moderation"]["notice"] is None  # nothing to remind on a refusal
+
+
+async def test_title_and_description_recorded_apart(
+    client: AsyncClient, sessionmaker: Session
+) -> None:
+    """The same passage at the same place in the title and the description: two originals."""
+    _, listing = await _put_online(
+        client,
+        sessionmaker,
+        title="Vélo 0612345678 bleu",
+        description="Vélo 0612345678 bleu en très bon état général.",
+    )
+    async with sessionmaker() as db:
+        parts = await db.scalars(
+            text(
+                "SELECT matched_spans -> 0 ->> 'part' FROM circumvention_detections"
+                " WHERE source_id = :l ORDER BY 1"
+            ),
+            {"l": listing["id"]},
+        )
+        assert list(parts) == ["description", "title"]

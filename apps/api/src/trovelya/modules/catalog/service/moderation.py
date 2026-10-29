@@ -199,6 +199,7 @@ class Moderation:
                 text=getattr(subject, field),
                 settings=self.settings,
                 clock=clock,
+                part=field,
             )
             for field in _LIMITS
         }

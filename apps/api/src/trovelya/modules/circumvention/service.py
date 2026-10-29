@@ -61,8 +61,10 @@ async def _record(
     base: Mapping[str, Any],
     text: str,
     settings: Settings,
+    part: str | None,
 ) -> None:
     row = {**base, "id": new_id()}
+    named = {"part": part} if part else {}
     await repository.insert_detection(
         db,
         {
@@ -70,6 +72,7 @@ async def _record(
             "signals": list(dict.fromkeys(d.signal for d in found)),
             "spans": [
                 {"signal": d.signal, "start": d.start, "end": d.end, "confidence": d.confidence}
+                | named
                 for d in found
             ],
             "confidence": max(d.confidence for d in found),
@@ -89,8 +92,11 @@ async def screen(
     text: str,
     settings: Settings,
     clock: Clock,
+    part: str | None = None,
 ) -> str:
-    """`text` as it may be shown, with the detections recorded when something was found."""
+    """`text` as it may be shown, with the detections recorded when something was found.
+    `part` names the text when a source has several (a listing's title and description):
+    each passage carries it, so the two are never taken for one."""
     found = detect(text)
     base = {
         "user_id": user_id,
@@ -99,9 +105,11 @@ async def screen(
         "created_at": clock.now(),
     }
     for masked in (True, False):
-        part = [d for d in found if (d.confidence >= MASK_AT) is masked]
-        if part:
-            await _record(db, part, masked=masked, base=base, text=text, settings=settings)
+        some = [d for d in found if (d.confidence >= MASK_AT) is masked]
+        if some:
+            await _record(
+                db, some, masked=masked, base=base, text=text, settings=settings, part=part
+            )
     return mask(text, found)
 
 
