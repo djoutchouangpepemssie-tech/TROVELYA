@@ -1,6 +1,7 @@
 """Contact details hidden in a text (section 8.16, plan P2-T05a, Q12, Q30, Q31): what is found,
 how sure, what is masked. Pure functions: no database."""
 
+import re
 import time
 
 import pytest
@@ -62,6 +63,26 @@ MASKED = [
     ("https://exemple.com/annonce", "external_link"),
     ("https://evil.io/trovelya.com", "external_link"),
     ("www.trovelya.fr.mon-site.com", "external_link"),
+    ("Mon numéro : 06 12 34 56 78", "phone"),
+    ("Tel n° 06 12 34 56 78", "phone"),
+    ("réf 06 12 34 56 78", "phone"),  # « réf. » before a mobile is a trick
+    ("06~12~34~56~78", "phone"),
+    ("06#12#34#56#78", "phone"),
+    ("06\u201012\u201134\u221256\u202278", "phone"),
+    ("06 -- 12 -- 34 -- 56 -- 78", "phone"),
+    ("FR76 30006 00001 12345678901 89", "iban"),
+    ("FR76/3000/6000/0112/3456/7890/189", "iban"),
+    ("jean (arobase) gmail (point) com", "email"),
+    ("jean[@]gmail[.]com", "email"),
+    ("jean chez gmail point com", "email"),
+    ("j e a n @ g m a i l . c o m", "email"),
+    ("what's app", "payment_app"),
+    ("mon whats : vendeur", "payment_app"),
+    ("w h a t s a p p", "payment_app"),
+    ("TeIegram", "payment_app"),
+    ("t.me/vendeur", "external_link"),
+    ("wa.me/33612345678", "external_link"),
+    ("paypal.me/jean", "external_link"),
 ]
 
 
@@ -69,7 +90,15 @@ MASKED = [
 def test_contact_details_masked(text: str, signal: str) -> None:
     found = _found(text)
     assert found.get(signal, 0) >= MASK_AT, detect(text)
-    assert MASK in mask(text, detect(text))
+    shown = mask(text, detect(text)).replace(MASK, " ")
+    # Nothing of the detail left to read: no three digits in a row, no address.
+    assert not re.search(r"\d\W{0,4}\d\W{0,4}\d", shown), shown
+    for part in ("@", "jean", "gmail", "http", "www"):
+        assert part not in shown.lower(), shown
+
+
+def test_mask_threshold_of_q30() -> None:
+    assert MASK_AT == 0.9
 
 
 QUEUED = [
@@ -81,6 +110,14 @@ QUEUED = [
     ("paiement en espèces uniquement", "payment_app"),
     ("Robe de la créatrice Lydia", "payment_app"),  # a first name, no payment around
     ("retrouvez-moi sur insta", "social_handle"),
+    ("Vendu à l'unité @15€ la pièce", "email"),  # a lone « @ » of the base rule of 8.16
+    ("Réf. produit : 4006381333931", "obfuscated_number"),  # a reference with a word between
+    ("Livre 9782070368228", "obfuscated_number"),  # an ISBN-13 by its check digit
+    ("Vin Bordeaux 2015 2016 2018 75 cl", "obfuscated_number"),  # a measure
+    ("Un compte PayPal", "payment_app"),
+    ("Paire de bottes Lydia", "payment_app"),
+    ("Robe Lydia 25 €", "payment_app"),
+    ("snap : vendeur92", "social_handle"),
 ]
 
 
@@ -105,9 +142,16 @@ def test_doubtful_queued_not_masked(text: str, signal: str) -> None:
         "Rangement : 3 tiroirs, 2 portes",
         "Facture du 03/05/2022, 18 mois de garantie restants",
         "Très bon état.Me contacter via la messagerie",
-        "Vendu à l'unité @15€ la pièce",
         "Appareil photo Polaroid Snap",
         "Une douzaine de verres, septembre 2021",
+        "Voiture 2015, 125 000 km, 5 portes",
+        "Moto 125 cm3, 2019, 12 000 km",
+        "Chaussures pointures 37, 38, 39, 40, 41",
+        "Quantités : 10, 20, 30, 40, 50",
+        "Collection Pokémon 151/165, 25/102, 4/102",
+        "Ordinateur Dell XPS 13 9310, i7-1165G7",
+        "Vinyles 1965 1972 1978 1981",
+        "Ancien télégramme de 1916",
     ],
 )
 def test_no_false_positive(text: str) -> None:
@@ -159,7 +203,22 @@ def test_combining_mark_after_a_passage_masked_with_it() -> None:
     assert mask(text, detect(text)) == f"{MASK} merci"
 
 
-@pytest.mark.parametrize("text", ["a-" * 2500, "-a" * 2500, "a." * 2500, "a" * 5000, "1 " * 2500])
+@pytest.mark.parametrize(
+    "text",
+    [
+        "a-" * 2500,
+        "-a" * 2500,
+        "a." * 2500,
+        "a" * 5000,
+        "1 " * 2500,
+        " " * 10000,
+        "\n" * 10000,
+        "fb " * 3333,
+        "@ab " * 2500,
+        "rib " * 2500,
+        "\ufdfa" * 10000,
+    ],
+)
 def test_long_hostile_text_stays_fast(text: str) -> None:
     """A description of 5000 characters is analysed in a few milliseconds, never in seconds."""
     start = time.perf_counter()

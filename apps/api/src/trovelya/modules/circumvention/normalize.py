@@ -34,14 +34,14 @@ _CONFUSABLES = str.maketrans(
 )
 
 
-def _dropped(char: str) -> bool:
-    """Invisible or decorative: format characters (zero width, soft hyphen…), variation
-    selectors and the keycap mark of « 0️⃣ »."""
+def invisible(char: str) -> bool:
+    """Invisible or decorative: format characters (zero width, soft hyphen…), combining marks,
+    variation selectors and the keycap mark of « 0️⃣ »."""
     return (
         unicodedata.category(char) == "Cf"
         or unicodedata.combining(char) != 0
-        or "︀" <= char <= "️"
-        or char == "⃣"
+        or "\ufe00" <= char <= "\ufe0f"
+        or char == "\u20e3"
     )
 
 
@@ -49,8 +49,11 @@ def _chars(text: str) -> tuple[list[str], list[Span]]:
     chars: list[str] = []
     origin: list[Span] = []
     for i, char in enumerate(text):
-        for part in unicodedata.normalize("NFKD", char.lower()):
-            if _dropped(part):
+        decomposed = unicodedata.normalize("NFKD", char.lower())
+        if len(decomposed) > 4:  # a ligature of a whole phrase (« ﷺ »): not worth expanding
+            decomposed = char.lower()
+        for part in decomposed:
+            if invisible(part):
                 continue
             if part.isdecimal() and not part.isascii():
                 part = str(unicodedata.decimal(part))
@@ -97,16 +100,23 @@ _ONE_NUMBER_RE = re.compile(_NUMBER_WORD)
 _DATE_RE = re.compile(
     r"(?<!\d)(?<!\d[/.\-])\d{1,2}[/.\-]\d{1,2}[/.\-](?:\d{4}|\d{2})(?!\d)(?![/.\-]\d)"
 )
-_DIGIT_LETTERS_RE = re.compile(r"(?<=\d)[oil]|[oil](?=\d)")
+# « O6 l2 »: a letter o or l right before a digit reads as one (never « i7 » or « 4l »).
+_DIGIT_LETTERS_RE = re.compile(r"(?<![a-z])[ol](?=\d)|(?<=\d)[ol](?=\d)")
+# « j e a n », « 0 6 1 2 »: single characters spaced out are put back together.
+_SPACED_RE = re.compile(r"(?<![a-z0-9])[a-z0-9](?:[ .][a-z0-9]){3,}+(?![a-z0-9])")
 _TLD = r"(?:com|fr|net|org|eu|be|de|it|es|lu|ch|io|info)\b"
+_PROVIDERS = r"(?:gmail|hotmail|outlook|yahoo|icloud|orange|free|laposte|sfr|protonmail)\b"
+# Each starts where no white space precedes, so a long run of spaces is read once.
 _AT_RE = re.compile(
-    r"\s*(?:[\[(]\s*(?:at|a)\s*[\])]|(?<![a-z])arobase(?![a-z])"
-    rf"|(?<![a-z])at(?=\s+[a-z0-9-]+\s*(?:\.|dot\b|point\b)\s*{_TLD}))\s*"
+    r"(?<!\s)\s*(?:[\[(]\s*(?:at|a|@|arobase)\s*[\])]|(?<![a-z])arobase(?![a-z])"
+    rf"|(?<![a-z])at(?=\s+[a-z0-9-]+\s*(?:\.|dot\b|point\b)\s*{_TLD})"
+    rf"|(?<![a-z])chez(?=\s+{_PROVIDERS}))\s*"
 )
 _DOT_RE = re.compile(
-    rf"\s*(?:[\[(]\s*(?:dot|\.)\s*[\])]|(?<![a-z])(?:dot|point)(?![a-z])|\.)\s*(?={_TLD})"
+    r"(?<!\s)\s*(?:[\[(]\s*(?:dot|\.|point)\s*[\])]|(?<![a-z])(?:dot|point)(?![a-z])|\.)"
+    rf"\s*(?={_TLD})"
 )
-_NAME_DOT_RE = re.compile(r"\s+(?:point|dot)\s+(?=[a-z0-9-]+\s*@)")
+_NAME_DOT_RE = re.compile(r"(?<!\s)\s+(?:point|dot)\s+(?=[a-z0-9-]+\s*@)")
 
 
 def _sub(norm: Normalized, pattern: re.Pattern[str], repl: Callable[[str], str]) -> Normalized:
@@ -137,6 +147,7 @@ def normalize(text: str) -> Normalized:
     norm = _sub(norm, _DATE_RE, lambda _: "§")
     norm = _sub(norm, _NUMBERS_RE, _numbers)
     norm = _sub(norm, _DIGIT_LETTERS_RE, lambda c: "0" if c == "o" else "1")
+    norm = _sub(norm, _SPACED_RE, lambda run: re.sub(r"[ .]", "", run))
     norm = _sub(norm, _AT_RE, lambda _: "@")
     norm = _sub(norm, _NAME_DOT_RE, lambda _: ".")
     return _sub(norm, _DOT_RE, lambda _: ".")
