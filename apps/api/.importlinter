@@ -107,6 +107,7 @@ forbidden_modules =
     trovelya.shared
     trovelya.modules.catalog.service
     trovelya.modules.catalog.models
+    trovelya.modules.circumvention
     trovelya.modules.identity
     trovelya.modules.ledger
     trovelya.modules.orders
