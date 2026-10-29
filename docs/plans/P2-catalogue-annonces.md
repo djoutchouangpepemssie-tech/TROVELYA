@@ -630,7 +630,7 @@ Découpée en deux PR de 600 lignes au plus : **T05b1** (texte, catégories, coo
 
 ### P2-T05c — File de revue staff minimale
 
-Découpée en **T05c1** (API : file, décisions, permission, audit ; branche `feat/P2-T05c1-file-de-revue`) puis **T05c2** (page `/fr/staff/moderation` et test de bout en bout). La file montre, pour chaque annonce, ce que l'anti-contournement a trouvé (partie, signaux, action) sans le texte d'origine ni les positions : le surlignage des passages vient avec la Tour de contrôle (P8). Les photos d'une annonce retirée par la modération, refus automatique compris, passent en copie privée pour le recours (Q40, T05c1b).
+Découpée en **T05c1** (API : file, décisions, permission, audit ; branche `feat/P2-T05c1-file-de-revue`) puis **T05c2** (page `/fr/staff/moderation` et test de bout en bout). La file montre, pour chaque annonce, ce que l'anti-contournement a trouvé (partie, signaux, action) sans le texte d'origine ni les positions : le surlignage des passages vient avec la Tour de contrôle (P8). Les photos d'une annonce retirée par la modération, refus automatique compris, passent en copie privée pour le recours (Q40, T05c1b). T05c1b reprend aussi la relecture de T05c1 : détections de la file lues en une requête, index partiel `listings_pending_review_idx`, refus (403) d'un rôle qui n'aurait la permission qu'avec double validation (pas de double validation pour la modération à ce stade), vendeur et photo revérifiés à l'approbation (409 `publish_forbidden` ou `photo_required` : le modérateur refuse l'annonce à la place), `seller_id` et explication du motif gardés dans l'audit.
 
 **Branche :** `feat/P2-T05c-file-de-revue`.
 

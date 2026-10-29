@@ -11,7 +11,7 @@ from uuid import UUID
 from sqlalchemy.ext.asyncio import AsyncSession
 
 from trovelya.core.errors import AppError, ErrorCode, FieldError
-from trovelya.modules.catalog import repository
+from trovelya.modules.catalog import policies, repository
 from trovelya.modules.catalog.models import ListingStatus
 from trovelya.modules.catalog.service.moderation import PROHIBITED, label
 from trovelya.modules.catalog.service.states import Actor, apply_transition
@@ -50,6 +50,7 @@ async def queue(db: AsyncSession, *, public_url: str | None, limit: int) -> list
     photos = await listing_photos.photo_variants_by_id(
         db, [m for row in rows for m in row["media_ids"]], public_url=public_url
     )
+    found = await detections_of(db, source_type="listing", source_ids=[row["id"] for row in rows])
     items: list[dict[str, Any]] = []
     for row in rows:
         reason = row["reason_code"]
@@ -60,7 +61,7 @@ async def queue(db: AsyncSession, *, public_url: str | None, limit: int) -> list
                 "price": {"amount_minor": row["price_minor"], "currency": row["currency"]},
                 "reasons": [{"code": reason, "label": label(reason)}] if reason else [],
                 "photos": [photos[m] for m in row["media_ids"] if m in photos],
-                "detections": await detections_of(db, source_type="listing", source_id=row["id"]),
+                "detections": found.get(row["id"], []),
             }
         )
     return items
@@ -84,7 +85,8 @@ async def _decide(
         raise AppError(ErrorCode.FORBIDDEN, 403)
     now = FixedClock(clock.now())
     online_until = None
-    if event is ListingEvent.APPROVE:
+    if event is ListingEvent.APPROVE and locked.status == ListingStatus.PENDING_REVIEW.value:
+        await _check_still_publishable(db, listing_id, locked.seller_id, clock=now)
         days = await repository.setting_int(db, "listings.expiry_days")
         online_until = now.now() + timedelta(days=days)
     transition = await apply_transition(
@@ -108,9 +110,26 @@ async def _decide(
         target_id=str(listing_id),
         reason=reason_code,
         before={"status": transition.from_status.value},
-        after={"status": transition.to_status.value},
+        after={
+            "status": transition.to_status.value,
+            "seller_id": str(locked.seller_id),
+            "reason_text": reason_text,
+        },
     )
     return transition.to_status
+
+
+async def _check_still_publishable(
+    db: AsyncSession, listing_id: UUID, seller_id: UUID, *, clock: Clock
+) -> None:
+    """What the seller's publication checked may have changed while the listing waited: an
+    account since restricted, a photo since deleted. 409: the reviewer rejects it instead."""
+    refusal = await policies.publish_refusal(db, seller_id, clock=clock)
+    if refusal is not None:
+        field = FieldError(field="account", code=refusal, message="Le vendeur ne peut plus publier")
+        raise AppError(ErrorCode.PUBLISH_FORBIDDEN, 409, errors=[field])
+    if not await repository.has_ready_photo(db, listing_id):
+        raise AppError(ErrorCode.PHOTO_REQUIRED, 409)
 
 
 async def quarantine_listing_photos(db: AsyncSession, listing_id: UUID, *, clock: Clock) -> None:

@@ -6387,7 +6387,7 @@
             "description": "No such listing"
           },
           "409": {
-            "description": "Not in the status the decision applies to"
+            "description": "Not in the status the decision applies to, or no longer publishable"
           },
           "422": {
             "description": "Reason off the list, or unexplained"
@@ -6479,7 +6479,7 @@
             "description": "No such listing"
           },
           "409": {
-            "description": "Not in the status the decision applies to"
+            "description": "Not in the status the decision applies to, or no longer publishable"
           },
           "422": {
             "content": {
@@ -6542,7 +6542,7 @@
             "description": "No such listing"
           },
           "409": {
-            "description": "Not in the status the decision applies to"
+            "description": "Not in the status the decision applies to, or no longer publishable"
           },
           "422": {
             "description": "Reason off the list, or unexplained"

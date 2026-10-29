@@ -152,10 +152,10 @@ async def _export(db: AsyncSession, user_id: UUID, settings: Settings) -> dict[s
 
 
 async def detections_of(
-    db: AsyncSession, *, source_type: SourceType, source_id: UUID
-) -> list[dict[str, Any]]:
-    """For the review: the signals found in a source and what was done, without the text."""
-    return await repository.detections_of(db, source_type, source_id)
+    db: AsyncSession, *, source_type: SourceType, source_ids: list[UUID]
+) -> dict[UUID, list[dict[str, Any]]]:
+    """For the review: the signals found in each source and what was done, without the text."""
+    return await repository.detections_of(db, source_type, source_ids)
 
 
 register_exporter("circumvention", _export)
