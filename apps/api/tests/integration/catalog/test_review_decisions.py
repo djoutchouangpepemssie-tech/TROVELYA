@@ -103,22 +103,47 @@ ERASING = "UPDATE users SET erasure_requested_at = now() WHERE id = :u"
 NO_PHOTO = "UPDATE media SET deleted_at = now() WHERE id IN (SELECT media_id FROM listing_media"
 
 
-@pytest.mark.parametrize(
-    ("change", "code"), [(ERASING, "publish_forbidden"), (NO_PHOTO, "photo_required")]
-)
-async def test_approval_checks_the_listing_again(
-    client: AsyncClient, sessionmaker: Session, change: str, code: str
-) -> None:
-    """The seller may no longer publish, or the photo is gone: the reviewer rejects it instead."""
-    account, listing = await _in_review(client, sessionmaker)
-    if change == ERASING:
-        await _execute(sessionmaker, change, u=account.id)
-    else:
-        await _execute(sessionmaker, change + " WHERE listing_id = :l)", l=listing["id"])
+async def test_approval_refused_without_a_photo(client: AsyncClient, sessionmaker: Session) -> None:
+    """The photo is gone meanwhile: the reviewer rejects the listing instead."""
+    _, listing = await _in_review(client, sessionmaker)
+    await _execute(sessionmaker, NO_PHOTO + " WHERE listing_id = :l)", l=listing["id"])
     staff = await _moderator(sessionmaker)
     response = await _decide(client, staff, listing["id"], "approve")
-    assert (response.status_code, response.json()["code"]) == (409, code)
+    assert (response.status_code, response.json()["code"]) == (409, "photo_required")
     assert (await _decide(client, staff, listing["id"], "reject", SPAM)).status_code == 200
+
+
+async def test_seller_no_longer_publishing_withdrawn_without_sanction(
+    client: AsyncClient, sessionmaker: Session
+) -> None:
+    """Q41: approving the listing of a seller who may no longer publish withdraws it, by the
+    platform: no moderation removal, no quarantine, resubmitted once the account is in order."""
+    account, listing = await _in_review(client, sessionmaker)
+    await _execute(sessionmaker, ERASING, u=account.id)
+    staff = await _moderator(sessionmaker)
+    response = await _decide(client, staff, listing["id"], "approve")
+    assert (response.status_code, response.json()["status"]) == (200, "withdrawn")
+    sql = (
+        "SELECT actor_kind, event, reason_code FROM listing_status_history"
+        " WHERE listing_id = :l ORDER BY created_at DESC, id DESC LIMIT 1"
+    )
+    assert tuple(await _row(sessionmaker, sql, l=listing["id"])) == (
+        "system",
+        "withdraw",
+        "account_restricted",
+    )
+    sql = "SELECT action, reason, after FROM audit_log WHERE target_id = :l"
+    action, reason, after = await _row(sessionmaker, sql, l=listing["id"])
+    assert (action, reason, after["status"]) == (
+        "listing.approve",
+        "account_restricted",
+        "withdrawn",
+    )
+    sql = (
+        "SELECT bool_or(m.quarantined_at IS NOT NULL) FROM listing_media lm"
+        " JOIN media m ON m.id = lm.media_id WHERE lm.listing_id = :l"
+    )
+    assert (await _row(sessionmaker, sql, l=listing["id"]))[0] is False
 
 
 @pytest.mark.parametrize(

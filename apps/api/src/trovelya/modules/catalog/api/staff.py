@@ -34,7 +34,7 @@ def _direct(staff: access.Authorised) -> UUID:
 _DECISION_ERRORS: dict[int | str, dict[str, str]] = {
     403: {"description": "Not a staff session with the permission, or the reviewer's own"},
     404: {"description": "No such listing"},
-    409: {"description": "Not in the status the decision applies to, or no longer publishable"},
+    409: {"description": "Not in the status the decision applies to, or no photo left"},
 }
 
 
@@ -57,7 +57,8 @@ async def get_review_queue(
 async def approve_listing(
     listing_id: UUID, db: Uow, staff: Reviewer, clock: ClockDep
 ) -> StaffDecisionOut:
-    """The listing goes online for `listings.expiry_days` days."""
+    """The listing goes online for `listings.expiry_days` days; withdrawn by the platform when
+    its seller may no longer publish (Q41)."""
     status = await review.approve(db, listing_id=listing_id, staff_id=_direct(staff), clock=clock)
     return StaffDecisionOut.model_validate({"id": listing_id, "status": status})
 

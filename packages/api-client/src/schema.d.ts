@@ -1142,7 +1142,8 @@ export interface paths {
         put?: never;
         /**
          * Approve Listing
-         * @description The listing goes online for `listings.expiry_days` days.
+         * @description The listing goes online for `listings.expiry_days` days; withdrawn by the platform when
+         *     its seller may no longer publish (Q41).
          */
         post: operations["staff_review_approve"];
         delete?: never;
@@ -4798,7 +4799,7 @@ export interface operations {
                 };
                 content?: never;
             };
-            /** @description Not in the status the decision applies to, or no longer publishable */
+            /** @description Not in the status the decision applies to, or no photo left */
             409: {
                 headers: {
                     [name: string]: unknown;
@@ -4879,7 +4880,7 @@ export interface operations {
                 };
                 content?: never;
             };
-            /** @description Not in the status the decision applies to, or no longer publishable */
+            /** @description Not in the status the decision applies to, or no photo left */
             409: {
                 headers: {
                     [name: string]: unknown;
@@ -4935,7 +4936,7 @@ export interface operations {
                 };
                 content?: never;
             };
-            /** @description Not in the status the decision applies to, or no longer publishable */
+            /** @description Not in the status the decision applies to, or no photo left */
             409: {
                 headers: {
                     [name: string]: unknown;
