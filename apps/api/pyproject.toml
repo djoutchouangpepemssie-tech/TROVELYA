@@ -30,6 +30,7 @@ dependencies = [
     "pyyaml==6.0.3",
     "boto3==1.43.111",
     "pillow==13.0.0",
+    "h3==4.5.0",
 ]
 
 [dependency-groups]

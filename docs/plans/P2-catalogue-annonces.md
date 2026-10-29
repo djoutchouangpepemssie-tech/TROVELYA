@@ -432,6 +432,10 @@ tout ── T12 (parcours 2, démo, porte)
 
 ### P2-T03b — Brouillons, attributs, position et lecture d'une annonce
 
+*Livrée en trois PR : T03b1, les briques pures (validation des attributs, position publique, cellules H3, distance arrondie ; dépendance `h3` 4.5.0) ; T03b2, création et modification des brouillons ; T03b3, lecture, « mes annonces », grâce de l'effacement et purge des photos jamais rattachées.*
+
+*Questions ouvertes pour T03b2 (revue de T03b1), à faire trancher par Arcel :* (1) une annonce garde son décalage, mais plusieurs annonces d'une même adresse ont chacune le leur : leur moyenne rapprocherait de la position réelle (environ 350/√N m) ; proposition : un décalage par source de position (adresse ou zone), partagé par ses annonces. (2) Les attributs `year` sans `max` acceptent toute année (10^30) ; proposition : borner `int` et `year` à l'entier 32 bits et `year` à l'année courante + 1.
+
 **Branche :** `feat/P2-T03b-brouillons`.
 
 **Fichiers :**
