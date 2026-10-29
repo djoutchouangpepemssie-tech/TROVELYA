@@ -80,15 +80,16 @@ async def test_calls_purged_after_a_year(sessionmaker: Session) -> None:
     daily purge; a younger one stays."""
     member = await make_account(sessionmaker, completed=True)
     now = datetime(2026, 10, 29, 12, tzinfo=UTC)
-    ids = {age: new_id() for age in (366, 364)}
+    ages = {"old": timedelta(days=365, microseconds=1), "edge": timedelta(days=365)}
+    ids = {name: new_id() for name in ages}
     async with sessionmaker() as db:
-        for age, call_id in ids.items():
+        for name, call_id in ids.items():
             await db.execute(
                 text(
                     "INSERT INTO ai_listing_suggestions (id, user_id, media_ids, model,"
                     " created_at) VALUES (:id, :u, ARRAY[CAST(:m AS uuid)], 'fake', :at)"
                 ),
-                {"id": call_id, "u": member.id, "m": new_id(), "at": now - timedelta(days=age)},
+                {"id": call_id, "u": member.id, "m": new_id(), "at": now - ages[name]},
             )
         await db.commit()
     assert await purge_old_calls(sessionmaker, clock=FixedClock(now)) >= 1
@@ -98,4 +99,4 @@ async def test_calls_purged_after_a_year(sessionmaker: Session) -> None:
                 text("SELECT id FROM ai_listing_suggestions WHERE user_id = :u"), {"u": member.id}
             )
         )
-    assert left == {ids[364]}
+    assert left == {ids["edge"]}  # exactly 365 days old: kept until the next purge
