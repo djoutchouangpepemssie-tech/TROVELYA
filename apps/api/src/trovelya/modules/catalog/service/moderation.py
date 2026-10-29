@@ -217,7 +217,7 @@ _LIMITS = {"title": 120, "description": 5000}
 
 def label(code: str) -> str:
     """The French label of a reason code."""
-    return PROHIBITED.labels.get(code) or _OTHER_LABELS[code]
+    return PROHIBITED.labels.get(code) or _OTHER_LABELS.get(code, code)  # a retired code
 
 
 def _fit(text: str, limit: int) -> str:

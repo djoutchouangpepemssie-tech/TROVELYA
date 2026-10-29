@@ -356,7 +356,7 @@ class StaffDecisionIn(BaseModel):
     """A rejection or a removal: a reason from the closed list, explained for `other`."""
 
     reason_code: str = Field(min_length=1, max_length=64)
-    reason_text: str | None = Field(default=None, max_length=1000)
+    reason_text: str | None = Field(default=None, max_length=1000, pattern=r"^[^\x00-\x1f]*$")
 
 
 class StaffDecisionOut(BaseModel):

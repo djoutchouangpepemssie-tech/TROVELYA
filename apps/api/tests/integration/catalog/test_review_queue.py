@@ -1,6 +1,6 @@
 """The staff's review queue (P2-T05c1, plan Q6, Q16, E9): listings awaiting moderation, oldest
 first; approve puts one online, reject (closed list of reasons) or remove (`listing.remove_any`)
-takes it down with its photos. Every decision is in the history and the audit log."""
+takes it down, photos kept for the appeal (Q40). Each decision is in the history and the audit."""
 
 import asyncio
 from datetime import UTC, datetime
@@ -60,12 +60,13 @@ async def _audit(sessionmaker: Session, listing_id: str) -> list[tuple[Any, ...]
         return [tuple(r) for r in rows]
 
 
-async def _photos_deleted(sessionmaker: Session, listing_id: str) -> bool:
+async def _photos_kept(sessionmaker: Session, listing_id: str) -> bool:
+    """Q40: kept for the appeal (until their private copy, T05c1b), never destroyed."""
     async with sessionmaker() as db:
         return bool(
             await db.scalar(
                 text(
-                    "SELECT bool_and(m.deleted_at IS NOT NULL) FROM listing_media lm"
+                    "SELECT bool_and(m.deleted_at IS NULL) FROM listing_media lm"
                     " JOIN media m ON m.id = lm.media_id WHERE lm.listing_id = :l"
                 ),
                 {"l": listing_id},
@@ -115,15 +116,15 @@ async def test_approve_publishes_and_audits(client: AsyncClient, sessionmaker: S
 async def test_reject_requires_a_known_reason(client: AsyncClient, sessionmaker: Session) -> None:
     _, listing = await _in_review(client, sessionmaker)
     staff = await _moderator(sessionmaker)
-    for body in (None, {}, {"reason_code": "made_up"}, {"reason_code": "other"}):
+    bad = [{"reason_code": "made_up"}, {"reason_code": "other"}, {"reason_code": "x\u0000"}]
+    for body in (None, {}, *bad, {"reason_code": "spam", "reason_text": "a\u0000b"}):
         response = await _decide(client, staff, listing["id"], "reject", body)
         assert response.status_code == 422, (body, response.text)
 
 
-async def test_reject_removes_listing_and_photos(
+async def test_reject_removes_listing_keeps_photos(
     client: AsyncClient, sessionmaker: Session
 ) -> None:
-    """Q6: a listing removed by the moderation leaves storage at once (the purge's next run)."""
     _, listing = await _in_review(client, sessionmaker)
     staff = await _moderator(sessionmaker)
     response = await _decide(
@@ -131,7 +132,7 @@ async def test_reject_removes_listing_and_photos(
     )
     assert response.status_code == 200, response.text
     assert response.json()["status"] == "removed"
-    assert await _photos_deleted(sessionmaker, listing["id"])
+    assert await _photos_kept(sessionmaker, listing["id"])
     async with sessionmaker() as db:
         row = (
             await db.execute(
@@ -146,11 +147,11 @@ async def test_reject_removes_listing_and_photos(
     assert await _audit(sessionmaker, listing["id"]) == [("staff", "listing.reject", "weapons")]
 
 
-async def test_automatic_refusal_removes_photos(client: AsyncClient, sessionmaker: Session) -> None:
-    """Q6 holds for a refusal by the platform too (P2-T05b1)."""
+async def test_automatic_refusal_keeps_photos(client: AsyncClient, sessionmaker: Session) -> None:
+    """Q40 holds for a refusal by the platform too: a mistaken refusal loses nothing."""
     _, listing = await _listing(client, sessionmaker, title="Bouteille de whisky 12 ans")
     assert listing["status"] == "removed"
-    assert await _photos_deleted(sessionmaker, listing["id"])
+    assert await _photos_kept(sessionmaker, listing["id"])
 
 
 @pytest.mark.parametrize("action", ["approve", "reject"])
@@ -204,6 +205,6 @@ async def test_remove_an_active_listing(client: AsyncClient, sessionmaker: Sessi
     response = await client.post(path, headers=staff.headers, json={"reason_code": "counterfeit"})
     assert response.status_code == 200, response.text
     assert response.json()["status"] == "removed"
-    assert await _photos_deleted(sessionmaker, listing["id"])
+    assert await _photos_kept(sessionmaker, listing["id"])
     assert await _audit(sessionmaker, listing["id"]) == [("staff", "listing.remove", "counterfeit")]
     assert (await client.get(f"/v1/listings/{listing['id']}")).status_code == 404

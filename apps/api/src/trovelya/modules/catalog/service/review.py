@@ -1,8 +1,8 @@
 """The staff's decisions on listings (P2-T05c1, 8.17, plan Q6, Q16, E9). Never commits.
 
-Approving puts a listing online; rejecting or removing one takes a reason from a closed list
-and its photos leave storage (Q6). Each decision is a transition by the staff member and a line
-of the audit log, in one transaction; nobody decides on a listing of their own."""
+Approving puts a listing online; rejecting or removing one takes a reason from a closed list,
+its photos kept for the appeal (Q40, private copy in T05c1b). Each decision is a transition and
+an audit line in one transaction; nobody decides on a listing of their own."""
 
 from datetime import timedelta
 from typing import Any
@@ -97,8 +97,6 @@ async def _decide(
         reason_text=reason_text,
         online_until=online_until,
     )
-    if transition.to_status is ListingStatus.REMOVED:
-        await take_photos_down(db, listing_id, clock=now)
     await record_audit(
         db,
         actor_type="staff",
@@ -111,12 +109,6 @@ async def _decide(
         after={"status": transition.to_status.value},
     )
     return transition.to_status
-
-
-async def take_photos_down(db: AsyncSession, listing_id: UUID, *, clock: Clock) -> None:
-    """Q6: the photos of a listing removed by the moderation leave storage at once."""
-    media_ids = await repository.listing_media_ids(db, listing_id)
-    await listing_photos.discard_photos(db, media_ids, now=clock.now())
 
 
 async def approve(db: AsyncSession, *, listing_id: UUID, staff_id: UUID, clock: Clock) -> str:
