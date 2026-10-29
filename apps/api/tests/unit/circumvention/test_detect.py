@@ -204,32 +204,44 @@ def test_combining_mark_after_a_passage_masked_with_it() -> None:
     assert mask(text, detect(text)) == f"{MASK} merci"
 
 
+def _seconds(text: str) -> float:
+    """The best of three runs: the least disturbed by the rest of the machine."""
+    runs: list[float] = []
+    for _ in range(3):
+        start = time.perf_counter()
+        detect(text)
+        runs.append(time.perf_counter() - start)
+    return min(runs)
+
+
 @pytest.mark.parametrize(
-    "text",
+    "unit",
     [
-        "a-" * 5000,
-        "-a" * 5000,
-        "a." * 5000,
-        "a" * 10000,
-        "1 " * 5000,
-        "06 " * 3333,
-        "01 " * 3333,
-        "0 " * 5000,
-        "08:30 " * 1666,
-        "1/2 " * 2500,
-        "fr76 " * 2000,
-        "jean.dupont gmail " * 555,
-        " " * 10000,
-        "\n" * 10000,
-        "fb " * 3333,
-        "@ab " * 2500,
-        "rib " * 2500,
-        "\ufdfa" * 10000,
+        "a-",
+        "-a",
+        "a.",
+        "a",
+        "1 ",
+        "06 ",
+        "01 ",
+        "0 ",
+        "08:30 ",
+        "1/2 ",
+        "fr76 ",
+        "jean.dupont gmail ",
+        " ",
+        "\n",
+        "fb ",
+        "@ab ",
+        "rib ",
+        "\ufdfa",
     ],
 )
-def test_long_hostile_text_stays_fast(text: str) -> None:
-    """A text of 10 000 characters is analysed in a few tens of milliseconds, never in seconds
-    (50 ms aimed at, with room for a loaded CI runner)."""
-    start = time.perf_counter()
-    detect(text)
-    assert time.perf_counter() - start < 0.2
+def test_long_hostile_text_stays_fast(unit: str) -> None:
+    """Never quadratic: twice the text, about twice the time (four times would be quadratic).
+    10 000 characters take a few tens of milliseconds (50 ms aimed at); the bound of one
+    second leaves room for a CI runner measuring coverage, which slows Python eightfold."""
+    half = unit * (5000 // len(unit))
+    small, big = _seconds(half), _seconds(half * 2)
+    assert big < 3 * small + 0.02, (small, big)
+    assert big < 1.0

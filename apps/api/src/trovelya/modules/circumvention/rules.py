@@ -272,8 +272,9 @@ class _Finder:
         values = [text[a:b] for a, b in groups]
         digits = "".join(values)
         between = [text[a[1] : b[0]] for a, b in pairwise(groups)]
-        if len(set(between)) > 1 and any(c in "€=%\u00d7" for sep in between for c in sep):
-            return False  # « 06 = 36 €, 08 = 38 € »: prices, not a number
+        priced = any(c in "€=%\u00d7" for sep in between for c in sep)
+        if priced and _LIST_ITEM_SEP_RE.search(passage):
+            return False  # « 06 = 36 €, 08 = 38 € »: a list of prices, not a number
         mobile = bool(_MOBILE_RE.fullmatch(digits))
         years = any(_LONE_YEAR_RE.fullmatch(v) for v in values[1:])
         unit = bool(_UNIT_RE.search(text[run.end() : run.end() + 12]))
