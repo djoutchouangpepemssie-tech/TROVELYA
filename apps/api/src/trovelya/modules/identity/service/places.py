@@ -6,9 +6,12 @@
   choosing another moves the role, deleting the default hands it to the oldest remaining zone.
 - Search radius in {1, 2, 5, 10, 25, 50, 100} km, 5 km by default (local search first).
 - Addresses are kept with `deleted_at` (future orders may point to them); zones are deleted.
+- A listing stands at one of its seller's placed addresses or zones (`member_place`, P2-T03b2a).
 """
 
-from typing import Any
+import re
+from dataclasses import dataclass
+from typing import Any, Literal
 from uuid import UUID
 
 from sqlalchemy import Row
@@ -103,3 +106,71 @@ async def get_preferences(db: AsyncSession, *, user: CurrentUser) -> dict[str, A
 
 async def save_preferences(db: AsyncSession, *, user: CurrentUser, values: dict[str, Any]) -> None:
     await repository.save_preferences(db, user_id=user.id, values=values)
+
+
+PlaceSource = Literal["address", "zone"]
+
+# Arrondissements by postal code (750xx and 75116, 690xx, 130xx): the name the geocoder gives
+# them ("Lyon 7e"), without a call to it.
+_ARRONDISSEMENTS = {"75": ("Paris", 20), "69": ("Lyon", 9), "13": ("Marseille", 16)}
+
+
+# A place name shown on listings: words of letters joined by spaces, hyphens or apostrophes,
+# perhaps an arrondissement number ("Lyon 7e", "Paris 1er"). Anything else (a street, a number,
+# a comma) is typed text that must not go public (section 8.11).
+_PLACE_NAME = re.compile(r"[^\W\d_]+(?:[ '\u2019-][^\W\d_]+)*(?: \d{1,2}(?:er|e))?")
+_PLACE_NAME_MAX = 60
+
+
+def _public_name(name: str) -> str | None:
+    name = name.strip()
+    return name if len(name) <= _PLACE_NAME_MAX and _PLACE_NAME.fullmatch(name) else None
+
+
+@dataclass(frozen=True, slots=True)
+class MemberPlace:
+    lat: float
+    lon: float
+    place_name: str  # the city or the arrondissement, never the street
+    country_code: str
+
+
+def _arrondissement(code: str, country_code: str) -> str | None:
+    code = "75016" if code == "75116" else code
+    city = _ARRONDISSEMENTS.get(code[:2])
+    if country_code != "FR" or city is None or not (code.isdigit() and len(code) == 5):
+        return None
+    name, count = city
+    number = int(code[2:])
+    if not 1 <= number <= count:
+        return None
+    return f"{name} {number}{'er' if number == 1 else 'e'}"
+
+
+async def member_place(
+    db: AsyncSession, *, user_id: UUID, source: PlaceSource, source_id: UUID
+) -> MemberPlace | None:
+    """The position and place name of the member's address or zone; None for another member's,
+    a deleted or an unplaced address, an unknown one, or a zone whose name is more than a place
+    name. An address is named after its arrondissement, else its city, else its postal code."""
+    if source == "zone":
+        zone = await repository.zone_place(db, user_id=user_id, zone_id=source_id)
+        name = _public_name(zone.place_name) if zone else None
+        if zone is None or name is None:
+            return None
+        # Zones come from the IGN geocoder, which covers France only (P1, E10).
+        return MemberPlace(
+            lat=zone.lat, lon=zone.lon, place_name=zone.place_name, country_code="FR"
+        )
+    address = await repository.address_place(db, user_id=user_id, address_id=source_id)
+    if address is None:
+        return None
+    code = "".join(address.postal_code.split())
+    return MemberPlace(
+        lat=address.lat,
+        lon=address.lon,
+        place_name=_arrondissement(code, address.country_code)
+        or _public_name(address.city)
+        or code,
+        country_code=address.country_code,
+    )
