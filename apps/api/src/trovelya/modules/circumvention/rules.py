@@ -1,12 +1,8 @@
-"""Detection and masking of contact details (section 8.16, plan P2-T05a, Q12, Q30, Q31).
+"""Detection and masking of contact details (section 8.16, plan Q12, Q30, Q31).
 
-Each rule runs on the normalized text and reports the original passage with a confidence. A
-passage of confidence `MASK_AT` or more is masked and the detection confirmed automatically;
-below, it is only queued for review: a run of eight digits, digits after « ISBN », « réf. »,
-« n° de série » or « facture », a generic payment word, a payment app named with no payment
-around (« Lydia » is a first name too), a social network named. The base rule of 8.16
-(eight digits or more, `@`, `whats?app`, `lydia`, `paypal`, `telegram`, `z[ée]ro six`, `iban`)
-is covered by the rules below.
+Each rule runs on the normalized text and reports the original passage with a confidence: from
+`MASK_AT`, masked and confirmed automatically; below, only queued for review. Covers the base
+rule of 8.16 (eight digits or more, `@`, `whats?app`, `lydia`, `paypal`, `telegram`, `iban`).
 """
 
 import re

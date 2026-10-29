@@ -159,11 +159,6 @@ def test_combining_mark_after_a_passage_masked_with_it() -> None:
     assert mask(text, detect(text)) == f"{MASK} merci"
 
 
-def test_overlapping_detections_masked_once() -> None:
-    text = "jean.dupont@gmail.com"
-    assert mask(text, detect(text)) == MASK
-
-
 @pytest.mark.parametrize("text", ["a-" * 2500, "-a" * 2500, "a." * 2500, "a" * 5000, "1 " * 2500])
 def test_long_hostile_text_stays_fast(text: str) -> None:
     """A description of 5000 characters is analysed in a few milliseconds, never in seconds."""

@@ -1,11 +1,8 @@
-"""Normalisation before detection (section 8.16).
-
-Lower case, no accents, invisible characters and keycap marks dropped, look-alike letters
-(Cyrillic, Greek) and digits of every script turned into their Latin and ASCII form, numbers
-written in words turned into digits (« zéro six douze » → « 0 6 12 »), letters standing for
-digits among digits (« O6 l2 » → « 06 12 »), obfuscated « @ » and « . » of an address put back,
-dates made one block so they never read as a phone number. Every character of the result keeps
-the span of the original it comes from, so a detection points to the very passage written.
+"""Normalisation before detection (section 8.16): lower case, no accents nor invisible
+characters, look-alike letters and digits of any script made Latin and ASCII, numbers in words
+made digits (« zéro six douze » → « 0 6 12 »), « O6 l2 » among digits made « 06 12 », obfuscated
+« @ » and « . » put back, dates kept as one block. Every character of the result keeps the span
+of the original it comes from, so a detection points to the very passage written.
 """
 
 import re
