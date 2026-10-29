@@ -407,3 +407,17 @@ async def files_overdue(db: AsyncSession, *, deleted_before: datetime) -> int:
         )
         or 0
     )
+
+
+async def ready_moderation_of(db: AsyncSession, media_ids: Sequence[UUID]) -> list[dict[str, Any]]:
+    """The `moderation` of each photo still ready among `media_ids` (classification, duplicate)."""
+    if not media_ids:
+        return []
+    rows = await db.scalars(
+        text(
+            "SELECT moderation FROM media WHERE id = ANY(:ids) AND status = 'ready'"
+            " AND deleted_at IS NULL ORDER BY id"
+        ),
+        {"ids": list(media_ids)},
+    )
+    return list(rows)

@@ -913,3 +913,22 @@ async def set_listing_text(
         text("UPDATE listings SET title = :title, description = :description WHERE id = :id"),
         {"id": listing_id, "title": title, "description": description},
     )
+
+
+async def listing_media_ids(db: AsyncSession, listing_id: UUID) -> list[UUID]:
+    return list(
+        await db.scalars(
+            text("SELECT media_id FROM listing_media WHERE listing_id = :l ORDER BY position"),
+            {"l": listing_id},
+        )
+    )
+
+
+async def setting_json(db: AsyncSession, key: str) -> Any:
+    """A structured [PARAM] of `platform_settings` (missing = a bug)."""
+    value = await db.scalar(
+        text("SELECT value FROM platform_settings WHERE key = :key"), {"key": key}
+    )
+    if value is None:
+        raise LookupError(f"platform setting {key} is missing")
+    return value

@@ -5,7 +5,10 @@ Q34), in this order:
    `seed/prohibited.yaml` (a term without ambiguity refuses the listing with its reason, an
    ambiguous one sends it to review, known innocent phrases are taken out first);
 2. a category always checked by a human (`is_restricted`) sends it to review;
-3. contact details are masked in the listing itself, recorded, and the seller reminded.
+3. the photos (P2-T05b2, Q38): a score of the classifier past `moderation.image_thresholds`
+   refuses the listing or sends it to review; a photo unclassified (no classifier configured,
+   or it failed) or already published by another member sends it to review;
+4. contact details are masked in the listing itself, recorded, and the seller reminded.
 Never commits.
 """
 
@@ -21,6 +24,7 @@ from trovelya.core.config import Settings
 from trovelya.modules.catalog import repository
 from trovelya.modules.catalog.service.seed import read_seed_file
 from trovelya.modules.circumvention.service import MASK, screen
+from trovelya.modules.media.service import listing_photos
 from trovelya.shared.clock import Clock
 
 Outcome = Literal["online", "review", "refused"]
@@ -146,7 +150,46 @@ def prohibited(title: str, description: str, *, terms: Prohibited = PROHIBITED) 
 
 
 RESTRICTED = "restricted_category"
-_OTHER_LABELS = {RESTRICTED: "Catégorie vérifiée par un humain"}
+_OTHER_LABELS = {
+    RESTRICTED: "Catégorie vérifiée par un humain",
+    "image_nudity": "Image : nudité",
+    "image_violence": "Image : violence",
+    "image_weapons": "Image : armes",
+    "image_drugs": "Image : drogue",
+    "image_unchecked": "Image à vérifier par un humain",
+    "duplicate_image": "Photo déjà publiée par un autre membre",
+}
+
+
+def _combined(*verdicts: Verdict) -> Verdict:
+    """The strictest outcome, with the reasons that lead to it (each once, in order)."""
+    for outcome in ("refused", "review"):
+        reasons = [r for v in verdicts if v.outcome == outcome for r in v.reasons]
+        if reasons:
+            return Verdict(outcome, tuple(dict.fromkeys(reasons)))
+    return Verdict("online")
+
+
+def photos_verdict(photos: list[dict[str, Any]], thresholds: dict[str, float]) -> Verdict:
+    """Q38: refused past `refuse`, reviewed past `review`, unclassified or another member's
+    photo reviewed; the classifier's categories become `image_<category>` reasons."""
+    refused: list[str] = []
+    reviewed: list[str] = []
+    for photo in photos:
+        classification: dict[str, Any] = photo.get("classification") or {}
+        scores: dict[str, float] | None = classification.get("scores")
+        if scores is None:
+            reviewed.append("image_unchecked")
+        for category, score in (scores or {}).items():
+            if score >= thresholds["refuse"]:
+                refused.append(f"image_{category}")
+            elif score >= thresholds["review"]:
+                reviewed.append(f"image_{category}")
+        if photo.get("duplicate_of"):
+            reviewed.append("duplicate_image")
+    return _combined(Verdict("refused", tuple(refused)), Verdict("review", tuple(reviewed)))
+
+
 NOTICE = (
     "Pour ta sécurité, les coordonnées ont été masquées : échange avec l'acheteur par la "
     "messagerie TROVÉLYA, c'est elle qui protège ton paiement et ta vente."
@@ -186,9 +229,16 @@ class Moderation:
         self, db: AsyncSession, *, listing_id: UUID, seller_id: UUID, clock: Clock
     ) -> Moderated:
         subject = await repository.moderation_subject(db, listing_id)
-        verdict = prohibited(subject.title, subject.description)
-        if subject.is_restricted and verdict.outcome != "refused":
-            verdict = Verdict("review", (*verdict.reasons, RESTRICTED))
+        restricted = Verdict("review", (RESTRICTED,) if subject.is_restricted else ())
+        photos = await listing_photos.photo_moderation(
+            db, await repository.listing_media_ids(db, listing_id)
+        )
+        thresholds = await repository.setting_json(db, "moderation.image_thresholds")
+        verdict = _combined(
+            prohibited(subject.title, subject.description),
+            restricted,
+            photos_verdict(photos, thresholds),
+        )
         # Masked even when refused: an accepted appeal puts the listing back as it is.
         shown = {
             field: await screen(

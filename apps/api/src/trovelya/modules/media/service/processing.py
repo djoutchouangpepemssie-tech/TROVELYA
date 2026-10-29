@@ -11,6 +11,10 @@
    written deletes them too: nothing public is left unreferenced.
 4. The original is deleted once the outcome is committed: it never outlives processing.
 
+A listing photo is also classified (P2-T05b2, Q38): the classifier gets its largest WebP
+variant only, and the scores join the media's `moderation`; a failing classifier, or none
+configured, leaves it unclassified and its listing goes to human review.
+
 A file refused at any step ends `rejected` with its reason and `media.rejected`. A media whose
 job keeps failing (tasks.py) or died (`recover_stuck_media`) ends `rejected` with
 `processing_failed`: never `processing` for ever.
@@ -26,6 +30,7 @@ from sqlalchemy.ext.asyncio import AsyncSession, async_sessionmaker
 
 from trovelya.core.db import commit
 from trovelya.modules.media import repository
+from trovelya.modules.media.adapters.classifier import ImageClassifier
 from trovelya.modules.media.adapters.storage import ObjectStorage, new_storage_key
 from trovelya.modules.media.service.images import (
     ImageRejectedError,
@@ -122,15 +127,36 @@ async def _write_variants(
     return variants
 
 
+async def _classify(
+    classifier: ImageClassifier | None, row: Any, image: ProcessedImage
+) -> dict[str, Any]:
+    """What the moderation keeps of a listing photo's classification (nothing for an avatar,
+    nor without a classifier)."""
+    if classifier is None or row.purpose != "listing":
+        return {}
+    # The largest WebP: the format every provider reads.
+    largest = max(image.variants, key=lambda v: (v.format == "webp", v.width))
+    try:
+        scores = await classifier.classify(largest.data, f"image/{largest.format}")
+    except Exception:  # noqa: BLE001 — any failure of the provider: reviewed by a human
+        logger.warning("media.classification_failed", media_id=str(row.id))
+        return {"classification": {"error": "failed"}}
+    return {"classification": {"by": classifier.name, "scores": scores}}
+
+
 async def _mark_ready(
-    db: AsyncSession, row: Any, image: ProcessedImage, variants: list[dict[str, Any]]
+    db: AsyncSession,
+    row: Any,
+    image: ProcessedImage,
+    variants: list[dict[str, Any]],
+    classified: dict[str, Any],
 ) -> bool:
     perceptual_hash = _signed(image.dhash)
-    duplicate = None
+    moderation = dict(classified)
     if row.purpose == "listing":
         first = await repository.oldest_similar_media(db, perceptual_hash, DUPLICATE_DISTANCE)
         if first is not None and first.owner_id != row.owner_id:
-            duplicate = first.id
+            moderation["duplicate_of"] = str(first.id)
     decided = await repository.mark_ready(
         db,
         row.id,
@@ -139,7 +165,7 @@ async def _mark_ready(
         sha256=image.sha256,
         perceptual_hash=perceptual_hash,
         variants=variants,
-        moderation={"duplicate_of": str(duplicate)} if duplicate else {},
+        moderation=moderation,
     )
     if decided:
         await emit_event(
@@ -179,6 +205,7 @@ async def process_media(
     media_id: UUID,
     *,
     image_slot: asyncio.Semaphore | None = None,
+    classifier: ImageClassifier | None = None,
 ) -> str:
     """Returns the media's status afterwards, or "gone" when it does not exist or was deleted.
     `image_slot` limits the images decoded at once (the worker shares one; one by default)."""
@@ -203,8 +230,9 @@ async def process_media(
     written: list[str] = []
     try:
         variants = await _write_variants(storage, image, written)
+        classified = await _classify(classifier, row, image)
         async with sessionmaker() as db:
-            decided = await _mark_ready(db, row, image, variants)
+            decided = await _mark_ready(db, row, image, variants, classified)
     except BaseException:
         await _delete_variants(storage, written)
         raise

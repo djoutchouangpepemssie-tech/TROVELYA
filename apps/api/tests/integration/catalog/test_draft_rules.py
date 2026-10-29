@@ -37,17 +37,17 @@ async def db(seeded: None, sessionmaker: Session) -> AsyncIterator[AsyncSession]
 async def photo(
     sessionmaker: Session, owner: UUID, *, purpose: str = "listing", status: str = "ready"
 ) -> UUID:
-    """A photo as the media worker leaves it."""
+    """A photo as the media worker leaves it, classified clean (P2-T05b2)."""
     media_id = new_id()
     async with sessionmaker() as session:
         await session.execute(
             text(
                 "INSERT INTO media (id, owner_id, kind, purpose, storage_key, mime_type, bytes,"
-                " status, sha256, exif_stripped, variants, rejection_reason)"
+                " status, sha256, exif_stripped, variants, rejection_reason, moderation)"
                 " VALUES (:id, :owner, 'image', :purpose, :key, 'image/jpeg', 1000, :status,"
                 " CASE WHEN :status = 'ready' THEN CAST(:sha AS bytea) END, :status = 'ready',"
                 " CASE WHEN :status = 'ready' THEN CAST(:variants AS jsonb) ELSE '[]' END,"
-                " CASE WHEN :status = 'rejected' THEN 'type_mismatch' END)"
+                " CASE WHEN :status = 'rejected' THEN 'type_mismatch' END, CAST(:mod AS jsonb))"
             ),
             {
                 "id": media_id,
@@ -56,6 +56,8 @@ async def photo(
                 "key": new_id().hex,
                 "status": status,
                 "sha": b"\x01" * 32,
+                "mod": '{"classification": {"by": "fake", "scores": {"nudity": 0, "violence": 0,'
+                ' "weapons": 0, "drugs": 0}}}',
                 "variants": f'[{{"format": "webp", "width": 640, "height": 480,'
                 f' "key": "{new_id().hex}", "bytes": 20}}]',
             },

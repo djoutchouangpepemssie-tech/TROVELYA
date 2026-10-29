@@ -75,3 +75,9 @@ async def photo_variants(
     longer ready (deleted, removed by moderation) is left out."""
     found = await photo_variants_by_id(db, media_ids, public_url=public_url)
     return [found[media_id] for media_id in media_ids if media_id in found]
+
+
+async def photo_moderation(db: AsyncSession, media_ids: Sequence[UUID]) -> list[dict[str, Any]]:
+    """What the moderation of a listing reads of its photos (P2-T05b2): their classification
+    (`{"by", "scores"}`, `{"error"}` or nothing) and `duplicate_of` another member's photo."""
+    return await repository.ready_moderation_of(db, media_ids)
