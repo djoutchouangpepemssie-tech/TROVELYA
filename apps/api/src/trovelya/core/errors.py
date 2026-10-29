@@ -74,6 +74,8 @@ class ErrorCode(StrEnum):
     PUBLICATION_LIMIT = "publication_limit"
     PHOTO_REQUIRED = "photo_required"
     OWN_LISTING = "own_listing"
+    AI_LIMIT = "ai_limit"
+    AI_UNAVAILABLE = "ai_unavailable"
 
 
 # French titles by default (section 2); translation by Accept-Language arrives with P1.
@@ -135,6 +137,8 @@ _TITLES: dict[ErrorCode, str] = {
     ErrorCode.PUBLICATION_LIMIT: "Limite de mises en ligne sur 24 heures atteinte",
     ErrorCode.PHOTO_REQUIRED: "Il faut au moins une photo prête pour publier",
     ErrorCode.OWN_LISTING: "C'est ta propre annonce",
+    ErrorCode.AI_LIMIT: "Limite de suggestions IA atteinte",
+    ErrorCode.AI_UNAVAILABLE: "Suggestions IA indisponibles pour l'instant, continue sans",
 }
 
 _STATUS_CODES: dict[int, ErrorCode] = {

@@ -161,7 +161,11 @@ async def test_similar_uses_hnsw_index(client: AsyncClient, sessionmaker: Sessio
         "limit": 8,
     }
     async with sessionmaker() as db:
-        await db.execute(sql("SET LOCAL enable_seqscan = off"))  # a tiny table: force the choice
+        # A small table: the planner may prefer reading every active listing (sequentially,
+        # by another partial index, or by bitmap) and sorting. Forbid those to see whether the
+        # HNSW index can serve the order, whatever else the shared database holds.
+        for plan_kind in ("seqscan", "bitmapscan", "sort"):
+            await db.execute(sql("SET LOCAL enable_" + plan_kind + " = off"))
         plan = "\n".join(await db.scalars(sql("EXPLAIN " + _SIMILAR.text), params))
     main = plan.split("SubPlan")[0]  # the media's subquery sorts by position
     assert "Index Scan using listings_embedding_hnsw_idx" in main, plan

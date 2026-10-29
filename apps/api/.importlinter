@@ -28,6 +28,7 @@ source_modules =
     trovelya.modules.identity
     trovelya.modules.media
     trovelya.modules.circumvention
+    trovelya.modules.ai
 forbidden_modules =
     trovelya.modules.ledger.repository
     trovelya.modules.ledger.models
@@ -42,6 +43,7 @@ source_modules =
     trovelya.modules.identity
     trovelya.modules.media
     trovelya.modules.circumvention
+    trovelya.modules.ai
 forbidden_modules =
     trovelya.modules.catalog.repository
     trovelya.modules.catalog.models
@@ -56,6 +58,7 @@ source_modules =
     trovelya.modules.identity
     trovelya.modules.media
     trovelya.modules.circumvention
+    trovelya.modules.ai
 forbidden_modules =
     trovelya.modules.orders.repository
     trovelya.modules.orders.models
@@ -73,6 +76,7 @@ source_modules =
     trovelya.modules.orders
     trovelya.modules.media
     trovelya.modules.circumvention
+    trovelya.modules.ai
 forbidden_modules =
     trovelya.modules.identity.repository
     trovelya.modules.identity.models
@@ -92,6 +96,7 @@ source_modules =
     trovelya.modules.orders
     trovelya.modules.identity
     trovelya.modules.circumvention
+    trovelya.modules.ai
 forbidden_modules =
     trovelya.modules.media.repository
     trovelya.modules.media.models
@@ -127,6 +132,7 @@ source_modules =
     trovelya.modules.orders
     trovelya.modules.identity
     trovelya.modules.media
+    trovelya.modules.ai
 forbidden_modules =
     trovelya.modules.circumvention.repository
     trovelya.modules.circumvention.models
@@ -134,3 +140,22 @@ forbidden_modules =
     trovelya.modules.circumvention.tasks
     trovelya.modules.circumvention.normalize
     trovelya.modules.circumvention.rules
+
+[importlinter:contract:module-ai]
+name = Other modules use ai only through ai.service
+type = forbidden
+# Direct imports only: the catalog asks for a suggestion through ai.service (P2-T06a), which
+# reaches its own adapters and repository inside its module.
+allow_indirect_imports = True
+source_modules =
+    trovelya.modules.ledger
+    trovelya.modules.catalog
+    trovelya.modules.orders
+    trovelya.modules.identity
+    trovelya.modules.media
+    trovelya.modules.circumvention
+forbidden_modules =
+    trovelya.modules.ai.repository
+    trovelya.modules.ai.migrations
+    trovelya.modules.ai.adapters
+    trovelya.modules.ai.schemas
