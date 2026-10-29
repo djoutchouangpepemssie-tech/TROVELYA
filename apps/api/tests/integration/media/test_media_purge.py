@@ -1,6 +1,7 @@
 """Erasure and purge of media (P2-T02c2): files of a deleted photo leave storage at the next
-hourly run, its row after 30 days; an erased account's at once; uploads never completed and
-avatar photos never chosen after 24 hours. Races with the worker and with the avatar choice."""
+hourly run, its row after 30 days; an erased account's at once; uploads never completed,
+avatar photos never chosen and listing photos never attached after 24 hours. Races with the
+worker, with the avatar choice and with a listing taking its photos."""
 
 import asyncio
 from collections.abc import Awaitable, Callable
@@ -12,6 +13,10 @@ import pytest
 from sqlalchemy import text
 from sqlalchemy.ext.asyncio import AsyncSession, async_sessionmaker
 
+from tests.integration.catalog.test_listing_gdpr import (
+    _listing,  # pyright: ignore[reportPrivateUsage]
+    category,  # noqa: F401  # pyright: ignore[reportUnusedImport] (fixture)
+)
 from tests.integration.identity.test_profile import make_account
 from trovelya.core.errors import AppError
 from trovelya.core.gdpr import registered_erasers
@@ -19,6 +24,7 @@ from trovelya.modules.media import repository
 from trovelya.modules.media.adapters.storage import MemoryStorage, new_storage_key
 from trovelya.modules.media.service import purge
 from trovelya.modules.media.service.avatars import check_avatar
+from trovelya.modules.media.service.listing_photos import check_listing_photos
 from trovelya.modules.media.service.purge import purge_media
 from trovelya.shared.clock import FixedClock
 from trovelya.shared.ids import new_id
@@ -109,6 +115,15 @@ async def _set_avatar(sessionmaker: Session, user_id: UUID, media_id: UUID) -> N
         await db.commit()
 
 
+async def _attach(sessionmaker: Session, listing_id: UUID, media_id: UUID) -> None:
+    async with sessionmaker() as db:
+        await db.execute(
+            text("INSERT INTO listing_media (listing_id, media_id, position) VALUES (:l, :m, 0)"),
+            {"l": listing_id, "m": media_id},
+        )
+        await db.commit()
+
+
 class HookedStorage(MemoryStorage):
     """Runs `hook` (once) when an original is deleted: what else happens meanwhile."""
 
@@ -185,7 +200,9 @@ async def test_media_erased_from_storage(sessionmaker: Session, storage: MemoryS
 
 
 async def test_withdrawn_photo_leaves_storage_at_once(
-    sessionmaker: Session, storage: MemoryStorage
+    sessionmaker: Session,
+    storage: MemoryStorage,
+    category: UUID,  # noqa: F811
 ) -> None:
     """ADR-0019: a withdrawn photo's public URL stops working at the next run; its row (no
     files) stays for the retention."""
@@ -193,6 +210,7 @@ async def test_withdrawn_photo_leaves_storage_at_once(
     recent = await _media(sessionmaker, storage, member.id, deleted_for=timedelta(minutes=1))
     old = await _media(sessionmaker, storage, member.id, deleted_for=timedelta(days=31))
     live = await _media(sessionmaker, storage, member.id, age=timedelta(days=400))
+    await _attach(sessionmaker, await _listing(sessionmaker, member.id, category, "Lampe"), live[0])
     await _set_avatar(sessionmaker, member.id, old[0])  # its avatar row still points at it
     await _purge(sessionmaker, storage)
     row = await _row(sessionmaker, recent[0])
@@ -309,6 +327,75 @@ async def test_avatar_photo_never_chosen_purged_after_24h(
     for media_id, keys in (chosen, recent):
         assert (await _row(sessionmaker, media_id)).deleted_at is None
         assert all(_stored(storage, keys))
+
+
+async def test_listing_photo_never_attached_purged_after_24h(
+    sessionmaker: Session,
+    storage: MemoryStorage,
+    category: UUID,  # noqa: F811
+) -> None:
+    """A listing photo nobody attached (never, or taken off a draft) goes after 24 hours; one
+    in a listing stays, whatever its age."""
+    member = await make_account(sessionmaker, completed=True)
+    attached, unattached, recent = [
+        await _media(sessionmaker, storage, member.id, age=age)
+        for age in (timedelta(days=3), timedelta(hours=25), timedelta(hours=23))
+    ]
+    listing_id = await _listing(sessionmaker, member.id, category, "Lampe opaline verte")
+    await _attach(sessionmaker, listing_id, attached[0])
+    await _purge(sessionmaker, storage)
+    assert (await _row(sessionmaker, unattached[0])).files_deleted_at is not None
+    assert not any(_stored(storage, unattached[1]))
+    for media_id, keys in (attached, recent):
+        assert (await _row(sessionmaker, media_id)).deleted_at is None
+        assert all(_stored(storage, keys))
+
+
+async def test_photo_being_attached_to_a_listing_is_not_purged(
+    sessionmaker: Session,
+    storage: MemoryStorage,
+    category: UUID,  # noqa: F811
+) -> None:
+    """The seller first: `check_listing_photos` holds the photo while the listing is saved; the
+    purge skips it without waiting, then sees it attached."""
+    member = await make_account(sessionmaker, completed=True)
+    media_id, keys = await _media(sessionmaker, storage, member.id, age=timedelta(hours=25))
+    listing_id = await _listing(sessionmaker, member.id, category, "Lampe opaline verte")
+    async with sessionmaker() as db:
+        await check_listing_photos(db, owner_id=member.id, media_ids=[media_id])
+        await asyncio.wait_for(_purge(sessionmaker, storage), timeout=10)
+        await db.execute(
+            text("INSERT INTO listing_media (listing_id, media_id, position) VALUES (:l, :m, 0)"),
+            {"l": listing_id, "m": media_id},
+        )
+        await db.commit()
+    await _purge(sessionmaker, storage)
+    assert (await _row(sessionmaker, media_id)).deleted_at is None and all(_stored(storage, keys))
+
+
+async def test_listing_photo_purged_first_cannot_be_attached(
+    sessionmaker: Session, storage: MemoryStorage
+) -> None:
+    """The purge first: attaching the photo waits for it, then finds it gone (404)."""
+    member = await make_account(sessionmaker, completed=True)
+    media_id, _ = await _media(sessionmaker, storage, member.id, age=timedelta(hours=25))
+    async with sessionmaker() as purging, sessionmaker() as attaching:
+        now = await purging.scalar(text("SELECT now()"))
+        await repository.mark_for_purge(
+            purging,
+            now=now,
+            abandoned_before=now - timedelta(hours=24),
+            refused_before=now - timedelta(days=30),
+        )
+        attach = asyncio.ensure_future(
+            check_listing_photos(attaching, owner_id=member.id, media_ids=[media_id])
+        )
+        await asyncio.sleep(1)
+        assert not attach.done()  # waiting for the purge
+        await purging.commit()
+        with pytest.raises(AppError) as refused:
+            await asyncio.wait_for(attach, timeout=10)
+    assert refused.value.status == 404
 
 
 async def test_late_worker_cannot_make_a_purged_media_ready(sessionmaker: Session) -> None:
@@ -468,16 +555,22 @@ async def test_files_overdue_reported(
     assert timedelta(hours=48) <= threshold < timedelta(hours=48, minutes=1)
 
 
-async def test_chosen_avatars_not_locked_by_the_purge(
-    sessionmaker: Session, storage: MemoryStorage
+async def test_photos_in_use_not_locked_by_the_purge(
+    sessionmaker: Session,
+    storage: MemoryStorage,
+    category: UUID,  # noqa: F811
 ) -> None:
-    """The purge locks only the avatar photos nobody chose: the others stay free for the
-    profile and the foreign keys pointing at them."""
+    """The purge locks only the photos nobody uses: a chosen avatar or a photo in a listing
+    stays free for the profile, the listing and the foreign keys pointing at them."""
     member = await make_account(sessionmaker, completed=True)
-    media_id, _ = await _media(
+    avatar, _ = await _media(
         sessionmaker, storage, member.id, age=timedelta(days=10), purpose="avatar"
     )
-    await _set_avatar(sessionmaker, member.id, media_id)
+    await _set_avatar(sessionmaker, member.id, avatar)
+    in_listing, _ = await _media(sessionmaker, storage, member.id, age=timedelta(days=10))
+    await _attach(
+        sessionmaker, await _listing(sessionmaker, member.id, category, "Lampe"), in_listing
+    )
     async with sessionmaker() as purging, sessionmaker() as other:
         now = await purging.scalar(text("SELECT now()"))
         await repository.mark_for_purge(
@@ -487,6 +580,7 @@ async def test_chosen_avatars_not_locked_by_the_purge(
             refused_before=now - timedelta(days=30),
         )
         await other.execute(
-            text("SELECT 1 FROM media WHERE id = :id FOR SHARE NOWAIT"), {"id": media_id}
+            text("SELECT 1 FROM media WHERE id = ANY(:ids) FOR SHARE NOWAIT"),
+            {"ids": [avatar, in_listing]},
         )
         await purging.rollback()

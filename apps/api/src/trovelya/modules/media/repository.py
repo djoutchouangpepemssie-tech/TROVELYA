@@ -265,15 +265,48 @@ def _rowcount(result: Any) -> int:
     return result.rowcount
 
 
+# Photos nobody uses: an avatar nobody chose, a listing photo in no listing (never attached, or
+# taken off a draft). A refusal follows its own retention (`refused_before`). Each: the photos
+# to lock, then the update, which checks again with a new snapshot.
+_UNUSED = (
+    (
+        text(
+            "SELECT id FROM media WHERE purpose = 'avatar' AND deleted_at IS NULL"
+            " AND status <> 'rejected' AND created_at < :abandoned_before"
+            " AND NOT EXISTS (SELECT 1 FROM users u WHERE u.avatar_media_id = media.id)"
+            " FOR NO KEY UPDATE SKIP LOCKED"
+        ),
+        text(
+            "UPDATE media m SET deleted_at = :now WHERE m.id = ANY(:ids)"
+            " AND NOT EXISTS (SELECT 1 FROM users u WHERE u.avatar_media_id = m.id)"
+        ),
+    ),
+    (
+        text(
+            "SELECT id FROM media WHERE purpose = 'listing' AND deleted_at IS NULL"
+            " AND status <> 'rejected' AND created_at < :abandoned_before"
+            " AND NOT EXISTS (SELECT 1 FROM listing_media lm WHERE lm.media_id = media.id)"
+            " FOR NO KEY UPDATE SKIP LOCKED"
+        ),
+        text(
+            "UPDATE media m SET deleted_at = :now WHERE m.id = ANY(:ids)"
+            " AND NOT EXISTS (SELECT 1 FROM listing_media lm WHERE lm.media_id = m.id)"
+        ),
+    ),
+)
+
+
 async def mark_for_purge(
     db: AsyncSession, *, now: datetime, abandoned_before: datetime, refused_before: datetime
 ) -> int:
-    """Purge, step 1: uploads never completed, avatar photos never chosen and old refusals are
-    marked deleted, so a worker or a member can no longer make them ready or an avatar.
+    """Purge, step 1: uploads never completed, photos nobody used (avatar never chosen, listing
+    photo in no listing) and old refusals are marked deleted, so a worker or a member can no
+    longer make them ready, an avatar or a listing's.
 
-    Avatar photos not chosen are locked first, skipping the ones a member is choosing right
-    now (`check_avatar` holds them FOR SHARE, which conflicts with FOR NO KEY UPDATE); the
-    second statement, with a new snapshot, sees the avatars chosen up to the lock."""
+    Unused photos are locked first, skipping the ones a member is choosing or attaching right
+    now (`check_avatar` and `check_listing_photos` hold them FOR SHARE, which conflicts with
+    FOR NO KEY UPDATE); the second statement, with a new snapshot, sees the photos used up to
+    the lock."""
     params = {"now": now, "abandoned_before": abandoned_before, "refused_before": refused_before}
     marked = 0
     for query in (
@@ -284,26 +317,11 @@ async def mark_for_purge(
     ):
         result = await db.execute(text(query), params)
         marked += _rowcount(result)
-    avatars: list[UUID] = list(
-        await db.scalars(
-            text(
-                "SELECT id FROM media WHERE purpose = 'avatar' AND deleted_at IS NULL"
-                " AND created_at < :abandoned_before"
-                " AND NOT EXISTS (SELECT 1 FROM users u WHERE u.avatar_media_id = media.id)"
-                " FOR NO KEY UPDATE SKIP LOCKED"
-            ),
-            {"abandoned_before": abandoned_before},
-        )
-    )
-    if avatars:
-        result = await db.execute(
-            text(
-                "UPDATE media m SET deleted_at = :now WHERE m.id = ANY(:ids)"
-                " AND NOT EXISTS (SELECT 1 FROM users u WHERE u.avatar_media_id = m.id)"
-            ),
-            {"now": now, "ids": avatars},
-        )
-        marked += _rowcount(result)
+    for lock, update in _UNUSED:
+        unused: list[UUID] = list(await db.scalars(lock, {"abandoned_before": abandoned_before}))
+        if unused:
+            result = await db.execute(update, {"now": now, "ids": unused})
+            marked += _rowcount(result)
     return marked
 
 
