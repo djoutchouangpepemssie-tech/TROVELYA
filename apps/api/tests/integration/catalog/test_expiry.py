@@ -78,6 +78,20 @@ async def test_expiry_after_120_days(
     )
 
 
+async def test_expiry_at_the_very_instant(
+    sessionmaker: Session,
+    category: UUID,  # noqa: F811
+) -> None:
+    """At `expires_at` exactly, the listing is expired (Q15: 120 days, not 120 days and more)."""
+    due = await _active(sessionmaker, category, published=timedelta(days=100))
+    async with sessionmaker() as db:
+        at = await db.scalar(text("SELECT expires_at FROM listings WHERE id = :l"), {"l": due})
+    await expire_listings(sessionmaker, clock=FixedClock(at - timedelta(microseconds=1)))
+    assert (await _state(sessionmaker, due))[0] == "active"
+    await expire_listings(sessionmaker, clock=FixedClock(at))
+    assert (await _state(sessionmaker, due))[0] == "expired"
+
+
 async def test_expire_job_idempotent(
     sessionmaker: Session,
     category: UUID,  # noqa: F811

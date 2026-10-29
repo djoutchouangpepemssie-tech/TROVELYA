@@ -69,7 +69,11 @@ async def test_renew_expired(client: AsyncClient, sessionmaker: Session) -> None
         await db.commit()
     renewed = await _call(client, account, listing["id"], "renew")
     assert renewed.status_code == 200, renewed.text
-    assert renewed.json()["status"] == "active"
+    back = renewed.json()
+    assert back["status"] == "active"
+    assert back["published_at"] > listing["published_at"]
+    at = datetime.fromisoformat(back["published_at"])
+    assert datetime.fromisoformat(back["expires_at"]) == at + timedelta(days=120)
     assert (await _history(sessionmaker, listing["id"]))[-1] == "renew"
 
 
