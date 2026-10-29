@@ -27,6 +27,7 @@ from trovelya.core.observability import (
     trace_engine,
 )
 from trovelya.core.redis import make_redis
+from trovelya.modules.ai.tasks import purge_old_calls_job
 from trovelya.modules.catalog.adapters.embedder import embedder_from_settings
 from trovelya.modules.catalog.service.embeddings import EMBED_JOB, catalog_subscriptions
 from trovelya.modules.catalog.tasks import (
@@ -195,6 +196,8 @@ class WorkerSettings:
         cron(purge_ended_listings_job, hour=2, minute=30, unique=True, timeout=3600),
         # Daily (Q36): reviewed anti-circumvention detections past 180 days are erased.
         cron(purge_old_detections_job, hour=5, minute=15, unique=True, timeout=600),
+        # Daily (Q46): the AI calls logged more than a year ago are erased.
+        cron(purge_old_calls_job, hour=5, minute=25, unique=True, timeout=600),
         # Daily (ADR-0020): listings never embedded, or by another model, are embedded.
         cron(reindex_embeddings_job, hour=1, minute=40, unique=True, timeout=3600),
     ]
