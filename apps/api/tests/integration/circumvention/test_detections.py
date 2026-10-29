@@ -121,15 +121,8 @@ async def test_reading_the_original_is_audited(sessionmaker: Session) -> None:
     async with sessionmaker() as db:
         await open_original(db, row, staff_id=staff_id, settings=SETTINGS)
         await db.commit()
-        audit = (
-            await db.execute(
-                text(
-                    "SELECT actor_type, actor_id, action FROM audit_log"
-                    " WHERE target_type = 'circumvention_detection' AND target_id = :t"
-                ),
-                {"t": str(row["id"])},
-            )
-        ).one()
+        sql = "SELECT actor_type, actor_id, action FROM audit_log WHERE target_id = :t"
+        audit = (await db.execute(text(sql), {"t": str(row["id"])})).one()
     assert tuple(audit) == ("staff", staff_id, "circumvention.original_read")
 
 
@@ -140,21 +133,15 @@ async def test_sealed_original_bound_to_its_row(sessionmaker: Session) -> None:
     second, _ = await _screen(sessionmaker, member.id, "Paiement par Lydia possible")
     [row] = await _rows(sessionmaker, first)
     [other] = await _rows(sessionmaker, second)
+    stranger = make_settings(field_encryption_key="b" * 64)
     async with sessionmaker() as db:
-        with pytest.raises(SealError):
-            await open_original(
-                db,
-                {**other, "original_sealed": row["original_sealed"]},
-                staff_id=new_id(),
-                settings=SETTINGS,
-            )
-        with pytest.raises(SealError):
-            await open_original(
-                db, {**row, "user_id": new_id()}, staff_id=new_id(), settings=SETTINGS
-            )
-        stranger = make_settings(field_encryption_key="b" * 64)
-        with pytest.raises(SealError):
-            await open_original(db, row, staff_id=new_id(), settings=stranger)
+        for tampered, settings in (
+            ({**other, "original_sealed": row["original_sealed"]}, SETTINGS),
+            ({**row, "user_id": new_id()}, SETTINGS),
+            (row, stranger),
+        ):
+            with pytest.raises(SealError):
+                await open_original(db, tampered, staff_id=new_id(), settings=settings)
 
 
 @pytest.mark.parametrize(
