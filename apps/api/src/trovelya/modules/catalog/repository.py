@@ -7,6 +7,7 @@ from typing import Any
 from uuid import UUID
 
 from sqlalchemy import Row, text
+from sqlalchemy.exc import IntegrityError
 from sqlalchemy.ext.asyncio import AsyncSession
 
 from trovelya.shared.ids import new_id
@@ -292,6 +293,16 @@ async def erase_catalog(db: AsyncSession, user_id: UUID) -> None:
     histories); the photos themselves go with the media eraser and purge. The member's own
     favorites and price watches on other listings go too, their favorite counts with them."""
     params = {"u": user_id}
+    # Listings first, in id order, as the daily purge locks them: the two never deadlock.
+    await db.execute(
+        text(
+            "SELECT id FROM listings WHERE seller_id = :u"
+            " OR id IN (SELECT listing_id FROM favorites WHERE user_id = :u)"
+            " OR id IN (SELECT listing_id FROM price_watches WHERE user_id = :u)"
+            " ORDER BY id FOR UPDATE"
+        ),
+        params,
+    )
     await db.execute(
         text(
             "WITH gone AS (DELETE FROM favorites WHERE user_id = :u RETURNING listing_id)"
@@ -754,3 +765,83 @@ _LOCK_DUE_LISTINGS = text(
 async def lock_due_listings(db: AsyncSession, *, now: datetime, limit: int) -> list[UUID]:
     """Active listings whose time is up, locked; the ones locked elsewhere are skipped."""
     return list(await db.scalars(_LOCK_DUE_LISTINGS, {"now": now, "limit": limit}))
+
+
+# --- Retention of ended listings (P2-T04e, Q19) ---------------------------------------------
+
+# Q19. When the listing reached its status: the last transition to it (the creation for a
+# listing that never moved). Deleted by the seller: 30 days after, but a listing removed by
+# moderation keeps its 180 days (DSA art. 20) and a reserved or sold one waits for the orders
+# of P4. The same condition picks the listings, then, with a new snapshot, deletes them: keep
+# the two copies alike.
+# Listings are locked in id order, as the account's eraser does: the two never deadlock.
+_LOCK_LISTINGS_TO_PURGE = text(
+    "SELECT l.id FROM listings l"
+    " WHERE (l.status IN ('withdrawn', 'expired', 'removed') OR l.deleted_at IS NOT NULL)"
+    " AND (CAST(:after AS uuid) IS NULL OR l.id > :after) AND"
+    " ((l.deleted_at IS NOT NULL AND l.deleted_at < :deleted_before"
+    " AND l.status NOT IN ('reserved', 'sold')"
+    " AND (l.status <> 'removed' OR coalesce((SELECT max(h.created_at)"
+    " FROM listing_status_history h WHERE h.listing_id = l.id AND h.to_status = l.status),"
+    " l.created_at) < :removed_before))"
+    " OR (l.deleted_at IS NULL AND l.status IN ('withdrawn', 'expired', 'removed')"
+    " AND coalesce((SELECT max(h.created_at) FROM listing_status_history h"
+    " WHERE h.listing_id = l.id AND h.to_status = l.status), l.created_at)"
+    " < CASE WHEN l.status = 'removed' THEN CAST(:removed_before AS timestamptz)"
+    " ELSE CAST(:ended_before AS timestamptz) END))"
+    " ORDER BY l.id LIMIT :limit FOR UPDATE SKIP LOCKED"
+)
+# The photos are read in the statement's snapshot, before the cascade removes their links.
+_DELETE_PURGEABLE = text(
+    "WITH gone AS (DELETE FROM listings l WHERE l.id = ANY(:ids) AND"
+    " ((l.deleted_at IS NOT NULL AND l.deleted_at < :deleted_before"
+    " AND l.status NOT IN ('reserved', 'sold')"
+    " AND (l.status <> 'removed' OR coalesce((SELECT max(h.created_at)"
+    " FROM listing_status_history h WHERE h.listing_id = l.id AND h.to_status = l.status),"
+    " l.created_at) < :removed_before))"
+    " OR (l.deleted_at IS NULL AND l.status IN ('withdrawn', 'expired', 'removed')"
+    " AND coalesce((SELECT max(h.created_at) FROM listing_status_history h"
+    " WHERE h.listing_id = l.id AND h.to_status = l.status), l.created_at)"
+    " < CASE WHEN l.status = 'removed' THEN CAST(:removed_before AS timestamptz)"
+    " ELSE CAST(:ended_before AS timestamptz) END))"
+    " RETURNING l.id, l.brand_id)"
+    " SELECT gone.brand_id,"
+    " ARRAY(SELECT lm.media_id FROM listing_media lm WHERE lm.listing_id = gone.id) AS photos"
+    " FROM gone"
+)
+# E19: a brand a member typed lives as long as a listing carries it.
+_DROP_UNUSED_MEMBER_BRANDS = text(
+    "DELETE FROM brands b WHERE b.id = ANY(:ids) AND b.origin = 'member'"
+    " AND NOT EXISTS (SELECT 1 FROM listings l WHERE l.brand_id = b.id)"
+)
+
+
+async def lock_listings_to_purge(
+    db: AsyncSession, cutoffs: Mapping[str, datetime], *, limit: int, after: UUID | None
+) -> list[UUID]:
+    params = {**cutoffs, "limit": limit, "after": after}
+    return list(await db.scalars(_LOCK_LISTINGS_TO_PURGE, params))
+
+
+async def delete_purgeable(
+    db: AsyncSession, listing_ids: Sequence[UUID], cutoffs: Mapping[str, datetime]
+) -> tuple[int, list[UUID], list[UUID]]:
+    """Deletes those of `listing_ids` still to purge (checked again: one put back online
+    meanwhile stays), with their photo links, favorites, price watches and histories. Returns
+    how many went, their photos and their brands."""
+    rows = (await db.execute(_DELETE_PURGEABLE, {**cutoffs, "ids": list(listing_ids)})).all()
+    photos = [media_id for row in rows for media_id in row.photos]
+    brands = [row.brand_id for row in rows if row.brand_id is not None]
+    return len(rows), photos, brands
+
+
+async def drop_unused_member_brands(db: AsyncSession, brand_ids: Sequence[UUID]) -> None:
+    """Member brands no listing carries any more go (E19, PII.md). A draft taking one at the
+    same moment wins: the deletion is given up, the brand kept."""
+    if not brand_ids:
+        return
+    try:
+        async with db.begin_nested():
+            await db.execute(_DROP_UNUSED_MEMBER_BRANDS, {"ids": list(set(brand_ids))})
+    except IntegrityError:
+        pass
