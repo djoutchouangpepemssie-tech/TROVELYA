@@ -1072,3 +1072,34 @@ async def my_favorites(
     params: dict[str, Any] = {"user_id": user_id, "available": available, "limit": limit}
     params |= {"at": at, "after_id": after_id}
     return [dict(row) for row in (await db.execute(_MY_FAVORITES, params)).mappings()]
+
+
+# --- Price history (P2-T08b) -------------------------------------------------------------------
+
+_LISTING_STATE = text(
+    "SELECT status::text AS status, seller_id, currency FROM listings"
+    " WHERE id = :id AND deleted_at IS NULL"
+)
+_PRICE_CHANGES = text(
+    "SELECT changed_at, price_minor FROM listing_price_history WHERE listing_id = :id"
+    " ORDER BY changed_at, id"
+)
+_TRANSITIONS = text(
+    "SELECT created_at, from_status::text AS from_status, to_status::text AS to_status"
+    " FROM listing_status_history WHERE listing_id = :id ORDER BY created_at, id"
+)
+
+
+async def listing_state(db: AsyncSession, listing_id: UUID) -> Row[Any] | None:
+    """Status, seller and currency of a listing not deleted, read without a lock."""
+    return (await db.execute(_LISTING_STATE, {"id": listing_id})).one_or_none()
+
+
+async def price_facts(
+    db: AsyncSession, listing_id: UUID
+) -> tuple[list[tuple[datetime, int]], list[tuple[datetime, str | None, str]]]:
+    """Every recorded price of the listing and every transition, each in the order recorded."""
+    rows = await db.execute(_PRICE_CHANGES, {"id": listing_id})
+    changes = [(row.changed_at, row.price_minor) for row in rows]
+    rows = await db.execute(_TRANSITIONS, {"id": listing_id})
+    return changes, [(row.created_at, row.from_status, row.to_status) for row in rows]
