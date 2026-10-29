@@ -1850,6 +1850,7 @@ export interface components {
             price: components["schemas"]["Money"];
             /** Published At */
             published_at: string | null;
+            quality: components["schemas"]["Quality"];
             /** Shipping Enabled */
             shipping_enabled: boolean;
             /** Short Id */
@@ -2293,6 +2294,7 @@ export interface components {
             price: components["schemas"]["Money"];
             /** Published At */
             published_at: string | null;
+            quality: components["schemas"]["Quality"];
             /** Shipping Enabled */
             shipping_enabled: boolean;
             /** Short Id */
@@ -2309,6 +2311,36 @@ export interface components {
             version: number;
             /** Weight G */
             weight_g: number | null;
+        };
+        /**
+         * Quality
+         * @description The listing's quality, 0 to 100 (P2-T07), with its tips, the most rewarding first.
+         */
+        Quality: {
+            /** Score */
+            score: number;
+            /** Tips */
+            tips: components["schemas"]["QualityTip"][];
+        };
+        /**
+         * QualityTip
+         * @description What would raise the score: `photos` (add `count`), `description` (write more), `brand`,
+         *     `attribute` (fill `attribute`, labelled `label`), worth `gain` points.
+         */
+        QualityTip: {
+            /** Attribute */
+            attribute: string | null;
+            /**
+             * Code
+             * @enum {string}
+             */
+            code: "photos" | "description" | "brand" | "attribute";
+            /** Count */
+            count: number | null;
+            /** Gain */
+            gain: number;
+            /** Label */
+            label: string | null;
         };
         /**
          * Relationship

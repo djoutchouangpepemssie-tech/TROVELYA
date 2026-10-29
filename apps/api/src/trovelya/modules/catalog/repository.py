@@ -399,7 +399,7 @@ _LISTING_CATEGORY = text(
     " FROM categories c WHERE c.key = :key"
 )
 _ATTRIBUTE_RULES = text(
-    "SELECT a.key, a.data_type, ca.is_required,"
+    "SELECT a.key, a.names->>'fr' AS label, a.data_type, ca.is_required,"
     " (SELECT array_agg(v->>'key') FROM jsonb_array_elements(a.enum_values) v) AS enum_keys,"
     " a.constraints"
     " FROM category_attributes ca JOIN attribute_definitions a ON a.id = ca.attribute_id"
@@ -417,19 +417,41 @@ _INSERT_LISTING = text(
     "INSERT INTO listings (id, short_id, seller_id, title, description, category_id, brand_id,"
     " condition, attributes, price_minor, currency, accepts_offers, handover_enabled,"
     " shipping_enabled, parcel_size, weight_g, location, location_public, h3_r7, h3_r9,"
-    " place_name, country_code, location_source, location_source_id, created_at, updated_at)"
+    " place_name, country_code, location_source, location_source_id, quality_score, created_at,"
+    " updated_at)"
     " VALUES (:id, :short_id, :seller_id, :title, :description, :category_id, :brand_id,"
     " CAST(:condition AS item_condition), CAST(:attributes AS jsonb), :price_minor, :currency,"
     " :accepts_offers, :handover_enabled, :shipping_enabled, :parcel_size, :weight_g,"
     " ST_MakePoint(:lon, :lat)::geography, ST_MakePoint(:public_lon, :public_lat)::geography,"
-    " :h3_r7, :h3_r9, :place_name, :country_code, :location_source, :location_source_id, :now,"
-    " :now)"
+    " :h3_r7, :h3_r9, :place_name, :country_code, :location_source, :location_source_id,"
+    " :quality_score, :now, :now)"
     " ON CONFLICT (short_id) DO NOTHING RETURNING id"
 )
 
 
 async def listing_category(db: AsyncSession, key: str) -> Row[Any] | None:
     return (await db.execute(_LISTING_CATEGORY, {"key": key})).one_or_none()
+
+
+async def listings_after(
+    db: AsyncSession, *, after: UUID | None, limit: int
+) -> list[tuple[UUID, UUID, int]]:
+    """(id, seller, stored score) of the listings not deleted, by id, after `after`."""
+    rows = await db.execute(
+        text(
+            "SELECT id, seller_id, quality_score FROM listings WHERE deleted_at IS NULL"
+            " AND (CAST(:after AS uuid) IS NULL OR id > :after) ORDER BY id LIMIT :limit"
+        ),
+        {"after": after, "limit": limit},
+    )
+    return [(row.id, row.seller_id, row.quality_score) for row in rows]
+
+
+async def set_quality_score(db: AsyncSession, listing_id: UUID, score: int) -> None:
+    await db.execute(
+        text("UPDATE listings SET quality_score = :score WHERE id = :id"),
+        {"id": listing_id, "score": score},
+    )
 
 
 async def attribute_rules(db: AsyncSession, category_id: UUID) -> Sequence[Row[Any]]:
@@ -479,8 +501,10 @@ async def record_price(db: AsyncSession, listing_id: UUID, price_minor: int, now
 
 _OWN_LISTING = text(
     "SELECT l.id, l.short_id, l.status::text AS status, l.version, l.title, l.description,"
-    " c.key AS category, b.name::text AS brand, l.condition::text AS condition, l.attributes,"
-    " l.price_minor, l.currency, l.accepts_offers, l.handover_enabled, l.shipping_enabled,"
+    " c.key AS category, c.id AS category_id, c.brand_policy, c.max_photos,"
+    " b.name::text AS brand,"
+    " l.condition::text AS condition, l.attributes, l.price_minor, l.currency, l.accepts_offers,"
+    " l.handover_enabled, l.shipping_enabled,"
     " l.parcel_size, l.weight_g, l.place_name, l.country_code, l.location_source,"
     " l.location_source_id,"
     " (SELECT coalesce(array_agg(m.media_id ORDER BY m.position), '{}')"
@@ -513,7 +537,7 @@ _UPDATE_LISTING = text(
     " condition = CAST(:condition AS item_condition), attributes = CAST(:attributes AS jsonb),"
     " price_minor = :price_minor, currency = :currency, accepts_offers = :accepts_offers,"
     " handover_enabled = :handover_enabled, shipping_enabled = :shipping_enabled,"
-    " parcel_size = :parcel_size, weight_g = :weight_g,"
+    " parcel_size = :parcel_size, weight_g = :weight_g, quality_score = :quality_score,"
     " location = CASE WHEN :locate THEN ST_MakePoint(:lon, :lat)::geography ELSE location END,"
     " location_public = CASE WHEN :locate"
     " THEN ST_MakePoint(:public_lon, :public_lat)::geography ELSE location_public END,"

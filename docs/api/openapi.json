@@ -1676,6 +1676,9 @@
             ],
             "title": "Published At"
           },
+          "quality": {
+            "$ref": "#/components/schemas/Quality"
+          },
           "shipping_enabled": {
             "title": "Shipping Enabled",
             "type": "boolean"
@@ -1736,7 +1739,8 @@
           "created_at",
           "updated_at",
           "published_at",
-          "expires_at"
+          "expires_at",
+          "quality"
         ],
         "title": "ListingOut",
         "type": "object"
@@ -2947,6 +2951,9 @@
             ],
             "title": "Published At"
           },
+          "quality": {
+            "$ref": "#/components/schemas/Quality"
+          },
           "shipping_enabled": {
             "title": "Shipping Enabled",
             "type": "boolean"
@@ -3008,9 +3015,95 @@
           "updated_at",
           "published_at",
           "expires_at",
+          "quality",
           "moderation"
         ],
         "title": "PublishedOut",
+        "type": "object"
+      },
+      "Quality": {
+        "description": "The listing's quality, 0 to 100 (P2-T07), with its tips, the most rewarding first.",
+        "properties": {
+          "score": {
+            "maximum": 100.0,
+            "minimum": 0.0,
+            "title": "Score",
+            "type": "integer"
+          },
+          "tips": {
+            "items": {
+              "$ref": "#/components/schemas/QualityTip"
+            },
+            "title": "Tips",
+            "type": "array"
+          }
+        },
+        "required": [
+          "score",
+          "tips"
+        ],
+        "title": "Quality",
+        "type": "object"
+      },
+      "QualityTip": {
+        "description": "What would raise the score: `photos` (add `count`), `description` (write more), `brand`,\n`attribute` (fill `attribute`, labelled `label`), worth `gain` points.",
+        "properties": {
+          "attribute": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Attribute"
+          },
+          "code": {
+            "enum": [
+              "photos",
+              "description",
+              "brand",
+              "attribute"
+            ],
+            "title": "Code",
+            "type": "string"
+          },
+          "count": {
+            "anyOf": [
+              {
+                "type": "integer"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Count"
+          },
+          "gain": {
+            "title": "Gain",
+            "type": "integer"
+          },
+          "label": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Label"
+          }
+        },
+        "required": [
+          "code",
+          "gain",
+          "count",
+          "attribute",
+          "label"
+        ],
+        "title": "QualityTip",
         "type": "object"
       },
       "Relationship": {

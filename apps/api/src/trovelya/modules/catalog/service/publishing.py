@@ -123,6 +123,8 @@ async def _put_online(
                 reason_text=", ".join(label(c) for c in verdict.reasons),
             )
     listing = await own_listing(db, seller_id=seller_id, listing_id=listing_id)
+    # The text may have been masked (Q12): the stored score follows what the seller reads.
+    await repository.set_quality_score(db, listing_id, listing.quality.score)
     return PublishedOut(
         **listing.model_dump(),
         moderation=ModerationOut(
