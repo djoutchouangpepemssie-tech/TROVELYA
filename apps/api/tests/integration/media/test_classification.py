@@ -96,8 +96,7 @@ def test_classifier_chosen_by_settings(provider: str, configured: bool) -> None:
 
 @pytest.mark.parametrize("environment", ["preview", "staging", "production"])
 def test_fake_classifier_refused_outside_development(environment: str) -> None:
-    """Q38: a fake classifier scores everything 0; deployed by mistake it would put every
-    listing online unchecked."""
+    """Q38: deployed by mistake, the fake classifier (all 0) would let every listing through."""
     with pytest.raises(ValueError, match="IMAGE_CLASSIFIER"):
         make_settings(env=environment, image_classifier="fake")
 
