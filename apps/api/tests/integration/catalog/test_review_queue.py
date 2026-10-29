@@ -13,6 +13,7 @@ from sqlalchemy import text
 from tests.integration.catalog.test_drafts import Session, create, draft, seller
 from tests.integration.catalog.test_withdraw_renew import _call  # pyright: ignore[reportPrivateUsage]
 from tests.integration.identity.test_staff_access import Staff, make_staff
+from trovelya.modules.catalog.service.review import STAFF_REASONS
 from trovelya.shared.clock import FixedClock
 
 QUEUE = "/v1/staff/moderation/listings"
@@ -96,8 +97,12 @@ async def test_queue_oldest_first_with_reasons(client: AsyncClient, sessionmaker
     item = items[ids.index(first["id"])]
     assert item["reasons"] == [{"code": "weapons", "label": "Armes et munitions"}]
     assert item["title"] == "Robe en lin bleue"
+    assert (item["category"], item["category_name"]) == ("mode.femme.robes", "Robes")
     assert len(item["photos"]) == 1
     assert {"submitted_at", "seller_id", "detections"} <= set(item)
+    reasons = response.json()["reject_reasons"]
+    assert [r["code"] for r in reasons] == list(STAFF_REASONS)  # the list a rejection checks
+    assert {"code": "other", "label": "Autre motif"} in reasons
 
 
 async def test_approve_publishes_and_audits(client: AsyncClient, sessionmaker: Session) -> None:

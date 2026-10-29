@@ -45,8 +45,10 @@ def check_reason(reason_code: str | None, reason_text: str | None) -> None:
         raise AppError(ErrorCode.VALIDATION_ERROR, 422, errors=[error])
 
 
-async def queue(db: AsyncSession, *, public_url: str | None, limit: int) -> list[dict[str, Any]]:
-    rows = await repository.review_queue(db, limit=limit)
+async def queue(
+    db: AsyncSession, *, staff_id: UUID, public_url: str | None, limit: int
+) -> list[dict[str, Any]]:
+    rows = await repository.review_queue(db, staff_id=staff_id, limit=limit)
     photos = await listing_photos.photo_variants_by_id(
         db, [m for row in rows for m in row["media_ids"]], public_url=public_url
     )
@@ -56,7 +58,10 @@ async def queue(db: AsyncSession, *, public_url: str | None, limit: int) -> list
         reason = row["reason_code"]
         items.append(
             {
-                **{k: row[k] for k in ("id", "short_id", "title", "description", "category")},
+                **{
+                    k: row[k]
+                    for k in ("id", "short_id", "title", "description", "category", "category_name")
+                },
                 **{k: row[k] for k in ("seller_id", "submitted_at", "reason_text")},
                 "price": {"amount_minor": row["price_minor"], "currency": row["currency"]},
                 "reasons": [{"code": reason, "label": label(reason)}] if reason else [],

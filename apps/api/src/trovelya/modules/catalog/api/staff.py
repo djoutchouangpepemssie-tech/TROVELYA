@@ -40,13 +40,17 @@ _DECISION_ERRORS: dict[int | str, dict[str, str]] = {
 
 @router.get("/moderation/listings", operation_id="staff_review_queue")
 async def get_review_queue(
-    request: Request, db: Uow, _: Reviewer, limit: Annotated[int, Query(ge=1, le=100)] = 50
+    request: Request, db: Uow, staff: Reviewer, limit: Annotated[int, Query(ge=1, le=100)] = 50
 ) -> ReviewQueue:
-    """The listings awaiting moderation, the longest waiting first."""
+    """The listings awaiting moderation, the longest waiting first, but the reviewer's own."""
     items = await review.queue(
-        db, public_url=request.app.state.settings.media_public_url, limit=limit
+        db,
+        staff_id=staff.user.id,
+        public_url=request.app.state.settings.media_public_url,
+        limit=limit,
     )
-    return ReviewQueue.model_validate({"items": items})
+    reasons = [{"code": code, "label": label} for code, label in review.STAFF_REASONS.items()]
+    return ReviewQueue.model_validate({"items": items, "reject_reasons": reasons})
 
 
 @router.post(

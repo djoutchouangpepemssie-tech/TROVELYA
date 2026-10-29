@@ -3078,6 +3078,10 @@
             "title": "Category",
             "type": "string"
           },
+          "category_name": {
+            "title": "Category Name",
+            "type": "string"
+          },
           "description": {
             "title": "Description",
             "type": "string"
@@ -3151,6 +3155,7 @@
           "title",
           "description",
           "category",
+          "category_name",
           "price",
           "seller_id",
           "submitted_at",
@@ -3170,10 +3175,18 @@
             },
             "title": "Items",
             "type": "array"
+          },
+          "reject_reasons": {
+            "items": {
+              "$ref": "#/components/schemas/ModerationReason"
+            },
+            "title": "Reject Reasons",
+            "type": "array"
           }
         },
         "required": [
-          "items"
+          "items",
+          "reject_reasons"
         ],
         "title": "ReviewQueue",
         "type": "object"
@@ -6401,7 +6414,7 @@
     },
     "/v1/staff/moderation/listings": {
       "get": {
-        "description": "The listings awaiting moderation, the longest waiting first.",
+        "description": "The listings awaiting moderation, the longest waiting first, but the reviewer's own.",
         "operationId": "staff_review_queue",
         "parameters": [
           {

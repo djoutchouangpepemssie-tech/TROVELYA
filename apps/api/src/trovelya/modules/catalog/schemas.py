@@ -339,6 +339,7 @@ class ReviewItem(BaseModel):
     title: str
     description: str
     category: str
+    category_name: str
     price: Money
     seller_id: UUID
     submitted_at: datetime
@@ -350,6 +351,8 @@ class ReviewItem(BaseModel):
 
 class ReviewQueue(BaseModel):
     items: list[ReviewItem]
+    # The closed list a rejection or a removal takes its reason from (`other` needs a text).
+    reject_reasons: list[ModerationReason]
 
 
 class StaffDecisionIn(BaseModel):
