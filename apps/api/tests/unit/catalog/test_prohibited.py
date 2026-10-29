@@ -88,22 +88,10 @@ def test_refusal_wins_over_review() -> None:
 
 def test_every_reason_has_a_readable_label() -> None:
     """Each motive of 8.17 (and the drugs) is a reason code with its French label."""
-    assert set(PROHIBITED.reasons) == {
-        "weapons",
-        "counterfeit",
-        "medicines",
-        "drugs",
-        "tobacco",
-        "alcohol",
-        "animals",
-        "protected_species",
-        "adult",
-        "digital_accounts",
-        "transport_tickets",
-        "recalled",
-        "stolen",
-        "identity_documents",
-    }
+    assert " ".join(PROHIBITED.reasons) == (
+        "weapons counterfeit medicines drugs tobacco alcohol animals protected_species adult"
+        " digital_accounts transport_tickets recalled stolen identity_documents"
+    )
     assert all(label and label[0].isupper() for label in PROHIBITED.labels.values())
 
 

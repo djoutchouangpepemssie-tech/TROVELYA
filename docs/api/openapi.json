@@ -2312,6 +2312,63 @@
         "title": "MediaOut",
         "type": "object"
       },
+      "ModerationOut": {
+        "description": "What the moderation decided when the listing was put online (P2-T05b).",
+        "properties": {
+          "notice": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Notice"
+          },
+          "outcome": {
+            "enum": [
+              "online",
+              "review",
+              "refused"
+            ],
+            "title": "Outcome",
+            "type": "string"
+          },
+          "reasons": {
+            "items": {
+              "$ref": "#/components/schemas/ModerationReason"
+            },
+            "title": "Reasons",
+            "type": "array"
+          }
+        },
+        "required": [
+          "outcome",
+          "reasons",
+          "notice"
+        ],
+        "title": "ModerationOut",
+        "type": "object"
+      },
+      "ModerationReason": {
+        "properties": {
+          "code": {
+            "title": "Code",
+            "type": "string"
+          },
+          "label": {
+            "title": "Label",
+            "type": "string"
+          }
+        },
+        "required": [
+          "code",
+          "label"
+        ],
+        "title": "ModerationReason",
+        "type": "object"
+      },
       "Money": {
         "description": "Section 11.1: an amount in minor units and its currency; euros only for now.",
         "properties": {
@@ -2773,6 +2830,187 @@
           "following_count"
         ],
         "title": "PublicProfile",
+        "type": "object"
+      },
+      "PublishedOut": {
+        "description": "The listing after `publish` or `renew`, with the moderation's decision.",
+        "properties": {
+          "accepts_offers": {
+            "title": "Accepts Offers",
+            "type": "boolean"
+          },
+          "attributes": {
+            "additionalProperties": true,
+            "title": "Attributes",
+            "type": "object"
+          },
+          "brand": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Brand"
+          },
+          "category": {
+            "title": "Category",
+            "type": "string"
+          },
+          "condition": {
+            "$ref": "#/components/schemas/ItemCondition"
+          },
+          "country_code": {
+            "title": "Country Code",
+            "type": "string"
+          },
+          "created_at": {
+            "format": "date-time",
+            "title": "Created At",
+            "type": "string"
+          },
+          "description": {
+            "title": "Description",
+            "type": "string"
+          },
+          "expires_at": {
+            "anyOf": [
+              {
+                "format": "date-time",
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Expires At"
+          },
+          "handover_enabled": {
+            "title": "Handover Enabled",
+            "type": "boolean"
+          },
+          "id": {
+            "format": "uuid",
+            "title": "Id",
+            "type": "string"
+          },
+          "location": {
+            "$ref": "#/components/schemas/ListingLocationIn"
+          },
+          "media_ids": {
+            "items": {
+              "format": "uuid",
+              "type": "string"
+            },
+            "title": "Media Ids",
+            "type": "array"
+          },
+          "moderation": {
+            "$ref": "#/components/schemas/ModerationOut"
+          },
+          "parcel_size": {
+            "anyOf": [
+              {
+                "enum": [
+                  "xs",
+                  "s",
+                  "m",
+                  "l",
+                  "xl"
+                ],
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Parcel Size"
+          },
+          "place_name": {
+            "title": "Place Name",
+            "type": "string"
+          },
+          "price": {
+            "$ref": "#/components/schemas/Money"
+          },
+          "published_at": {
+            "anyOf": [
+              {
+                "format": "date-time",
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Published At"
+          },
+          "shipping_enabled": {
+            "title": "Shipping Enabled",
+            "type": "boolean"
+          },
+          "short_id": {
+            "title": "Short Id",
+            "type": "string"
+          },
+          "status": {
+            "$ref": "#/components/schemas/ListingStatus"
+          },
+          "title": {
+            "title": "Title",
+            "type": "string"
+          },
+          "updated_at": {
+            "format": "date-time",
+            "title": "Updated At",
+            "type": "string"
+          },
+          "version": {
+            "title": "Version",
+            "type": "integer"
+          },
+          "weight_g": {
+            "anyOf": [
+              {
+                "type": "integer"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Weight G"
+          }
+        },
+        "required": [
+          "id",
+          "short_id",
+          "status",
+          "version",
+          "title",
+          "description",
+          "category",
+          "brand",
+          "condition",
+          "attributes",
+          "price",
+          "accepts_offers",
+          "handover_enabled",
+          "shipping_enabled",
+          "parcel_size",
+          "weight_g",
+          "place_name",
+          "country_code",
+          "location",
+          "media_ids",
+          "created_at",
+          "updated_at",
+          "published_at",
+          "expires_at",
+          "moderation"
+        ],
+        "title": "PublishedOut",
         "type": "object"
       },
       "Relationship": {
@@ -4511,7 +4749,7 @@
     },
     "/v1/listings/{listing_id}/publish": {
       "post": {
-        "description": "A draft goes online for `listings.expiry_days` (120) days.",
+        "description": "A draft goes online for `listings.expiry_days` (120) days, to review or is refused, as\nthe moderation decides (the answer says which and why).",
         "operationId": "listing_publish",
         "parameters": [
           {
@@ -4530,7 +4768,7 @@
             "content": {
               "application/json": {
                 "schema": {
-                  "$ref": "#/components/schemas/ListingOut"
+                  "$ref": "#/components/schemas/PublishedOut"
                 }
               }
             },
@@ -4560,7 +4798,7 @@
     },
     "/v1/listings/{listing_id}/renew": {
       "post": {
-        "description": "Back online for 120 days: an expired listing is renewed, a withdrawn one republished.",
+        "description": "Back online for 120 days: an expired listing is renewed, a withdrawn one republished;\nmoderated as a first publication (Q32).",
         "operationId": "listing_renew",
         "parameters": [
           {
@@ -4579,7 +4817,7 @@
             "content": {
               "application/json": {
                 "schema": {
-                  "$ref": "#/components/schemas/ListingOut"
+                  "$ref": "#/components/schemas/PublishedOut"
                 }
               }
             },
@@ -4609,7 +4847,7 @@
     },
     "/v1/listings/{listing_id}/withdraw": {
       "post": {
-        "description": "Take an active listing out of the shop window.",
+        "description": "Take a listing out of the shop window, or back from the moderation (Q29).",
         "operationId": "listing_withdraw",
         "parameters": [
           {
@@ -4638,7 +4876,7 @@
             "description": "Not the caller's listing"
           },
           "409": {
-            "description": "Not active"
+            "description": "Neither active nor awaiting moderation"
           },
           "422": {
             "content": {

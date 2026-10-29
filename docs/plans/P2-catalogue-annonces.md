@@ -597,7 +597,7 @@ Découpée en deux PR de 600 lignes au plus : **T05b1** (texte, catégories, coo
 
 **Branche :** `feat/P2-T05b1-moderation-texte`.
 
-**Fichiers :** `modules/catalog/state_machine.py`, `modules/catalog/service/{moderation,publishing}.py`, `modules/catalog/moderation_terms.py` (graine des interdits), migration (paramètre `catalog.prohibited`), `modules/circumvention/service.py` (normalisation des mots exposée), `tests/integration/catalog/test_moderation.py`, `tests/unit/catalog/test_prohibited.py`.
+**Fichiers :** `modules/catalog/state_machine.py`, `modules/catalog/service/{moderation,publishing}.py`, `modules/catalog/seed/prohibited.yaml` (la liste [PARAM] `catalog.prohibited`, en graine versionnée et relue par PR jusqu'au back-office), `tests/integration/catalog/test_moderation.py`, `tests/unit/catalog/test_prohibited.py`. Les motifs sont ceux de 8.17, plus « Stupéfiants » (illicites par la loi ; la modération d'images de 8.17 les vise déjà).
 
 **Contenu :**
 - Transitions ajoutées à 9.1 : `pending_review` + `withdraw` → `withdrawn` (Q29) ; `withdrawn` et `expired` + `submit_for_review` → `pending_review` (Q32).

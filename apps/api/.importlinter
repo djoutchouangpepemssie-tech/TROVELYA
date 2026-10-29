@@ -116,6 +116,10 @@ forbidden_modules =
 [importlinter:contract:module-circumvention]
 name = Other modules use circumvention only through circumvention.service
 type = forbidden
+# circumvention.service reaching its own modules is not a breach: the catalog screens a
+# listing through it (P2-T05b1). Any other path to these modules still is.
+ignore_imports =
+    trovelya.modules.circumvention.service -> trovelya.modules.circumvention.*
 source_modules =
     trovelya.modules.ledger
     trovelya.modules.catalog

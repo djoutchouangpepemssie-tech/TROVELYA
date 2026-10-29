@@ -220,6 +220,25 @@ class ListingOut(BaseModel):
     expires_at: datetime | None  # while online: when it expires (Q15)
 
 
+class ModerationReason(BaseModel):
+    code: str  # `alcohol`, `weapons`… (8.17), `restricted_category`
+    label: str  # in French, for the seller
+
+
+class ModerationOut(BaseModel):
+    """What the moderation decided when the listing was put online (P2-T05b)."""
+
+    outcome: Literal["online", "review", "refused"]
+    reasons: list[ModerationReason]
+    notice: str | None  # the reminder when contact details were masked (Q12)
+
+
+class PublishedOut(ListingOut):
+    """The listing after `publish` or `renew`, with the moderation's decision."""
+
+    moderation: ModerationOut
+
+
 class CategoryRef(BaseModel):
     key: str
     name: str

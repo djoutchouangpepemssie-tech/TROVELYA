@@ -4,11 +4,13 @@ The seller's lock comes first, as for drafts: one write of a seller's listings a
 two publications cannot both slip under the quota, and the photos are never taken in two
 orders (no deadlock). Checks run in this order: 404 not theirs, 403 `publish_forbidden` with
 its reason (Q1), 409 `invalid_transition`, 422 `photo_required`, 429 `publication_limit`; the
-moderation decides last, on a listing that may go online.
+moderation decides last, on a listing that may go online (P2-T05b, Q32: every putting online,
+first or not): online at once, to review (`submit_for_review`), or refused (`submit_for_review`
+then `reject` by the platform, the reason in the history).
 """
 
 import math
-from collections.abc import Awaitable, Callable, Collection
+from collections.abc import Callable, Collection
 from datetime import datetime, timedelta
 from typing import Protocol
 from uuid import UUID
@@ -18,9 +20,15 @@ from sqlalchemy.ext.asyncio import AsyncSession
 from trovelya.core.errors import AppError, ErrorCode, FieldError
 from trovelya.modules.catalog import policies, repository
 from trovelya.modules.catalog.models import ListingStatus
-from trovelya.modules.catalog.schemas import ListingOut
+from trovelya.modules.catalog.schemas import (
+    ListingOut,
+    ModerationOut,
+    ModerationReason,
+    PublishedOut,
+)
 from trovelya.modules.catalog.service.listings import own_listing
-from trovelya.modules.catalog.service.states import Actor, apply_transition
+from trovelya.modules.catalog.service.moderation import Moderated, label
+from trovelya.modules.catalog.service.states import SYSTEM, Actor, apply_transition
 from trovelya.modules.catalog.state_machine import ListingEvent
 from trovelya.shared.clock import Clock, FixedClock
 
@@ -34,16 +42,11 @@ _REFUSALS = {
 
 
 class ModerationGate(Protocol):
-    """Which way a draft goes online: `publish` (low risk, at once) or `submit_for_review`."""
+    """Whether a listing goes online, to review or is refused (service/moderation.py)."""
 
-    async def route(self, db: AsyncSession, listing_id: UUID) -> ListingEvent: ...
-
-
-class PublishEverything:
-    """Until P2-T05b brings the moderation: every listing goes online at once."""
-
-    async def route(self, db: AsyncSession, listing_id: UUID) -> ListingEvent:
-        return ListingEvent.PUBLISH
+    async def moderate(
+        self, db: AsyncSession, *, listing_id: UUID, seller_id: UUID, clock: Clock
+    ) -> Moderated: ...
 
 
 def retry_after(put_online: list[datetime], limit: int, now: datetime) -> int | None:
@@ -75,9 +78,10 @@ async def _put_online(
     seller_id: UUID,
     listing_id: UUID,
     allowed: Collection[ListingStatus],
-    event_for: Callable[[ListingStatus], Awaitable[ListingEvent]],
+    online_event: Callable[[ListingStatus], ListingEvent],
+    gate: ModerationGate,
     clock: Clock,
-) -> ListingOut:
+) -> PublishedOut:
     await repository.lock_seller_listings(db, seller_id)
     locked = await repository.lock_own_listing(db, listing_id=listing_id, seller_id=seller_id)
     if locked is None:
@@ -95,18 +99,42 @@ async def _put_online(
     if not await repository.has_ready_photo(db, listing_id):
         raise AppError(ErrorCode.PHOTO_REQUIRED, 422)
     await check_publication_quota(db, seller_id, clock=clock)
-    event = await event_for(status)
     days = await repository.setting_int(db, "listings.expiry_days")
-    now = clock.now()  # one instant for the history, `published_at` and `expires_at`
-    await apply_transition(
-        db,
-        listing_id=listing_id,
-        event=event,
-        actor=Actor("user", seller_id),
-        clock=FixedClock(now),
-        online_until=now + timedelta(days=days),
+    now = FixedClock(clock.now())  # one instant for the moderation and the transitions
+    moderated = await gate.moderate(db, listing_id=listing_id, seller_id=seller_id, clock=now)
+    verdict = moderated.verdict
+    seller = Actor("user", seller_id)
+    if verdict.outcome == "online":
+        await apply_transition(
+            db,
+            listing_id=listing_id,
+            event=online_event(status),
+            actor=seller,
+            clock=now,
+            online_until=now.now() + timedelta(days=days),
+        )
+    else:  # to review, and refused by the platform at once when the item is prohibited
+        steps = [(ListingEvent.SUBMIT_FOR_REVIEW, seller)]
+        if verdict.outcome == "refused":
+            steps.append((ListingEvent.REJECT, SYSTEM))
+        for event, actor in steps:
+            await apply_transition(
+                db,
+                listing_id=listing_id,
+                event=event,
+                actor=actor,
+                clock=now,
+                reason_code=verdict.reasons[0],
+            )
+    listing = await own_listing(db, seller_id=seller_id, listing_id=listing_id)
+    return PublishedOut(
+        **listing.model_dump(),
+        moderation=ModerationOut(
+            outcome=verdict.outcome,
+            reasons=[ModerationReason(code=c, label=label(c)) for c in verdict.reasons],
+            notice=moderated.notice,
+        ),
     )
-    return await own_listing(db, seller_id=seller_id, listing_id=listing_id)
 
 
 async def publish(
@@ -116,18 +144,15 @@ async def publish(
     listing_id: UUID,
     gate: ModerationGate,
     clock: Clock,
-) -> ListingOut:
-    """A draft goes online, or to moderation when the gate says so."""
-
-    async def route(_: ListingStatus) -> ListingEvent:
-        return await gate.route(db, listing_id)
-
+) -> PublishedOut:
+    """A draft goes online, to review or is refused, as the moderation decides."""
     return await _put_online(
         db,
         seller_id=seller_id,
         listing_id=listing_id,
         allowed={ListingStatus.DRAFT},
-        event_for=route,
+        online_event=lambda _: ListingEvent.PUBLISH,
+        gate=gate,
         clock=clock,
     )
 
@@ -139,19 +164,19 @@ _BACK_ONLINE = {
 }
 
 
-async def renew(db: AsyncSession, *, seller_id: UUID, listing_id: UUID, clock: Clock) -> ListingOut:
+async def renew(
+    db: AsyncSession, *, seller_id: UUID, listing_id: UUID, gate: ModerationGate, clock: Clock
+) -> PublishedOut:
     """An expired listing renewed, a withdrawn one republished: back online for
-    `listings.expiry_days` under the publication's rules; 409 from any other status."""
-
-    async def back_online(status: ListingStatus) -> ListingEvent:
-        return _BACK_ONLINE[status]
-
+    `listings.expiry_days` under the publication's rules and moderation (Q32); 409 from any
+    other status."""
     return await _put_online(
         db,
         seller_id=seller_id,
         listing_id=listing_id,
         allowed=_BACK_ONLINE.keys(),
-        event_for=back_online,
+        online_event=_BACK_ONLINE.__getitem__,
+        gate=gate,
         clock=clock,
     )
 
@@ -159,7 +184,8 @@ async def renew(db: AsyncSession, *, seller_id: UUID, listing_id: UUID, clock: C
 async def withdraw(
     db: AsyncSession, *, seller_id: UUID, listing_id: UUID, clock: Clock
 ) -> ListingOut:
-    """The seller takes an active listing down, whatever the state of their account."""
+    """The seller takes an active listing down, or one awaiting moderation (Q29), whatever
+    the state of their account."""
     await repository.lock_seller_listings(db, seller_id)
     if await repository.lock_own_listing(db, listing_id=listing_id, seller_id=seller_id) is None:
         raise AppError(ErrorCode.NOT_FOUND, 404)

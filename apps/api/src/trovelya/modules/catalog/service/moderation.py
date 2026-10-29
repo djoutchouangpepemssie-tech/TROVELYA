@@ -1,16 +1,27 @@
-"""The moderation of a listing put online (section 8.17, plan P2-T05b, Q32, Q33, Q34).
+"""The moderation of a listing put online (section 8.16, 8.17, plan P2-T05b, Q12, Q32, Q33,
+Q34), in this order:
 
-`prohibited` reads the title and the description against `seed/prohibited.yaml`: a term
-without ambiguity refuses the listing with its reason, an ambiguous one sends it to review,
-known innocent phrases are taken out first. Pure: no database.
+1. prohibited items: `prohibited` reads the title and the description against
+   `seed/prohibited.yaml` (a term without ambiguity refuses the listing with its reason, an
+   ambiguous one sends it to review, known innocent phrases are taken out first);
+2. a category always checked by a human (`is_restricted`) sends it to review;
+3. contact details are masked in the listing itself, recorded, and the seller reminded.
+Never commits.
 """
 
 import re
 import unicodedata
 from dataclasses import dataclass
 from typing import Any, Literal
+from uuid import UUID
 
+from sqlalchemy.ext.asyncio import AsyncSession
+
+from trovelya.core.config import Settings
+from trovelya.modules.catalog import repository
 from trovelya.modules.catalog.service.seed import read_seed_file
+from trovelya.modules.circumvention.service import screen
+from trovelya.shared.clock import Clock
 
 Outcome = Literal["online", "review", "refused"]
 
@@ -100,3 +111,62 @@ def prohibited(title: str, description: str, *, terms: Prohibited = PROHIBITED) 
     if reviewed:
         return Verdict("review", tuple(reviewed))
     return Verdict("online")
+
+
+RESTRICTED = "restricted_category"
+_OTHER_LABELS = {RESTRICTED: "Catégorie vérifiée par un humain"}
+NOTICE = (
+    "Pour ta sécurité, les coordonnées ont été masquées : échange avec l'acheteur par la "
+    "messagerie TROVÉLYA, c'est elle qui protège ton paiement et ta vente."
+)
+_LIMITS = {"title": 120, "description": 5000}
+
+
+def label(code: str) -> str:
+    """The French label of a reason code."""
+    return PROHIBITED.labels.get(code) or _OTHER_LABELS[code]
+
+
+def _fit(text: str, limit: int) -> str:
+    """A masked text longer than its column allows is cut, never the mask left half-way."""
+    return text if len(text) <= limit else text[: limit - 1] + "…"
+
+
+@dataclass(frozen=True, slots=True)
+class Moderated:
+    verdict: Verdict
+    notice: str | None = None  # the reminder when contact details were masked
+
+
+class Moderation:
+    """The moderation of P2-T05b1 (text); the images join it in T05b2."""
+
+    def __init__(self, settings: Settings) -> None:
+        self.settings = settings
+
+    async def moderate(
+        self, db: AsyncSession, *, listing_id: UUID, seller_id: UUID, clock: Clock
+    ) -> Moderated:
+        subject = await repository.moderation_subject(db, listing_id)
+        verdict = prohibited(subject.title, subject.description)
+        if verdict.outcome == "refused":
+            return Moderated(verdict)
+        if subject.is_restricted:
+            verdict = Verdict("review", (*verdict.reasons, RESTRICTED))
+        shown = {
+            field: await screen(
+                db,
+                user_id=seller_id,
+                source_type="listing",
+                source_id=listing_id,
+                text=getattr(subject, field),
+                settings=self.settings,
+                clock=clock,
+            )
+            for field in _LIMITS
+        }
+        if all(shown[field] == getattr(subject, field) for field in _LIMITS):
+            return Moderated(verdict)
+        fitted = {field: _fit(value, _LIMITS[field]) for field, value in shown.items()}
+        await repository.set_listing_text(db, listing_id, **fitted)
+        return Moderated(verdict, NOTICE)
