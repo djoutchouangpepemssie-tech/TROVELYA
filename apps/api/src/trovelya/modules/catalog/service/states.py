@@ -4,6 +4,7 @@ with its actor and reason, and a domain event leaves through the outbox (section
 the caller's transaction: a rolled-back transition leaves no trace. Never commits."""
 
 from dataclasses import dataclass
+from datetime import datetime
 from typing import Literal
 from uuid import UUID
 
@@ -70,6 +71,7 @@ async def apply_transition(
     clock: Clock,
     reason_code: str | None = None,
     reason_text: str | None = None,
+    online_until: datetime | None = None,
 ) -> Transition:
     """404 for a listing that does not exist or was deleted; 409 `invalid_transition` when
     the table does not allow `event` from the listing's status (nothing is written).
@@ -78,7 +80,8 @@ async def apply_transition(
     A seller's route takes `lock_seller_listings` then `lock_own_listing` first (the order of
     the drafts, so a publication and an edit never deadlock); a staff decision writes the audit
     log in the same transaction (E8). `reason_code` and `reason_text` come from the code or a
-    validated staff form: the history's checks reject anything else."""
+    validated staff form: the history's checks reject anything else. `online_until`: the
+    listing goes online now until then (`published_at`, `expires_at`, Q15)."""
     current = await repository.lock_listing_status(db, listing_id)
     if current is None:
         raise AppError(ErrorCode.NOT_FOUND, 404)
@@ -87,7 +90,10 @@ async def apply_transition(
         to_status = next_status(from_status, event)
     except InvalidTransition as exc:
         raise AppError(ErrorCode.INVALID_TRANSITION, 409) from exc
-    await repository.set_listing_status(db, listing_id, to_status)
+    now = clock.now()
+    await repository.set_listing_status(
+        db, listing_id, to_status, now=now, online_until=online_until
+    )
     await repository.record_transition(
         db,
         {
@@ -100,7 +106,7 @@ async def apply_transition(
             "actor_kind": actor.kind,
             "reason_code": reason_code,
             "reason_text": reason_text,
-            "created_at": clock.now(),
+            "created_at": now,
         },
     )
     await emit_event(

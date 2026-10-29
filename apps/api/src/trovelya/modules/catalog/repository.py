@@ -667,8 +667,12 @@ _LOCK_LISTING_STATUS = text(
     "SELECT status::text AS status, seller_id FROM listings"
     " WHERE id = :id AND deleted_at IS NULL FOR UPDATE"
 )
+# Going online sets its dates in the same UPDATE, so the version moves once.
 _SET_LISTING_STATUS = text(
-    "UPDATE listings SET status = CAST(:status AS listing_status) WHERE id = :id"
+    "UPDATE listings SET status = CAST(:status AS listing_status),"
+    " published_at = CASE WHEN CAST(:online_until AS timestamptz) IS NULL THEN published_at"
+    " ELSE :now END,"
+    " expires_at = coalesce(CAST(:online_until AS timestamptz), expires_at) WHERE id = :id"
 )
 _RECORD_TRANSITION = text(
     "INSERT INTO listing_status_history (id, listing_id, from_status, to_status, event,"
@@ -684,9 +688,20 @@ async def lock_listing_status(db: AsyncSession, listing_id: UUID) -> Row[Any] | 
     return (await db.execute(_LOCK_LISTING_STATUS, {"id": listing_id})).one_or_none()
 
 
-async def set_listing_status(db: AsyncSession, listing_id: UUID, status: str) -> None:
-    """The status alone; the version trigger moves `version` and `updated_at` with it."""
-    await db.execute(_SET_LISTING_STATUS, {"id": listing_id, "status": status})
+async def set_listing_status(
+    db: AsyncSession,
+    listing_id: UUID,
+    status: str,
+    *,
+    now: datetime,
+    online_until: datetime | None = None,
+) -> None:
+    """The status, and when the listing goes online (`online_until`), `published_at = now` and
+    `expires_at`; the version trigger moves `version` and `updated_at` once with it."""
+    await db.execute(
+        _SET_LISTING_STATUS,
+        {"id": listing_id, "status": status, "now": now, "online_until": online_until},
+    )
 
 
 async def record_transition(db: AsyncSession, values: Mapping[str, Any]) -> None:
@@ -698,12 +713,10 @@ async def record_transition(db: AsyncSession, values: Mapping[str, Any]) -> None
 
 # What a seller put online (Q24): every transition to the shop window they made themselves.
 _PUT_ONLINE_SINCE = text(
-    "SELECT count(*) AS n, min(created_at) AS oldest FROM listing_status_history"
+    "SELECT created_at FROM listing_status_history"
     " WHERE actor_id = :seller_id AND actor_kind = 'user' AND created_at > :since"
     " AND event IN ('publish', 'submit_for_review', 'republish', 'renew')"
-)
-_MARK_ONLINE = text(
-    "UPDATE listings SET published_at = :now, expires_at = :expires_at WHERE id = :id"
+    " ORDER BY created_at"
 )
 _HAS_READY_PHOTO = text(
     "SELECT EXISTS (SELECT 1 FROM listing_media lm JOIN media m ON m.id = lm.media_id"
@@ -711,14 +724,9 @@ _HAS_READY_PHOTO = text(
 )
 
 
-async def put_online_since(db: AsyncSession, seller_id: UUID, since: datetime) -> Row[Any]:
-    return (await db.execute(_PUT_ONLINE_SINCE, {"seller_id": seller_id, "since": since})).one()
-
-
-async def mark_online(
-    db: AsyncSession, listing_id: UUID, *, now: datetime, expires_at: datetime
-) -> None:
-    await db.execute(_MARK_ONLINE, {"id": listing_id, "now": now, "expires_at": expires_at})
+async def put_online_since(db: AsyncSession, seller_id: UUID, since: datetime) -> list[datetime]:
+    """When the seller put listings online after `since`, oldest first."""
+    return list(await db.scalars(_PUT_ONLINE_SINCE, {"seller_id": seller_id, "since": since}))
 
 
 async def has_ready_photo(db: AsyncSession, listing_id: UUID) -> bool:
