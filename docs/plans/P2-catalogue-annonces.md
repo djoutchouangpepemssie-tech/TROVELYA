@@ -68,6 +68,7 @@ Stockage objet Cloudflare R2 en juridiction UE (MinIO en local et en CI), deux b
 | E15 | 7.5 `listings` | La légende de la photo (pour l'embedding) et la raison de refus n'ont pas de colonne. | `media.moderation` garde la légende et les étiquettes de classification ; `listing_status_history.reason_code` + `reason_text` gardent les motifs. | — |
 | E16 | 11.5 rattachement des photos | Aucune route ne dit comment attacher des photos à une annonce. | Champ `media_ids` (liste ordonnée, 1 à 12) dans `POST` et `PATCH /listings` ; aucune route nouvelle. | — |
 | E17 | 7.5 `listings` | Les contrôles de valeurs ne sont pas tous écrits. | Seulement des formats et des bornes déjà dans le cahier : code pays et devise, modes de vente de la section 4, compteurs et score 0-100, montants `>= 0` (7.1). Aucune règle entre colonnes (offre minimale et prix, statut et dates, remise et livraison) : la machine à états (T04) et le service (T03b) les portent. `version` et `updated_at` ne suivent que le contenu de l'annonce (ni compteurs, ni score, ni données de recherche). | — |
+| E18 | 8.11 position publique, Q20 | Un décalage par source laisserait plusieurs tirages autour d'un même domicile (une adresse et une zone au même endroit, une zone supprimée puis recréée, une adresse ressaisie au mètre près) : leur moyenne approcherait l'adresse (revue de T03b2a). | Le décalage est tiré une fois par **lieu** du vendeur : une source à moins de 50 m d'un lieu déjà utilisé par ce vendeur reprend son décalage (translaté), sous un verrou par vendeur ; au-delà, nouveau tirage gardé. Table `listing_public_positions` (migration 0014). Le nom public d'une zone ou d'une ville doit être un simple nom de lieu (lettres, espaces, traits d'union, apostrophes, numéro d'arrondissement) : sinon, zone refusée et adresse nommée par son code postal. |
 
 ### 0.3 ADR produits par cette phase
 
@@ -435,9 +436,9 @@ tout ── T12 (parcours 2, démo, porte)
 
 ### P2-T03b — Brouillons, attributs, position et lecture d'une annonce
 
-*Livrée en trois PR : T03b1, les briques pures (validation des attributs, position publique, cellules H3, distance arrondie ; dépendance `h3` 4.5.0) ; T03b2, création et modification des brouillons ; T03b3, lecture, « mes annonces », grâce de l'effacement et purge des photos jamais rattachées.*
+*Livrée en trois PR : T03b1, les briques pures (validation des attributs, position publique, cellules H3, distance arrondie ; dépendance `h3` 4.5.0) ; T03b2, création et modification des brouillons, elle-même en deux PR (T03b2a : bornes Q21, décalage par lieu du vendeur (Q20, E18) avec la table `listing_public_positions` (migration 0014) et la position tirée d'une adresse ou d'une zone ; T03b2b : routes `POST` et `PATCH`) ; T03b3, lecture, « mes annonces », grâce de l'effacement et purge des photos jamais rattachées.*
 
-*Questions de la revue de T03b1 tranchées par Arcel le 26 octobre 2026 : Q20 (décalage par source de position) et Q21 (bornes des entiers et des années), appliquées dans T03b2.*
+*Questions de la revue de T03b1 tranchées par Arcel le 26 octobre 2026 : Q20 (décalage par source de position) et Q21 (bornes des entiers et des années), appliquées dans T03b2a (Q20 précisée par E18). En T03b2b, `current_year` des attributs vient de l'horloge dans le fuseau Europe/Paris (le 1er janvier à 0 h 30 à Paris, l'année est déjà la nouvelle). Nom du lieu d'une adresse : sa commune, ou l'arrondissement déduit du code postal pour Paris, Lyon et Marseille (aucun appel au géocodeur) ; pays d'une zone : `FR`, le géocodeur de l'IGN ne couvrant que la France (E10 de P1).*
 
 **Branche :** `feat/P2-T03b-brouillons`.
 

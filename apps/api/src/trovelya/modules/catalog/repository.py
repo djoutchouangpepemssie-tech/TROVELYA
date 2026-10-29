@@ -2,6 +2,7 @@
 
 import json
 from collections.abc import Mapping, Sequence
+from datetime import datetime
 from typing import Any
 from uuid import UUID
 
@@ -255,6 +256,13 @@ _EXPORT_PRICE_WATCHES = text(
     " JOIN listings l ON l.id = w.listing_id WHERE w.user_id = :user_id ORDER BY w.created_at"
 )
 
+# The member's places kept for public positions, with the date of the draw; not the public
+# position itself (derived). The place is kept even once its address or zone is gone.
+_EXPORT_PUBLIC_POSITIONS = text(
+    "SELECT ST_Y(location::geometry) AS latitude, ST_X(location::geometry) AS longitude, drawn_at"
+    " FROM listing_public_positions WHERE seller_id = :user_id ORDER BY drawn_at, id"
+)
+
 
 async def export_catalog(db: AsyncSession, user_id: UUID) -> dict[str, list[dict[str, Any]]]:
     params = {"user_id": user_id}
@@ -264,6 +272,7 @@ async def export_catalog(db: AsyncSession, user_id: UUID) -> dict[str, list[dict
             ("listings", _EXPORT_LISTINGS),
             ("favorites", _EXPORT_FAVORITES),
             ("price_watches", _EXPORT_PRICE_WATCHES),
+            ("listing_public_positions", _EXPORT_PUBLIC_POSITIONS),
         )
     }
 
@@ -284,3 +293,57 @@ async def erase_catalog(db: AsyncSession, user_id: UUID) -> None:
     )
     await db.execute(text("DELETE FROM price_watches WHERE user_id = :u"), params)
     await db.execute(text("DELETE FROM listings WHERE seller_id = :u"), params)
+    await db.execute(text("DELETE FROM listing_public_positions WHERE seller_id = :u"), params)
+
+
+# Q20 and E18: one draw per place of the seller. Under the seller's lock, the nearest kept place
+# within REUSE_M lends its offset; otherwise the new draw is kept.
+_LOCK_SELLER_PLACES = text(
+    "SELECT pg_advisory_xact_lock(hashtextextended('trovelya.public_position:' || :seller_id, 0))"
+)
+_NEAREST_PLACE = text(
+    "SELECT ST_Y(location::geometry) AS lat, ST_X(location::geometry) AS lon,"
+    " ST_Y(location_public::geometry) AS public_lat, ST_X(location_public::geometry) AS public_lon"
+    " FROM listing_public_positions"
+    " WHERE seller_id = :seller_id AND ST_DWithin(location, ST_MakePoint(:lon, :lat)::geography,"
+    " :reuse_m)"
+    " ORDER BY ST_Distance(location, ST_MakePoint(:lon, :lat)::geography), drawn_at, id LIMIT 1"
+)
+_KEEP_PLACE = text(
+    "INSERT INTO listing_public_positions (id, seller_id, location, location_public, drawn_at)"
+    " VALUES (:id, :seller_id, ST_MakePoint(:lon, :lat)::geography,"
+    " ST_MakePoint(:public_lon, :public_lat)::geography, :now)"
+)
+
+
+async def public_position(
+    db: AsyncSession,
+    *,
+    seller_id: UUID,
+    real: tuple[float, float],
+    drawn: tuple[float, float],
+    reuse_m: float,
+    now: datetime,
+) -> tuple[float, float]:
+    """The public position of `real`: the offset of the seller's nearest place within `reuse_m`
+    applied to it, else `drawn`, then kept."""
+    params = {"seller_id": str(seller_id), "lat": real[0], "lon": real[1], "reuse_m": reuse_m}
+    await db.execute(_LOCK_SELLER_PLACES, params)
+    near = (await db.execute(_NEAREST_PLACE, params)).one_or_none()
+    if near is not None and (near.lat, near.lon) == real:
+        return near.public_lat, near.public_lon  # the very place: the very point, bit for bit
+    if near is not None:
+        public_lon = real[1] + near.public_lon - near.lon
+        return real[0] + near.public_lat - near.lat, (public_lon + 180.0) % 360.0 - 180.0
+    await db.execute(
+        _KEEP_PLACE,
+        {
+            **params,
+            "id": new_id(),
+            "seller_id": seller_id,
+            "public_lat": drawn[0],
+            "public_lon": drawn[1],
+            "now": now,
+        },
+    )
+    return drawn
