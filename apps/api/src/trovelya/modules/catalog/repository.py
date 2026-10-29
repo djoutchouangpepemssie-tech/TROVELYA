@@ -814,6 +814,21 @@ _DROP_UNUSED_MEMBER_BRANDS = text(
     "DELETE FROM brands b WHERE b.id = ANY(:ids) AND b.origin = 'member'"
     " AND NOT EXISTS (SELECT 1 FROM listings l WHERE l.brand_id = b.id)"
 )
+# Q20, E18: a kept place is used while a listing of its seller stands within REUSE_M of it.
+_SELLERS_WITH_UNUSED_PLACES = text(
+    "SELECT DISTINCT p.seller_id FROM listing_public_positions p WHERE NOT EXISTS"
+    " (SELECT 1 FROM listings l WHERE l.seller_id = p.seller_id"
+    " AND ST_DWithin(l.location, p.location, :reuse_m))"
+)
+_TRY_LOCK_SELLER_PLACES = text(
+    "SELECT pg_try_advisory_xact_lock("
+    "hashtextextended('trovelya.public_position:' || :seller_id, 0))"
+)
+_DELETE_UNUSED_PLACES = text(
+    "DELETE FROM listing_public_positions p WHERE p.seller_id = :seller_id AND NOT EXISTS"
+    " (SELECT 1 FROM listings l WHERE l.seller_id = p.seller_id"
+    " AND ST_DWithin(l.location, p.location, :reuse_m))"
+)
 
 
 async def lock_listings_to_purge(
@@ -845,3 +860,15 @@ async def drop_unused_member_brands(db: AsyncSession, brand_ids: Sequence[UUID])
             await db.execute(_DROP_UNUSED_MEMBER_BRANDS, {"ids": list(set(brand_ids))})
     except IntegrityError:
         pass
+
+
+async def sellers_with_unused_places(db: AsyncSession, *, reuse_m: float) -> list[UUID]:
+    return list(await db.scalars(_SELLERS_WITH_UNUSED_PLACES, {"reuse_m": reuse_m}))
+
+
+async def delete_unused_places(db: AsyncSession, seller_id: UUID, *, reuse_m: float) -> bool:
+    """False, and nothing deleted, while the seller is drawing a position (their lock)."""
+    if not await db.scalar(_TRY_LOCK_SELLER_PLACES, {"seller_id": str(seller_id)}):
+        return False
+    await db.execute(_DELETE_UNUSED_PLACES, {"seller_id": seller_id, "reuse_m": reuse_m})
+    return True
