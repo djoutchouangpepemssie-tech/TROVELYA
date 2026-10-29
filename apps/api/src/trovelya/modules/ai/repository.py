@@ -84,3 +84,10 @@ async def export_calls(db: AsyncSession, user_id: UUID) -> list[dict[str, Any]]:
 
 async def erase_calls(db: AsyncSession, user_id: UUID) -> None:
     await db.execute(text("DELETE FROM ai_listing_suggestions WHERE user_id = :u"), {"u": user_id})
+
+
+async def delete_calls_before(db: AsyncSession, before: datetime) -> int:
+    result = await db.execute(
+        text("DELETE FROM ai_listing_suggestions WHERE created_at < :before"), {"before": before}
+    )
+    return int(result.rowcount)  # pyright: ignore[reportAttributeAccessIssue, reportUnknownArgumentType, reportUnknownMemberType]
