@@ -352,39 +352,86 @@ async def _accepted(sessionmaker: Session, call_id: str) -> Any:
         return await db.scalar(text(sql), {"c": call_id})
 
 
-async def test_accepted_fields_recorded_on_draft(ai: Ai, sessionmaker: Session) -> None:
-    """The draft created from a suggestion records the fields kept as shown; the caption goes
-    with the main photo, embedded with the listing (T11). A suggestion serves one draft, and
-    only its member's."""
+async def _caption(sessionmaker: Session, media: UUID) -> Any:
+    async with sessionmaker() as db:
+        sql = "SELECT moderation->>'caption' FROM media WHERE id = :m"
+        return await db.scalar(text(sql), {"m": media})
+
+
+async def _from_suggestion(ai: Ai, sessionmaker: Session, **changes: Any) -> Any:
+    """A member's suggestion and the draft they create from it with `changes`."""
     account, zone, media = await seller(sessionmaker)
     suggestion = (await _assist(ai, account, media)).json()
-    body = draft(
-        zone,
-        [media],
-        condition="good",  # changed
-        attributes={"clothing_size": "m", "color": "rouge"},  # the colour changed
-        suggestion_id=suggestion["suggestion_id"],
-    )
+    body = draft(zone, [media], suggestion_id=suggestion["suggestion_id"], **changes)
     created = await create(ai.client, account, body)
     assert created.status_code == 201, created.text
+    return account, media, suggestion, body, created.json()
+
+
+async def test_accepted_fields_recorded_on_draft(ai: Ai, sessionmaker: Session) -> None:
+    """The fields kept as shown, attributes one by one; the caption the seller kept goes with
+    the main photo and joins the listing's embedding (T11)."""
+    account, media, suggestion, _, listing = await _from_suggestion(
+        ai,
+        sessionmaker,
+        condition="good",  # changed
+        attributes={"clothing_size": "m", "color": "rouge"},  # the colour changed
+        caption="Robe bleue en lin posée à plat",
+    )
     assert await _accepted(sessionmaker, suggestion["suggestion_id"]) == [
         "title",
         "category",
+        "caption",
         "attributes.clothing_size",
     ]
-    async with sessionmaker() as db:
-        sql = "SELECT moderation->>'caption' FROM media WHERE id = :m"
-        assert await db.scalar(text(sql), {"m": media}) == suggestion["caption"]
-    published = await _call(ai.client, account, created.json()["id"], "publish")
+    assert await _caption(sessionmaker, media) == suggestion["caption"]
+    published = await _call(ai.client, account, listing["id"], "publish")
     assert published.status_code == 200, published.text
     async with sessionmaker() as db:
-        embedded = await listing_text(db, UUID(created.json()["id"]))
+        embedded = await listing_text(db, UUID(listing["id"]))
     assert embedded is not None and suggestion["caption"] in embedded
-    again = await create(
-        ai.client, account, body | {"media_ids": [str(await photo(sessionmaker, account.id))]}
-    )
-    assert again.status_code == 201  # used once: the second draft records nothing
-    assert len(await _accepted(sessionmaker, suggestion["suggestion_id"])) == 3
+
+
+async def test_caption_never_without_the_seller(ai: Ai, sessionmaker: Session) -> None:
+    """Q47: the AI's caption is not kept unless the seller sends it back."""
+    _, media, suggestion, _, _ = await _from_suggestion(ai, sessionmaker)
+    assert await _caption(sessionmaker, media) is None
+    assert "caption" not in await _accepted(sessionmaker, suggestion["suggestion_id"])
+
+
+async def test_brand_compared_as_stored(ai: Ai, sessionmaker: Session) -> None:
+    """A brand written otherwise is the same brand (found by its slug)."""
+    ai.answers_with(_Saying(brand="Nike"))
+    _, _, suggestion, _, _ = await _from_suggestion(ai, sessionmaker, brand="nike")
+    assert "brand" in await _accepted(sessionmaker, suggestion["suggestion_id"])
+
+
+async def test_suggestion_serves_one_draft_of_its_member(ai: Ai, sessionmaker: Session) -> None:
+    """Used again, someone else's, unknown or failed: ignored, and the draft is created."""
+    account, _, suggestion, body, _ = await _from_suggestion(ai, sessionmaker)
+    kept = await _accepted(sessionmaker, suggestion["suggestion_id"])
+    second = await photo(sessionmaker, account.id)
+    again = await create(ai.client, account, body | {"media_ids": [str(second)]})
+    assert again.status_code == 201
     other, other_zone, other_media = await seller(sessionmaker)
-    foreign = draft(other_zone, [other_media], suggestion_id=suggestion["suggestion_id"])
-    assert (await create(ai.client, other, foreign)).status_code == 201  # ignored
+    for suggestion_id in (suggestion["suggestion_id"], str(new_id())):
+        foreign = draft(other_zone, [other_media], suggestion_id=suggestion_id)
+        assert (await create(ai.client, other, foreign)).status_code == 201
+        other_media = await photo(sessionmaker, other.id)
+    assert await _accepted(sessionmaker, suggestion["suggestion_id"]) == kept
+    ai.answers_with(_Saying(cost=30_000))  # too dear: never shown, never serves a draft
+    member, zone, media = await seller(sessionmaker)
+    await _assist(ai, member, media)
+    [call] = await _calls(sessionmaker, member.id)
+    body = draft(zone, [media], suggestion_id=str(call["id"]))
+    assert (await create(ai.client, member, body)).status_code == 201
+    assert await _accepted(sessionmaker, str(call["id"])) is None
+
+
+async def test_caption_screened_at_publication(ai: Ai, sessionmaker: Session) -> None:
+    """Q47: the caption kept is screened like the title: a phone number never stays."""
+    account, media, _, _, listing = await _from_suggestion(
+        ai, sessionmaker, caption="Robe bleue, appelez le 06 12 34 56 78"
+    )
+    assert (await _call(ai.client, account, listing["id"], "publish")).status_code == 200
+    assert "06 12 34 56 78" not in await _caption(sessionmaker, media)
