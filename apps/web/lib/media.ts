@@ -53,14 +53,12 @@ const REFUSED: Record<number, UploadFailure> = {
   429: "rate_limited",
 };
 
-/** Sends `file` for `purpose` and waits until it is ready to use; stops once `signal` aborts.
- * `onSent` is told once the file is in storage, while it is being processed. */
+/** Sends `file` for `purpose` and waits until it is ready to use; stops once `signal` aborts. */
 export async function uploadPhoto(
   file: File,
   purpose: "avatar" | "listing",
   deps: Dependencies = browser,
   signal?: AbortSignal,
-  onSent?: () => void,
 ): Promise<UploadResult> {
   if (file.size === 0) return { ok: false, reason: "empty" };
   if (!ACCEPTED_TYPES.includes(file.type)) return { ok: false, reason: "type" };
@@ -86,7 +84,6 @@ export async function uploadPhoto(
   } catch {
     return signal?.aborted ? aborted : { ok: false, reason: "error" };
   }
-  onSent?.();
   const path = `/v1/media/${upload.media_id}` as const;
   let state = await deps.api(`${path}/complete`, { method: "POST" });
   for (let tries = 0, errors = 0; ; tries++) {
