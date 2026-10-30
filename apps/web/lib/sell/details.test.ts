@@ -20,6 +20,7 @@ const catalogue: Catalogue = {
       parent_key: null,
       is_leaf: false,
       max_photos: 12,
+      shipping_allowed: true,
       brand_policy: "optional",
       allowed_conditions: null,
       attributes: [],
@@ -30,6 +31,7 @@ const catalogue: Catalogue = {
       parent_key: "mode",
       is_leaf: true,
       max_photos: 12,
+      shipping_allowed: true,
       brand_policy: "optional",
       allowed_conditions: null,
       attributes: [{ key: "clothing_size", required: true }],
@@ -40,6 +42,7 @@ const catalogue: Catalogue = {
       parent_key: "mode",
       is_leaf: true,
       max_photos: 2,
+      shipping_allowed: true,
       brand_policy: "required",
       allowed_conditions: ["new_with_tags"],
       attributes: [],
@@ -50,6 +53,7 @@ const catalogue: Catalogue = {
       parent_key: "mode",
       is_leaf: true,
       max_photos: 12,
+      shipping_allowed: true,
       brand_policy: "none",
       allowed_conditions: null,
       attributes: [],
@@ -106,14 +110,19 @@ describe("the details of step 2", () => {
       "brand",
       "condition",
       "attributes.clothing_size",
-      "caption",
     ]);
-    const edited = { ...start, title: "Robe longue", attributes: { clothing_size: "l" } };
+    const edited = {
+      ...start,
+      title: "Robe longue",
+      brand: "sezane ",
+      attributes: { clothing_size: "l" },
+      keepCaption: true,
+    };
     expect([...proposedFields(edited, suggestion)]).toEqual([
       "category",
-      "brand",
+      "brand", // compared as the API does, by its slug
       "condition",
-      "caption",
+      "caption", // only once kept (Q47)
     ]);
     expect(proposedFields(start, null).size).toBe(0);
   });
@@ -126,11 +135,39 @@ describe("the details of step 2", () => {
     ]);
   });
 
-  it("accept details the API takes, with the attributes it keeps and the brand cleaned", () => {
-    expect(checkDetails({ ...good, brand: "  Sézane " }, catalogue, 1, YEAR)).toEqual({
+  it("accept details the API takes, and give what a draft takes of them", () => {
+    const sent = { ...good, title: " Robe d'été fleurie\u0085", brand: "  Sézane ", caption: "x" };
+    expect(checkDetails(sent, catalogue, 1, YEAR)).toEqual({
       errors: {},
-      attributes: { clothing_size: "m" },
-      brand: "Sézane",
+      draft: {
+        title: "Robe d'été fleurie",
+        description: good.description,
+        category: "mode.robes",
+        condition: "very_good",
+        brand: "Sézane",
+        attributes: { clothing_size: "m" },
+        caption: null, // not kept: never sent, whatever it holds (Q47)
+      },
+    });
+    const kept = { ...good, caption: " Posée à plat ", keepCaption: true };
+    expect(checkDetails(kept, catalogue, 1, YEAR).draft.caption).toBe("Posée à plat");
+  });
+
+  it("count as the API counts: code points, a CRLF as two, at the exact limits", () => {
+    const at = (title: string, description: string) =>
+      checkDetails({ ...good, title, description }, catalogue, 1, YEAR).errors;
+    expect(at("🎸".repeat(5), "a".repeat(20))).toEqual({});
+    expect(at("🎸".repeat(4), "a".repeat(19))).toEqual({
+      title: "too_short",
+      description: "too_short",
+    });
+    expect(at("🎸".repeat(120), "a".repeat(5000))).toEqual({});
+    expect(at("🎸".repeat(121), `${"a".repeat(4998)}\r\nb`)).toEqual({
+      title: "too_long",
+      description: "too_long",
+    });
+    expect(at(`\ufeff${"a".repeat(120)}`, `${"a".repeat(20)}\r\nb`)).toEqual({
+      title: "too_long", // the API keeps a byte order mark
     });
   });
 
@@ -174,14 +211,30 @@ describe("the details of step 2", () => {
       condition: "not_allowed",
       brand: "required",
     });
-    expect(checkDetails({ ...good, brand: "!!!" }, catalogue, 1, YEAR).errors).toEqual({
-      brand: "invalid",
+    const brand = (name: string, category = "mode.robes") =>
+      checkDetails({ ...good, category, brand: name }, catalogue, 1, YEAR);
+    expect(brand("!!!").errors).toEqual({ brand: "invalid" });
+    expect(brand("!!!\u0000").errors).toEqual({ brand: "invalid_characters" });
+    expect(brand("a\tb").errors).toEqual({ brand: "one_line" });
+    expect(brand("é".repeat(81)).errors).toEqual({ brand: "too_long" });
+    expect(brand("   ").draft.brand).toBeNull();
+    expect(brand("   ").errors).toEqual({});
+    expect(brand("   ", "mode.neuf").errors).toMatchObject({ brand: "required" });
+    expect(checkDetails({ ...good, category: "inconnue" }, catalogue, 1, YEAR).errors).toEqual({
+      category: "required",
     });
+    const allowed = { ...good, category: "mode.neuf", condition: "new_with_tags" as const };
+    expect(checkDetails(allowed, catalogue, 2, YEAR).errors).toEqual({});
     const none = checkDetails({ ...good, category: "mode.vrac" }, catalogue, 1, YEAR);
-    expect(none).toEqual({ errors: {}, attributes: {}, brand: null });
+    expect(none.errors).toEqual({});
+    expect(none.draft).toMatchObject({ brand: null, attributes: {} }); // left behind: dropped
     const missing = { ...good, attributes: { clothing_size: "xxl" } };
     expect(checkDetails(missing, catalogue, 1, YEAR).errors).toEqual({
       "attributes.clothing_size": "not_in_list",
+    });
+    const absent = { ...good, attributes: {} };
+    expect(checkDetails(absent, catalogue, 1, YEAR).errors).toEqual({
+      "attributes.clothing_size": "required",
     });
   });
 });

@@ -37,6 +37,7 @@ export type Catalogue = {
     parent_key: string | null;
     is_leaf: boolean;
     max_photos: number;
+    shipping_allowed: boolean;
     brand_policy: "required" | "optional" | "none";
     allowed_conditions: ItemCondition[] | null;
     attributes: { key: string; required: boolean }[];
@@ -68,6 +69,12 @@ export function fromSuggestion(suggestion: Suggestion | null): Details {
   };
 }
 
+/** A brand as the API compares it (`brand_slug`, nearly): accents, case and punctuation aside. */
+function slug(name: string): string {
+  const plain = name.normalize("NFKD").replace(/\p{M}/gu, "").toLowerCase();
+  return plain.replace(/[^\p{L}\p{N}]+/gu, "-").replace(/^-|-$/g, "");
+}
+
 /** The fields still holding what the AI proposed (marked « Proposé par l'IA »). */
 export function proposedFields(details: Details, suggestion: Suggestion | null): Set<string> {
   const same = new Set<string>();
@@ -75,14 +82,14 @@ export function proposedFields(details: Details, suggestion: Suggestion | null):
   const pairs: [string, unknown, unknown][] = [
     ["title", details.title, suggestion.title],
     ["category", details.category, suggestion.category?.key],
-    ["brand", details.brand, suggestion.brand],
+    ["brand", slug(details.brand), suggestion.brand === null ? null : slug(suggestion.brand)],
     ["condition", details.condition, suggestion.condition],
     ...Object.entries(suggestion.attributes).map(([key, value]): [string, unknown, unknown] => [
       `attributes.${key}`,
       details.attributes[key],
       value,
     ]),
-    ["caption", details.caption, suggestion.caption],
+    ["caption", details.keepCaption ? details.caption : null, suggestion.caption],
   ];
   for (const [field, value, proposed] of pairs) {
     if (proposed != null && value === proposed) same.add(field);
@@ -102,26 +109,45 @@ export function leaves(catalogue: Catalogue): { key: string; label: string }[] {
 }
 
 const length = (text: string) => Array.from(text).length;
+// Python's `str.strip()` (Pydantic's `strip_whitespace`): not JavaScript's `trim()`, which
+// keeps U+0085 and U+001C to U+001F but takes the byte order mark away.
+const SPACE =
+  "[\\t-\\r\\x1c-\\x20\\x85\\xa0\\u1680\\u2000-\\u200a\\u2028\\u2029\\u202f\\u205f\\u3000]";
+const EDGES = new RegExp(`^${SPACE}+|${SPACE}+$`, "gu");
 // Control characters but line breaks and tabs, as `_printable`.
 const CONTROL = /\p{Cc}/u;
 
-/** A text as the API's constrained strings: stripped, then its length, then its characters. */
-function text(value: string, min: number, max: number, oneLine: boolean): string | null {
-  const stripped = value.replace(/\r\n?/g, "\n").trim();
-  if (length(stripped) < min) return min === 1 ? "required" : "too_short";
-  if (length(stripped) > max) return "too_long";
-  if (CONTROL.test(stripped.replace(/[\n\t]/g, ""))) return "invalid_characters";
-  if (oneLine && /[\n\t]/.test(stripped)) return "one_line";
-  return null;
+/** A text as the API's constrained strings: stripped, its length (a `\r\n` counts two, as
+ * the API measures before `_printable`), then its characters. The text and its error. */
+function text(value: string, min: number, max: number, oneLine: boolean): [string, string | null] {
+  const stripped = value.replace(EDGES, "");
+  if (length(stripped) < min) return [stripped, min === 1 ? "required" : "too_short"];
+  if (length(stripped) > max) return [stripped, "too_long"];
+  const lines = stripped.replace(/\r\n?/g, "\n");
+  if (CONTROL.test(lines.replace(/[\n\t]/g, ""))) return [stripped, "invalid_characters"];
+  if (oneLine && /[\n\t]/.test(lines)) return [stripped, "one_line"];
+  return [stripped, null];
 }
+
+/** What a draft takes of the details: each text as the API stores it, the brand only where
+ * the category takes one, the caption only if kept (Q47), the category's own attributes. */
+export type DraftDetails = {
+  title: string;
+  description: string;
+  category: string;
+  condition: ItemCondition | "";
+  brand: string | null;
+  attributes: Record<string, unknown>;
+  caption: string | null;
+};
 
 export type Checked = {
   errors: Record<string, string>; // by field, `attributes.<key>` for an attribute
-  attributes: Record<string, unknown>; // the values the API keeps
-  brand: string | null; // none when the category takes no brand
+  draft: DraftDetails; // what to send once `errors` is empty
 };
 
-/** Every error a draft of these details would get, for `photos` photos; `year` is Paris's. */
+/** Every error a draft of these details would get, for `photos` photos; `year` is Paris's.
+ * Whether the category takes shipping (`shipping_allowed`) is checked with it at step 3. */
 export function checkDetails(
   details: Details,
   catalogue: Catalogue,
@@ -132,9 +158,16 @@ export function checkDetails(
   const add = (field: string, code: string | null) => {
     if (code && !(field in errors)) errors[field] = code;
   };
-  add("title", text(details.title, 5, 120, true));
-  add("description", text(details.description, 20, 5000, false));
-  if (details.keepCaption) add("caption", text(details.caption, 1, 300, true));
+  const [title, titleError] = text(details.title, 5, 120, true);
+  add("title", titleError);
+  const [description, descriptionError] = text(details.description, 20, 5000, false);
+  add("description", descriptionError);
+  let caption: string | null = null;
+  if (details.keepCaption) {
+    const [kept, captionError] = text(details.caption, 1, 300, true);
+    add("caption", captionError);
+    caption = kept;
+  }
   const category = catalogue.categories.find(
     (candidate) => candidate.key === details.category && candidate.is_leaf,
   );
@@ -144,14 +177,23 @@ export function checkDetails(
   else if (category?.allowed_conditions && !category.allowed_conditions.includes(details.condition))
     add("condition", "not_allowed");
 
-  let brand: string | null = details.brand.trim() || null;
+  // As `BrandName`, then `brand_slug` (a letter or a digit); none where the category takes none.
+  const [named, brandError] = text(details.brand, 1, 80, true);
+  let brand: string | null = named || null;
   if (category?.brand_policy === "none") brand = null;
   else if (brand === null) add("brand", category?.brand_policy === "required" ? "required" : null);
-  else if (length(brand) > 80) add("brand", "too_long");
-  else if (!/[\p{L}\p{N}]/u.test(brand)) add("brand", "invalid");
-  else add("brand", text(brand, 1, 80, true));
+  else add("brand", brandError ?? (/[\p{L}\p{N}]/u.test(brand) ? null : "invalid"));
 
-  if (!category) return { errors, attributes: {}, brand };
+  const draft = {
+    title,
+    description,
+    category: details.category,
+    condition: details.condition,
+    brand,
+    attributes: {},
+    caption,
+  };
+  if (!category) return { errors, draft };
   // Only the category's own attributes are sent: those of a category left behind are dropped.
   const rules = rulesFor(catalogue, category.key);
   const own = Object.fromEntries(
@@ -161,5 +203,5 @@ export function checkDetails(
   );
   const [attributes, issues] = validateAttributes(own, rules, year);
   for (const [key, code] of issues) add(`attributes.${key}`, code);
-  return { errors, attributes, brand };
+  return { errors, draft: { ...draft, attributes } };
 }
