@@ -591,5 +591,24 @@
       "obfuscated_number": "numéro déguisé",
       "meet_off_app": "rendez-vous hors de l'application"
     }
+  },
+  "Sell": {
+    "metaTitle": "Vendre en 30 s",
+    "progress": "Étape {step} sur {total}",
+    "loading": "Chargement…",
+    "refused": {
+      "title": "Votre compte ne peut pas encore vendre",
+      "incomplete": "Complétez votre profil pour mettre un objet en vente.",
+      "minor": "La vente est réservée aux personnes majeures.",
+      "complete": "Compléter mon profil",
+      "home": "Revenir à l'accueil",
+      "erasure": "La vente est suspendue pendant l'effacement de votre compte.",
+      "manage": "Gérer l'effacement"
+    },
+    "unavailable": "L'envoi de photos n'est pas encore ouvert. Revenez bientôt pour vendre.",
+    "photos": {
+      "title": "Vos photos",
+      "intro": "Jusqu'à {max} photos. La première est la photo principale."
+    }
   }
 }
