@@ -1,6 +1,12 @@
 import { describe, expect, it } from "vitest";
 
-import { type AttributeRule, validateAttributes } from "./attributes";
+import {
+  type AttributeRule,
+  type CategoryTree,
+  parisYear,
+  rulesFor,
+  validateAttributes,
+} from "./attributes";
 
 // The cases of the API's own test (apps/api/tests/unit/catalog/test_attributes.py), so the form
 // and the API never disagree.
@@ -108,6 +114,9 @@ describe("attributes checked as the API checks them", () => {
       ["edition_year", "too_large"],
     ]);
     expect(validateAttributes({ color: "noir", edition_year: 2028 }, RULES, 2027)[1]).toEqual([]);
+    expect(check({ color: "noir", edition_year: 1e30 })[1]).toEqual([
+      ["edition_year", "too_large"],
+    ]);
     const vintage: AttributeRule[] = [{ key: "vintage", type: "year", min: 1900, max: 2000 }];
     expect(check({ vintage: 2001 }, vintage)[1]).toEqual([["vintage", "too_large"]]);
   });
@@ -120,5 +129,53 @@ describe("attributes checked as the API checks them", () => {
   ])("fits integers in 32 bits: %d", (value, error) => {
     const count: AttributeRule[] = [{ key: "count", type: "int" }];
     expect(check({ count: value }, count)[1]).toEqual(error ? [["count", error]] : []);
+  });
+});
+
+describe("the rules of a category, from GET /v1/categories", () => {
+  const tree: CategoryTree = {
+    categories: [
+      {
+        key: "mode.femme.robes",
+        attributes: [
+          { key: "clothing_size", required: true },
+          { key: "length_cm", required: false },
+          { key: "label", required: false },
+        ],
+      },
+    ],
+    attributes: [
+      { key: "label", type: "text", values: null, max_length: 3, min: null, max: null },
+      { key: "length_cm", type: "int", values: null, min: 1, max: 300, step: null },
+      { key: "clothing_size", type: "enum", values: [{ key: "m" }, { key: "l" }] },
+    ],
+  };
+
+  it("joins each attribute's definition, a null bound being no bound", () => {
+    const rules = rulesFor(tree, "mode.femme.robes");
+    expect(rules.map((rule) => rule.key)).toEqual(["clothing_size", "length_cm", "label"]);
+    expect(validateAttributes({ clothing_size: "m", length_cm: 5 }, rules, YEAR)).toEqual([
+      { clothing_size: "m", length_cm: 5 },
+      [],
+    ]);
+    expect(validateAttributes({ label: "abcdef" }, rules, YEAR)[1]).toEqual([
+      ["clothing_size", "required"],
+      ["label", "too_long"],
+    ]);
+    expect(rulesFor(tree, "inconnue")).toEqual([]);
+  });
+
+  it("never takes a key of an object's prototype for a value", () => {
+    const rules: AttributeRule[] = [{ key: "constructor", type: "text", required: true }];
+    expect(validateAttributes({}, rules, YEAR)[1]).toEqual([["constructor", "required"]]);
+  });
+
+  it("takes an unknown type for a bug", () => {
+    const rules = [{ key: "odd", type: "colour" }] as unknown as AttributeRule[];
+    expect(() => validateAttributes({ odd: 1 }, rules, YEAR)).toThrow("unknown type");
+  });
+
+  it("counts the year in Paris", () => {
+    expect(parisYear(new Date("2026-12-31T23:30:00Z"))).toBe(2027);
   });
 });

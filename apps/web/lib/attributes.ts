@@ -7,6 +7,7 @@
  * decimal arithmetic: 0.1 + 0.2 is not a multiple of 0.1), `too_long`, `empty`,
  * `invalid_characters`. `int` and `year` fit in a signed 32-bit integer, a `year` is at most next
  * year (plan P2, Q21). A number too large for JavaScript (Infinity) is too large, as the API says.
+ * The values are those the form sends through `JSON.stringify` (an integer, never `30.0`).
  */
 
 export type AttributeType = "enum" | "bool" | "text" | "int" | "year" | "decimal";
@@ -23,6 +24,44 @@ export type AttributeRule = {
 };
 
 export type AttributeIssue = [key: string, code: string];
+
+/** What `GET /v1/categories` says of the attributes (only what the check needs). */
+export type CategoryTree = {
+  categories: { key: string; attributes: { key: string; required: boolean }[] }[];
+  attributes: {
+    key: string;
+    type: AttributeType;
+    values: { key: string }[] | null;
+    min?: number | null;
+    max?: number | null;
+    step?: number | null;
+    max_length?: number | null;
+  }[];
+};
+
+/** The rules of a category, in its order, from the tree the API serves; none for an unknown
+ * category. A bound the API leaves out comes as `null`: it is no bound. */
+export function rulesFor(tree: CategoryTree, categoryKey: string): AttributeRule[] {
+  const definitions = new Map(tree.attributes.map((attribute) => [attribute.key, attribute]));
+  const category = tree.categories.find((candidate) => candidate.key === categoryKey);
+  return (category?.attributes ?? []).flatMap(({ key, required }) => {
+    const definition = definitions.get(key);
+    if (!definition) return [];
+    const rule: AttributeRule = { key, type: definition.type, required };
+    if (definition.values) rule.values = definition.values.map((value) => value.key);
+    if (definition.min != null) rule.min = definition.min;
+    if (definition.max != null) rule.max = definition.max;
+    if (definition.step != null) rule.step = definition.step;
+    if (definition.max_length != null) rule.maxLength = definition.max_length;
+    return [rule];
+  });
+}
+
+/** The year the API checks against: Paris's, not the browser's (the night of 31 December). */
+export function parisYear(now: Date = new Date()): number {
+  const year = new Intl.DateTimeFormat("fr-FR", { timeZone: "Europe/Paris", year: "numeric" });
+  return Number(year.format(now));
+}
 
 const INT32_MIN = -(2 ** 31);
 const INT32_MAX = 2 ** 31 - 1;
@@ -44,9 +83,9 @@ function isMultiple(value: number, start: number, step: number): boolean {
 }
 
 function bounds(value: number, rule: { min?: number; max?: number; step?: number }) {
-  if (rule.min !== undefined && value < rule.min) return "too_small";
-  if (rule.max !== undefined && value > rule.max) return "too_large";
-  if (rule.step !== undefined && !isMultiple(value, rule.min ?? 0, rule.step)) return "step";
+  if (rule.min != null && value < rule.min) return "too_small";
+  if (rule.max != null && value > rule.max) return "too_large";
+  if (rule.step != null && !isMultiple(value, rule.min ?? 0, rule.step)) return "step";
   return null;
 }
 
@@ -92,10 +131,16 @@ function check(rule: AttributeRule, value: unknown, year: number): [unknown, str
       if (typeof value !== "number" || !Number.isFinite(value)) return [null, "type"];
       return [value, bounds(value, rule)];
     }
+    default: {
+      // A type the seed does not know: a bug, not the member's mistake (as the API says).
+      const unknown: never = rule.type;
+      throw new Error(`attribute ${rule.key}: unknown type ${String(unknown)}`);
+    }
   }
 }
 
-/** Accepted values (in the category's order) and every error found; `year` is this year. */
+/** Accepted values (in the category's order) and every error found; `year` is Paris's
+ * (`parisYear`). */
 export function validateAttributes(
   values: Record<string, unknown>,
   rules: readonly AttributeRule[],
@@ -107,7 +152,7 @@ export function validateAttributes(
     .filter((key) => !known.has(key))
     .map((key) => [key, "unknown"]);
   for (const rule of rules) {
-    const value = values[rule.key];
+    const value = Object.hasOwn(values, rule.key) ? values[rule.key] : undefined;
     if (value === null || value === undefined) {
       if (rule.required) errors.push([rule.key, "required"]);
       continue;
