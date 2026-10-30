@@ -9,6 +9,7 @@ import { postAsMember, signIn } from "./session";
 
 const sell = messages.Sell;
 const photos = sell.photos;
+const details = sell.details;
 const PHOTO = path.join(import.meta.dirname, "..", "e2e-full", "fixtures", "portrait.jpg");
 
 // Mobile first (plan P2-T09a): a phone, in Chromium.
@@ -61,6 +62,58 @@ test("sell, step 1: photos sent, ordered and taken away by keyboard", async ({ p
   await expect(cards(page)).toHaveCount(1);
   await expect(page.getByRole("button", { name: label("remove", 1) })).toBeFocused();
   await expect(next).toBeEnabled();
+  await expectNoAxeViolations(page);
+});
+
+async function toDetails(page: Page): Promise<void> {
+  await pick(page, ["robe-face.jpg"]);
+  await expect(cards(page).filter({ hasText: photos.status.ready })).toHaveCount(1, {
+    timeout: 60_000,
+  });
+  await page.getByRole("button", { name: photos.next }).click();
+}
+
+// W09, step 2 (P2-T09a2b2): the fake AI's dress fills the fields, marked as proposed; a field
+// the API would refuse says so and takes the focus; then onwards.
+test("sell, step 2: the AI's proposal, checked field by field", async ({ page }) => {
+  test.setTimeout(90_000);
+  await seller(page);
+  await postAsMember(page, "/v1/_test/flag-allow", { key: "ai.assist" });
+  await toDetails(page);
+  await expect(page.getByRole("heading", { level: 1, name: details.title })).toBeFocused({
+    timeout: 30_000,
+  });
+  const title = page.getByRole("textbox", { name: details.titleLabel });
+  await expect(title).toHaveValue("Robe en lin bleue");
+  await expect(title).toHaveAccessibleDescription(details.proposed);
+  await expect(page.getByRole("combobox", { name: details.category })).toHaveValue(
+    "mode.femme.robes",
+  );
+  // A long category's name never widens the page past the phone's screen.
+  expect(await page.evaluate(() => document.documentElement.scrollWidth)).toBeLessThanOrEqual(
+    page.viewportSize()?.width ?? 0,
+  );
+  await expectNoAxeViolations(page);
+
+  await title.fill("Robe en lin bleu ciel");
+  await expect(title).not.toHaveAccessibleDescription(details.proposed);
+  await page.getByRole("button", { name: details.next }).click();
+  const description = page.getByRole("textbox", { name: details.description });
+  await expect(description).toBeFocused();
+  await expect(page.getByText(details.errors.too_short)).toBeVisible();
+  await description.fill("Portée deux fois, aucune tache, taille un peu grand.");
+  await page.getByRole("button", { name: details.next }).click();
+  await expect(page.getByRole("heading", { level: 1, name: sell.price.title })).toBeFocused();
+});
+
+test("sell, step 2: without the AI, the member fills the fields", async ({ page }) => {
+  test.setTimeout(90_000);
+  await seller(page);
+  await toDetails(page);
+  await expect(page.getByText(details.ai.unavailable)).toBeVisible({ timeout: 30_000 });
+  await expect(page.getByRole("textbox", { name: details.titleLabel })).toHaveValue("");
+  await page.getByRole("button", { name: details.next }).click();
+  await expect(page.getByRole("textbox", { name: details.titleLabel })).toBeFocused();
   await expectNoAxeViolations(page);
 });
 
