@@ -11,8 +11,8 @@ import { PhotoStep } from "./PhotoStep";
 
 /**
  * W09 (P2-T09a): who may sell, then the steps. Signed-out visitors go to the sign-in page and
- * come back; a member who may not sell yet (profile incomplete, under 18) is told why, with
- * the way to fix it (Q1); without photo uploads (flag `media.uploads`) nothing can start.
+ * come back; a member who may not sell yet (profile incomplete, under 18, erasure under way) is
+ * told why, with the way to fix it (Q1); without photo uploads (`media.uploads`) nothing starts.
  */
 export function SellFlow() {
   const t = useTranslations("Sell");
@@ -33,17 +33,26 @@ export function SellFlow() {
       </main>
     );
   }
-  if (!me.profile_completed || me.is_minor) {
+  // As the API's own check (Q1): a profile completed, of an adult (an unknown year counts as
+  // under 18), without an erasure under way. A suspended account is refused at publication.
+  const refusal = !me.profile_completed
+    ? { text: "incomplete", link: "bienvenue", label: "complete" }
+    : me.is_minor !== false
+      ? { text: "minor", link: "", label: "home" }
+      : me.erase_at
+        ? { text: "erasure", link: "compte/donnees", label: "manage" }
+        : null;
+  if (refusal) {
     return (
       <main className="mx-auto flex w-full max-w-2xl flex-col gap-4 px-5 pt-14">
         <h1 className="text-3xl leading-tight font-bold tracking-tight">{t("refused.title")}</h1>
-        <p>{me.is_minor ? t("refused.minor") : t("refused.incomplete")}</p>
+        <p>{t(`refused.${refusal.text}`)}</p>
         <a
-          href={me.is_minor ? `/${locale}` : `/${locale}/bienvenue`}
+          href={`/${locale}${refusal.link ? `/${refusal.link}` : ""}`}
           className="trv-button self-start"
           data-variant="primary"
         >
-          {me.is_minor ? t("refused.home") : t("refused.complete")}
+          {t(`refused.${refusal.label}`)}
         </a>
       </main>
     );

@@ -7,7 +7,7 @@ import { usePathname } from "next/navigation";
 import { useSession } from "./SessionProvider";
 
 // Full-screen journeys keep the bottom of the screen for their own actions.
-const HIDDEN = /^\/[a-z]{2}\/(bienvenue|connexion|inscription|verifier|staff)(\/|$)/;
+const HIDDEN = /^\/[a-z]{2}\/(bienvenue|connexion|inscription|verifier|staff|vendre)(\/|$)/;
 
 function HomeIcon() {
   return (
