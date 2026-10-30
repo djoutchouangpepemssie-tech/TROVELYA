@@ -807,7 +807,7 @@ Recalculé à chaque création ou modification. La réponse au propriétaire don
 
 ### P2-T09a — Écran W09 « Vendre en 30 s »
 
-**Branche :** `feat/P2-T09a-vendre`.
+**Branche :** `feat/P2-T09a-vendre`. Découpée : T09a0 (la pile e2e stocke et traite les photos : Garage et le worker arq, fournisseurs factices ; l'e2e-full tourne en `staging`, où l'IA factice est refusée), T09a1 (photos), T09a2 (suggestions et attributs, validation miroir), T09a3 (prix, position, envoi, aperçu, publication, e2e chronométré), T09a4 (brouillon enregistré et repris, score de qualité, accessibilité).
 
 **Fichiers :** `apps/web/app/[locale]/vendre/page.tsx`, `components/sell/{SellFlow,PhotoPicker,UploadProgress,SuggestionFields,AttributeFields,LocationPicker,QualityMeter}.tsx`, `lib/media.ts`, `lib/attributes.ts` (miroir de la validation), `messages/fr.json`, `tests/e2e/vendre.spec.ts`, tests Vitest des composants.
 

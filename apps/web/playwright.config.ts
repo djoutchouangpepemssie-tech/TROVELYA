@@ -16,6 +16,10 @@ const API_ENV = {
   ADMIN_ORIGIN: "http://localhost:3101",
   EMAIL_PROVIDER: "fake",
   GEOCODER_PROVIDER: "fake",
+  // The fakes (ENV=test only): every photo clean, a linen dress suggested, words as vectors.
+  IMAGE_CLASSIFIER: "fake",
+  AI_PROVIDER: "fake",
+  EMBEDDER: "fake",
   FEATURE_FLAGS_DEFAULT: "{}",
   // Every browser of the suite shares one IP: the per-IP limit would throttle the tests.
   RATE_LIMIT_ANONYMOUS_PER_MINUTE: "10000",
@@ -46,7 +50,13 @@ export default defineConfig({
     {
       command: `pnpm start --port ${PORT}`,
       url: `http://localhost:${PORT}/fr`,
-      env: { API_INTERNAL_URL: `http://127.0.0.1:${API_PORT}`, PROXY_SHARED_SECRET },
+      env: {
+        API_INTERNAL_URL: `http://127.0.0.1:${API_PORT}`,
+        PROXY_SHARED_SECRET,
+        // The Garage of tests/e2e/stack.sh, allowed by the CSP: uploads and processed photos.
+        MEDIA_UPLOAD_ORIGIN: "http://localhost:3900",
+        MEDIA_PUBLIC_URL: "http://trovelya-variants.web.garage.localhost:3902",
+      },
       reuseExistingServer: !process.env.CI,
       timeout: 60_000,
     },
