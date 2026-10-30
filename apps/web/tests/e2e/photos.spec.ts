@@ -18,4 +18,9 @@ test("a photo sent from the browser is stored and processed", async ({ page }) =
   await page.reload();
   await page.locator('input[type="file"]').setInputFiles(PHOTO);
   await expect(page.getByText(avatar.preview)).toBeVisible({ timeout: 60_000 });
+  // Served by Garage's public variants, as the CSP allows.
+  const shown = page.getByRole("group", { name: avatar.label }).locator("img");
+  await expect
+    .poll(() => shown.evaluate((img: HTMLImageElement) => img.naturalWidth))
+    .toBeGreaterThan(0);
 });
