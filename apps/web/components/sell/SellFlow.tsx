@@ -2,10 +2,12 @@
 
 import { useLocale, useTranslations } from "next-intl";
 import { usePathname, useRouter } from "next/navigation";
-import { useEffect } from "react";
+import { useEffect, useState } from "react";
 
 import { useSession } from "@/components/SessionProvider";
-import { SellStep } from "./SellStep";
+import type { SellPhoto } from "@/lib/sell/photos";
+
+import { PhotoStep } from "./PhotoStep";
 
 /**
  * W09 (P2-T09a): who may sell, then the steps. Signed-out visitors go to the sign-in page and
@@ -18,6 +20,7 @@ export function SellFlow() {
   const router = useRouter();
   const pathname = usePathname();
   const { me } = useSession();
+  const [, setPhotos] = useState<SellPhoto[]>([]);
 
   useEffect(() => {
     if (me === null) router.replace(`/${locale}/connexion?suivant=${encodeURIComponent(pathname)}`);
@@ -62,15 +65,5 @@ export function SellFlow() {
       </main>
     );
   }
-  // The photos step arrives with P2-T09a1b.
-  return (
-    <SellStep
-      step={1}
-      title={t("photos.title")}
-      intro={t("photos.intro", { max: 12 })}
-      actions={null}
-    >
-      {null}
-    </SellStep>
-  );
+  return <PhotoStep onDone={setPhotos} />;
 }
