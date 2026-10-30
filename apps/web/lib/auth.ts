@@ -18,6 +18,10 @@ export type Me = {
   /** Square variants of the photo (P2-T02c), null while there is none. */
   avatar: Variant[] | null;
   profile_completed: boolean;
+  /** Under 18 (null until the birth year is known): may not sell (8.18). */
+  is_minor: boolean | null;
+  /** The feature flags as they apply to the member (section 7.2). */
+  flags: Record<string, boolean>;
   /** Erasure asked for (Q10): the account is erased then, unless the member cancels. */
   erase_at: string | null;
 };

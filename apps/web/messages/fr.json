@@ -591,5 +591,51 @@
       "obfuscated_number": "numéro déguisé",
       "meet_off_app": "rendez-vous hors de l'application"
     }
+  },
+  "Sell": {
+    "metaTitle": "Vendre en 30 s",
+    "progress": "Étape {step} sur {total}",
+    "loading": "Chargement…",
+    "refused": {
+      "title": "Votre compte ne peut pas encore vendre",
+      "incomplete": "Complétez votre profil pour mettre un objet en vente.",
+      "minor": "La vente est réservée aux personnes majeures.",
+      "complete": "Compléter mon profil",
+      "home": "Revenir à l'accueil"
+    },
+    "unavailable": "L'envoi de photos n'est pas encore ouvert. Revenez bientôt pour vendre.",
+    "photos": {
+      "title": "Vos photos",
+      "intro": "Jusqu'à {max} photos. La première est la photo principale.",
+      "camera": "Prendre une photo",
+      "gallery": "Choisir dans la galerie",
+      "count": "{count, plural, =0 {Aucune photo} one {# photo} other {# photos}} sur {max}",
+      "full": "Vous avez atteint {max} photos.",
+      "main": "Photo principale",
+      "label": "Photo {position} : {name}",
+      "status": {
+        "sending": "Envoi…",
+        "processing": "Préparation…",
+        "ready": "Prête",
+        "failed": "Échec"
+      },
+      "failure": {
+        "empty": "Ce fichier est vide.",
+        "type": "Ce format n'est pas accepté : JPEG, PNG ou WebP.",
+        "unavailable": "L'envoi de photos est fermé pour l'instant.",
+        "too_large": "Cette photo est trop lourde.",
+        "rate_limited": "Trop d'envois d'un coup : réessayez dans un moment.",
+        "rejected": "Cette photo n'a pas pu être lue.",
+        "timeout": "La préparation prend trop de temps : réessayez.",
+        "aborted": "Envoi annulé.",
+        "error": "L'envoi n'a pas abouti : réessayez."
+      },
+      "announce": "{name} : {status}",
+      "up": "Avancer la photo {position}",
+      "down": "Reculer la photo {position}",
+      "remove": "Retirer la photo {position}",
+      "next": "Continuer",
+      "waiting": "Attendez la fin des envois pour continuer."
+    }
   }
 }
