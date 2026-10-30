@@ -7,7 +7,9 @@ import { useEffect, useState } from "react";
 import { useSession } from "@/components/SessionProvider";
 import type { SellPhoto } from "@/lib/sell/photos";
 
+import { DetailsStep, type DetailsDone } from "./DetailsStep";
 import { PhotoStep } from "./PhotoStep";
+import { SellStep } from "./SellStep";
 
 /**
  * W09 (P2-T09a): who may sell, then the steps. Signed-out visitors go to the sign-in page and
@@ -20,7 +22,8 @@ export function SellFlow() {
   const router = useRouter();
   const pathname = usePathname();
   const { me } = useSession();
-  const [, setPhotos] = useState<SellPhoto[]>([]);
+  const [photos, setPhotos] = useState<SellPhoto[] | null>(null);
+  const [details, setDetails] = useState<DetailsDone | null>(null);
 
   useEffect(() => {
     if (me === null) router.replace(`/${locale}/connexion?suivant=${encodeURIComponent(pathname)}`);
@@ -65,5 +68,12 @@ export function SellFlow() {
       </main>
     );
   }
-  return <PhotoStep onDone={setPhotos} />;
+  if (photos === null) return <PhotoStep onDone={setPhotos} />;
+  if (details === null) return <DetailsStep photos={photos} onDone={setDetails} />;
+  // Step 3 (price, place, handover) comes with P2-T09a3.
+  return (
+    <SellStep step={3} title={t("price.title")} actions={null}>
+      <p>{t("price.soon")}</p>
+    </SellStep>
+  );
 }

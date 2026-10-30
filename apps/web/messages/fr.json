@@ -642,6 +642,61 @@
       "moved": "Photo déplacée en position {position} sur {count}.",
       "removed": "Photo retirée. {count, plural, =0 {Aucune photo} one {# photo} other {# photos}} restante(s).",
       "dropped": "{count, plural, one {# photo non ajoutée} other {# photos non ajoutées}} : {max} au maximum."
+    },
+    "details": {
+      "title": "Votre objet",
+      "intro": "L'IA a rempli ce qu'elle a reconnu. Vérifiez chaque champ et corrigez-le si besoin.",
+      "ai": {
+        "limit": "Vous avez utilisé toute l'aide de l'IA pour aujourd'hui : décrivez votre objet vous-même.",
+        "unavailable": "L'aide de l'IA n'est pas disponible pour l'instant : décrivez votre objet vous-même.",
+        "skipped": "Décrivez votre objet vous-même."
+      },
+      "asking": "L'IA regarde vos photos…",
+      "catalogueFailed": "Les catégories n'ont pas pu être chargées.",
+      "retry": "Réessayer",
+      "proposed": "Proposé par l'IA",
+      "titleLabel": "Titre",
+      "category": "Catégorie",
+      "condition": "État",
+      "brand": "Marque (facultatif)",
+      "brandRequired": "Marque",
+      "optional": "(facultatif)",
+      "choose": "Choisir…",
+      "description": "Description",
+      "descriptionHint": "Au moins 20 caractères : défauts, mesures, ce qui est inclus.",
+      "keepCaption": "Garder la légende proposée pour la photo principale",
+      "caption": "Légende de la photo principale",
+      "next": "Continuer",
+      "conditions": {
+        "new_with_tags": "Neuf avec étiquette",
+        "new_without_tags": "Neuf sans étiquette",
+        "very_good": "Très bon état",
+        "good": "Bon état",
+        "fair": "État correct",
+        "for_parts": "Pour pièces"
+      },
+      "errors": {
+        "required": "Ce champ est obligatoire.",
+        "too_short": "Ce texte est trop court.",
+        "too_long": "Ce texte est trop long.",
+        "one_line": "Écrivez sur une seule ligne.",
+        "invalid_characters": "Ce texte contient des caractères non acceptés.",
+        "invalid": "Écrivez au moins une lettre ou un chiffre.",
+        "not_allowed": "Cet état n'est pas accepté dans cette catégorie.",
+        "too_many_photos": "Cette catégorie accepte moins de photos : retirez-en.",
+        "type": "Écrivez un nombre, sans décimales s'il s'agit d'un nombre entier.",
+        "not_in_list": "Choisissez une valeur de la liste.",
+        "too_small": "Cette valeur est trop petite.",
+        "too_large": "Cette valeur est trop grande.",
+        "step": "Arrondissez au multiple de {step} le plus proche.",
+        "empty": "Ce champ est obligatoire.",
+        "unknown": "Cette caractéristique n'existe pas pour cette catégorie."
+      },
+      "skip": "Remplir moi-même"
+    },
+    "price": {
+      "title": "Prix et remise",
+      "soon": "Le prix, le lieu et la remise arrivent très bientôt."
     }
   }
 }
