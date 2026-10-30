@@ -35,8 +35,10 @@ describe("uploadPhoto", () => {
       { ok: true, data: media("processing") },
       { ok: true, data: media("ready") },
     ]);
-    const result = await uploadPhoto(FILE, "avatar", d);
+    const onSent = vi.fn();
+    const result = await uploadPhoto(FILE, "avatar", d, undefined, onSent);
     expect(result).toEqual({ ok: true, media: media("ready") });
+    expect(onSent).toHaveBeenCalledOnce();
     const [path, init] = d.api.mock.calls[0] as [string, RequestInit];
     expect(path).toBe("/v1/media/uploads");
     expect(JSON.parse(init.body as string)).toEqual({
