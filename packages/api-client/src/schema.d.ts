@@ -1911,6 +1911,8 @@ export interface components {
             };
             /** Brand */
             brand?: string | null;
+            /** Caption */
+            caption?: string | null;
             /** Category */
             category: string;
             condition: components["schemas"]["ItemCondition"];

@@ -1569,6 +1569,19 @@
             ],
             "title": "Brand"
           },
+          "caption": {
+            "anyOf": [
+              {
+                "maxLength": 300,
+                "minLength": 1,
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Caption"
+          },
           "category": {
             "maxLength": 200,
             "pattern": "^[a-z0-9_]+(\\.[a-z0-9_]+)*$",
