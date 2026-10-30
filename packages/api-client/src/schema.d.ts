@@ -1911,6 +1911,8 @@ export interface components {
             };
             /** Brand */
             brand?: string | null;
+            /** Caption */
+            caption?: string | null;
             /** Category */
             category: string;
             condition: components["schemas"]["ItemCondition"];
@@ -1932,6 +1934,8 @@ export interface components {
              * @default true
              */
             shipping_enabled: boolean;
+            /** Suggestion Id */
+            suggestion_id?: string | null;
             /** Title */
             title: string;
             /** Weight G */

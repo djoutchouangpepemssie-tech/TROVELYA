@@ -171,6 +171,10 @@ class ListingDraftIn(BaseModel):
     weight_g: WeightG | None = None
     location: ListingLocationIn
     media_ids: MediaIds
+    # The AI suggestion the draft comes from (P2-T06a3b): what was kept is recorded.
+    suggestion_id: UUID | None = None
+    # The main photo's caption the seller keeps (Q47): never the AI's without them.
+    caption: Caption | None = None
 
 
 class ListingDraftPatch(BaseModel):

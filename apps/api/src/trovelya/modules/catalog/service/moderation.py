@@ -213,6 +213,7 @@ NOTICE = (
     "messagerie TROVÉLYA, c'est elle qui protège ton paiement et ta vente."
 )
 _LIMITS = {"title": 120, "description": 5000}
+CAPTION_LIMIT = 300
 
 
 def label(code: str) -> str:
@@ -248,9 +249,8 @@ class Moderation:
     ) -> Moderated:
         subject = await repository.moderation_subject(db, listing_id)
         restricted = Verdict("review", (RESTRICTED,) if subject.is_restricted else ())
-        photos = await listing_photos.photo_moderation(
-            db, await repository.listing_media_ids(db, listing_id)
-        )
+        media_ids = await repository.listing_media_ids(db, listing_id)
+        photos = await listing_photos.photo_moderation(db, media_ids)
         thresholds = ImageThresholds.model_validate(
             await repository.setting_json(db, "moderation.image_thresholds")
         )
@@ -273,8 +273,30 @@ class Moderation:
             )
             for field in _LIMITS
         }
+        if media_ids:
+            await self._screen_caption(db, seller_id, listing_id, media_ids[0], clock)
         if all(shown[field] == getattr(subject, field) for field in _LIMITS):
             return Moderated(verdict)
         fitted = {field: _fit(value, _LIMITS[field]) for field, value in shown.items()}
         await repository.set_listing_text(db, listing_id, **fitted)
         return Moderated(verdict, None if verdict.outcome == "refused" else NOTICE)
+
+    async def _screen_caption(
+        self, db: AsyncSession, seller_id: UUID, listing_id: UUID, main: UUID, clock: Clock
+    ) -> None:
+        """Q47: the caption the seller kept is screened like the title (it is embedded)."""
+        caption = await listing_photos.photo_caption(db, main)
+        if caption is None:
+            return
+        masked = await screen(
+            db,
+            user_id=seller_id,
+            source_type="listing",
+            source_id=listing_id,
+            text=caption,
+            settings=self.settings,
+            clock=clock,
+            part="caption",
+        )
+        if masked != caption:
+            await listing_photos.set_caption(db, main, _fit(masked, CAPTION_LIMIT))

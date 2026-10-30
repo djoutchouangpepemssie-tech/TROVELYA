@@ -169,4 +169,9 @@ async def assist(
         kept = await _kept(db, call_id, suggestion, leaves, clock)
     leaf = leaves.get(kept.category.key) if kept.category else None
     found = await _price_range(sessionmaker, embedder, kept, leaf)
-    return kept.model_copy(update={"price_range": found})
+    shown = kept.model_copy(update={"price_range": found})
+    try:  # without it, the suggestion only serves no draft: it is still shown
+        await ai.record_shown(sessionmaker, call_id, shown.model_dump(mode="json"))
+    except Exception:
+        logger.exception("catalog.assist_shown_failed", suggestion_id=str(call_id))
+    return shown

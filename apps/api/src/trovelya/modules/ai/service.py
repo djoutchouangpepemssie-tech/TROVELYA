@@ -34,8 +34,11 @@ __all__ = [
     "ImageRef",
     "Leaf",
     "ListingSuggestion",
+    "record_accepted",
+    "record_shown",
     "reserve_call",
     "suggest",
+    "suggestion_for_draft",
     "unavailable",
 ]
 
@@ -162,6 +165,27 @@ async def suggest(
     except Exception:  # the log could not be written (a database failure): never a 500 page
         logger.exception("ai.log_failed", call_id=str(call_id))
         raise unavailable() from None
+
+
+async def record_shown(sessionmaker: Session, call_id: UUID, shown: dict[str, Any]) -> None:
+    """What the member was shown of a suggestion that went well; committed (as `suggest`)."""
+    async with sessionmaker() as db:
+        await repository.record_shown(db, call_id, shown)
+        await commit(db)
+
+
+async def suggestion_for_draft(
+    db: AsyncSession, *, call_id: UUID, user_id: UUID
+) -> tuple[dict[str, Any], list[UUID]] | None:
+    """What the member was shown of their suggestion and its photos, locked in the caller's
+    transaction; None when it is not theirs, did not go well, or already served a draft."""
+    row = await repository.suggestion_for_draft(db, call_id, user_id)
+    return None if row is None else (row.shown, list(row.media_ids))
+
+
+async def record_accepted(db: AsyncSession, call_id: UUID, fields: list[str]) -> None:
+    """The fields of the draft kept as shown (section 7.5), in the caller's transaction."""
+    await repository.record_accepted(db, call_id, fields)
 
 
 async def _export(db: AsyncSession, user_id: UUID, settings: Settings) -> dict[str, Any]:
