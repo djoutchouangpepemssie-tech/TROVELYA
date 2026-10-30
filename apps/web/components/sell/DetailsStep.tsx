@@ -2,9 +2,9 @@
 
 import { Button, Checkbox, Input } from "@trovelya/ui";
 import { useTranslations } from "next-intl";
-import { type ReactNode, useEffect, useId, useState } from "react";
+import { type ReactNode, useEffect, useId, useRef, useState } from "react";
 
-import { apiCall } from "@/lib/api";
+import { apiCall, type ApiResult } from "@/lib/api";
 import { parisYear, rulesFor } from "@/lib/attributes";
 import {
   type Catalogue,
@@ -23,6 +23,11 @@ import { SellStep } from "./SellStep";
 
 // `POST /v1/listings/assist` reads 1 to 4 photos: the first ones, the main photo first.
 const ASSIST_PHOTOS = 4;
+// The AI is a help: past this wait, the member fills the fields.
+const AI_TIMEOUT_MS = 20_000;
+// What the member types in a number field: digits, a decimal comma or point, nothing else
+// (`Number` would read "0x1A", "1e3" or "Infinity").
+const NUMBER = /^-?\d+(?:[.,]\d+)?$/;
 
 type AttributeView = Omit<Catalogue["attributes"][number], "values"> & {
   name: string;
@@ -92,11 +97,14 @@ export function DetailsStep({
   const t = useTranslations("Sell.details");
   const [tree, setTree] = useState<Tree | "failed" | null>(null);
   const [suggestion, setSuggestion] = useState<Suggestion | null>(null);
-  const [ai, setAi] = useState<"asking" | "done" | "limit" | "unavailable">("asking");
+  const [ai, setAi] = useState<"asking" | "done" | "limit" | "unavailable" | "skipped">("asking");
   const [details, setDetails] = useState<Details>(fromSuggestion(null));
   const [numbers, setNumbers] = useState<Record<string, string>>({});
   const [tried, setTried] = useState(false);
   const [attempt, setAttempt] = useState(0);
+  // One call per step, whatever the mounts (every call counts in the daily cap, Q45).
+  const request = useRef<Promise<ApiResult<Suggestion>> | null>(null);
+  const skipped = useRef(false);
 
   useEffect(() => {
     let live = true;
@@ -111,11 +119,13 @@ export function DetailsStep({
   useEffect(() => {
     let live = true;
     const media_ids = photos.slice(0, ASSIST_PHOTOS).flatMap((photo) => photo.media?.id ?? []);
-    void apiCall<Suggestion>("/v1/listings/assist", {
+    request.current ??= apiCall<Suggestion>("/v1/listings/assist", {
       method: "POST",
       body: JSON.stringify({ media_ids }),
-    }).then((result) => {
-      if (!live) return;
+      signal: AbortSignal.timeout(AI_TIMEOUT_MS),
+    });
+    void request.current.then((result) => {
+      if (!live || skipped.current) return; // the member went on without it
       if (result.ok) {
         setSuggestion(result.data);
         setDetails(fromSuggestion(result.data));
@@ -127,12 +137,32 @@ export function DetailsStep({
     };
   }, [photos]);
 
+  // One region says how the AI went, the same node from the wait to the form (announced).
+  const status = (text: string) => (
+    <p role="status" className="mb-5 text-ink-2">
+      {text}
+    </p>
+  );
   if (tree === null || ai === "asking") {
     return (
-      <SellStep step={2} title={t("title")} actions={null}>
-        <p role="status" aria-busy="true">
-          {t("asking")}
-        </p>
+      <SellStep
+        step={2}
+        title={t("title")}
+        actions={
+          tree === null ? null : (
+            <Button
+              variant="secondary"
+              onClick={() => {
+                skipped.current = true;
+                setAi("skipped");
+              }}
+            >
+              {t("skip")}
+            </Button>
+          )
+        }
+      >
+        {status(t("asking"))}
       </SellStep>
     );
   }
@@ -157,14 +187,24 @@ export function DetailsStep({
     );
   }
 
-  const checked = checkDetails(details, tree, photos.length, parisYear());
-  const proposed = proposedFields(details, suggestion);
   const category = tree.categories.find((candidate) => candidate.key === details.category);
+  const rules = category ? rulesFor(tree, category.key) : [];
+  // A box left unticked says no: `false`, never a missing answer.
+  const unticked = Object.fromEntries(
+    rules.filter((rule) => rule.type === "bool").map((rule) => [rule.key, false]),
+  );
+  const checked = checkDetails(
+    { ...details, attributes: { ...unticked, ...details.attributes } },
+    tree,
+    photos.length,
+    parisYear(),
+  );
+  const proposed = proposedFields(details, suggestion);
   const definitions = new Map(tree.attributes.map((attribute) => [attribute.key, attribute]));
   const hint = (field: string) => (proposed.has(field) ? t("proposed") : undefined);
-  const error = (field: string) => {
+  const error = (field: string, step?: number) => {
     const code = tried ? checked.errors[field] : undefined;
-    return code ? t(`errors.${code}`) : undefined;
+    return code ? t(`errors.${code}`, { step: step ?? 1 }) : undefined;
   };
   const change = (changes: Partial<Details>) => {
     setDetails((current) => ({ ...current, ...changes }));
@@ -192,12 +232,8 @@ export function DetailsStep({
   }
 
   return (
-    <SellStep
-      step={2}
-      title={t("title")}
-      intro={ai === "done" ? t("intro") : t(`ai.${ai}`)}
-      actions={<Button onClick={next}>{t("next")}</Button>}
-    >
+    <SellStep step={2} title={t("title")} actions={<Button onClick={next}>{t("next")}</Button>}>
+      {status(ai === "done" ? t("intro") : t(`ai.${ai}`))}
       <div className="flex flex-col gap-5">
         <Input
           label={t("titleLabel")}
@@ -215,7 +251,18 @@ export function DetailsStep({
               className="trv-input w-full min-w-0"
               value={details.category}
               onChange={(event) => {
-                change({ category: event.target.value });
+                const key = event.target.value;
+                const allowed = tree.categories.find(
+                  (leaf) => leaf.key === key,
+                )?.allowed_conditions;
+                setDetails((current) => ({
+                  ...current,
+                  category: key,
+                  condition:
+                    current.condition && allowed && !allowed.includes(current.condition)
+                      ? ""
+                      : current.condition,
+                }));
               }}
             >
               <option value="">{t("choose")}</option>
@@ -258,12 +305,12 @@ export function DetailsStep({
             {...(error("brand") ? { error: error("brand") as string } : {})}
           />
         )}
-        {(category ? rulesFor(tree, category.key) : []).map((rule) => {
+        {rules.map((rule) => {
           const definition = definitions.get(rule.key);
           if (!definition) return null;
           const field = `attributes.${rule.key}`;
           const label = `${definition.name}${definition.unit ? ` (${definition.unit})` : ""}${
-            rule.required ? "" : ` ${t("optional")}`
+            rule.required || rule.type === "bool" ? "" : ` ${t("optional")}`
           }`;
           const value = details.attributes[rule.key];
           if (rule.type === "bool") {
@@ -279,7 +326,7 @@ export function DetailsStep({
             );
           }
           return (
-            <Field key={rule.key} label={label} hint={hint(field)} error={error(field)}>
+            <Field key={rule.key} label={label} hint={hint(field)} error={error(field, rule.step)}>
               {(props) =>
                 rule.type === "enum" ? (
                   <select
@@ -314,7 +361,7 @@ export function DetailsStep({
                     value={
                       numbers[rule.key] ??
                       (typeof value === "number"
-                        ? String(value)
+                        ? String(value).replace(".", ",")
                         : typeof value === "string"
                           ? value
                           : "")
@@ -322,11 +369,15 @@ export function DetailsStep({
                     onChange={(event) => {
                       const raw = event.target.value;
                       setNumbers((current) => ({ ...current, [rule.key]: raw }));
-                      const number = Number(raw.replace(",", "."));
-                      // A number the member is still typing is checked as it reads: `type`.
+                      const typed = raw.trim();
+                      // Anything but a plain number is checked as it reads: `type`.
                       setAttribute(
                         rule.key,
-                        raw.trim() === "" ? undefined : Number.isNaN(number) ? raw : number,
+                        typed === ""
+                          ? undefined
+                          : NUMBER.test(typed)
+                            ? Number(typed.replace(",", "."))
+                            : raw,
                       );
                     }}
                   />

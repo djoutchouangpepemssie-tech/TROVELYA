@@ -101,6 +101,19 @@ test("sell, step 2: the AI's proposal, checked field by field", async ({ page })
   const description = page.getByRole("textbox", { name: details.description });
   await expect(description).toBeFocused();
   await expect(page.getByText(details.errors.too_short)).toBeVisible();
+  await expectNoAxeViolations(page);
+
+  // A category that takes only new items leaves no hidden condition behind, and asks its own
+  // questions; the box left unticked answers no.
+  const category = page.getByRole("combobox", { name: details.category });
+  const condition = page.getByRole("combobox", { name: details.condition });
+  await category.selectOption("beaute_bien_etre.soins_maquillage.maquillage");
+  await expect(condition).toHaveValue("");
+  await expect(
+    page.getByRole("checkbox", { name: "Neuf sous emballage scellé" }),
+  ).not.toBeChecked();
+  await category.selectOption("mode.femme.robes");
+  await condition.selectOption("very_good");
   await description.fill("Portée deux fois, aucune tache, taille un peu grand.");
   await page.getByRole("button", { name: details.next }).click();
   await expect(page.getByRole("heading", { level: 1, name: sell.price.title })).toBeFocused();
