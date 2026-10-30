@@ -81,7 +81,7 @@ jobs:
           enable-cache: true
       - run: pnpm install --frozen-lockfile
       - run: uv sync --locked --project apps/api
-      - name: Database and cache for the end-to-end tests (our PostgreSQL image, Redis)
+      - name: Database, cache and photo storage for the end-to-end tests (PostgreSQL, Redis, Garage)
         run: bash apps/web/tests/e2e/stack.sh
       - run: pnpm turbo run build --filter=@trovelya/web
       - id: playwright
@@ -96,6 +96,9 @@ jobs:
       - if: steps.browsers.outputs.cache-hit == 'true'
         run: pnpm --filter @trovelya/web exec playwright install-deps chromium
       - run: pnpm --filter @trovelya/web test:e2e
+      - name: Worker logs (redacted JSON lines), on failure
+        if: failure()
+        run: tail -n 200 /tmp/trovelya-e2e-worker.log || true
 
   # Journey 1 on the stack as deployed (P1 gate, G1): the API and the arq worker from the image
   # Railway runs, PostgreSQL, Redis and Mailpit in containers, the production web build in front.

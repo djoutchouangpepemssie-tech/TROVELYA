@@ -72,9 +72,11 @@ test("request an export, then download it", async ({ page }) => {
   // Asked once: no second request while it is being built.
   await expect(page.getByRole("button", { name: data.exportRequest })).toHaveCount(0);
 
-  // The worker's job, then the member comes back to the page.
-  await postAsMember(page, "/v1/_test/build-export");
-  await page.reload();
+  // The worker builds the archive (P2-T09a0: the e2e stack runs it); the member comes back.
+  await expect(async () => {
+    await page.reload();
+    await expect(page.getByRole("button", { name: data.download })).toBeVisible({ timeout: 1000 });
+  }).toPass({ timeout: 30_000 });
   const download = page.waitForEvent("download");
   await page.getByRole("button", { name: data.download }).click();
   const file = await download;
