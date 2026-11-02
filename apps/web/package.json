@@ -14,7 +14,7 @@
     "test:e2e:full": "playwright test --config playwright.full.config.ts"
   },
   "dependencies": {
-    "@sentry/nextjs": "11.9.0",
+    "@sentry/nextjs": "11.10.0",
     "@simplewebauthn/browser": "14.0.0",
     "@trovelya/core": "workspace:*",
     "@trovelya/design-tokens": "workspace:*",
