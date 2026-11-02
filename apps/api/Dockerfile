@@ -1,5 +1,5 @@
 # TROVÉLYA API image (Railway): one image for the web process and the arq worker.
-FROM python:3.12-slim AS build
+FROM python:3.14-slim AS build
 ENV UV_COMPILE_BYTECODE=1 UV_LINK_MODE=copy UV_PYTHON_DOWNLOADS=never
 RUN pip install --no-cache-dir uv==0.11.32
 WORKDIR /app
@@ -8,7 +8,7 @@ RUN uv sync --locked --no-dev --no-install-project
 COPY src ./src
 RUN uv sync --locked --no-dev --no-editable
 
-FROM python:3.12-slim
+FROM python:3.14-slim
 ENV PATH="/app/.venv/bin:$PATH" PYTHONUNBUFFERED=1 PORT=8000
 RUN useradd --system --uid 10001 --home /app trovelya
 WORKDIR /app
