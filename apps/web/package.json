@@ -14,30 +14,30 @@
     "test:e2e:full": "playwright test --config playwright.full.config.ts"
   },
   "dependencies": {
-    "@sentry/nextjs": "11.9.0",
+    "@sentry/nextjs": "11.11.0",
     "@simplewebauthn/browser": "14.0.0",
     "@trovelya/core": "workspace:*",
     "@trovelya/design-tokens": "workspace:*",
     "@trovelya/ui": "workspace:*",
-    "geist": "1.8.2",
-    "next": "16.4.3",
+    "geist": "1.9.1",
+    "next": "16.4.5",
     "next-intl": "4.14.9",
     "react": "19.3.1",
     "react-dom": "19.3.1"
   },
   "devDependencies": {
     "@axe-core/playwright": "4.14.0",
-    "@next/eslint-plugin-next": "16.4.3",
-    "@playwright/test": "1.64.1",
-    "@tailwindcss/postcss": "4.3.3",
+    "@next/eslint-plugin-next": "16.4.5",
+    "@playwright/test": "1.65.0",
+    "@tailwindcss/postcss": "4.3.4",
     "@trovelya/config-eslint": "workspace:*",
     "@trovelya/config-typescript": "workspace:*",
     "@types/node": "24.19.2",
     "@types/react": "19.3.0",
     "@types/react-dom": "19.3.0",
-    "eslint": "10.13.0",
-    "tailwindcss": "4.3.3",
+    "eslint": "10.14.0",
+    "tailwindcss": "4.3.4",
     "typescript": "6.0.3",
-    "vitest": "5.0.5"
+    "vitest": "5.1.0"
   }
 }
