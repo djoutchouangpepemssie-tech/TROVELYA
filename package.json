@@ -16,7 +16,7 @@
     "api:generate": "cd apps/api && uv run python -m trovelya.scripts.export_openapi ../../docs/api/openapi.json && cd ../.. && pnpm --filter @trovelya/api-client generate"
   },
   "devDependencies": {
-    "prettier": "3.9.10",
-    "turbo": "2.11.10"
+    "prettier": "3.10.1",
+    "turbo": "2.11.11"
   }
 }
